@@ -36,14 +36,16 @@ export default function Sidebar() {
   return (
     <aside className="w-64 bg-brand-900 text-white flex flex-col min-h-screen">
       {/* Logo */}
-      <div className="p-5 border-b border-brand-700">
+      <div className="p-4 border-b border-brand-700">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-brand-500 rounded-lg flex items-center justify-center flex-shrink-0">
-            <FileText size={18} className="text-white" />
-          </div>
+          <img
+            src="/logo.jpeg"
+            alt="Ogemi"
+            className="w-10 h-10 object-contain rounded-full bg-white flex-shrink-0"
+          />
           <div>
-            <p className="font-semibold text-sm leading-tight">Impresos</p>
-            <p className="text-brand-300 text-xs">Comerciales SA</p>
+            <p className="font-semibold text-sm leading-tight">Ogemi Impresora</p>
+            <p className="text-brand-300 text-xs">Gestión de Cartera</p>
           </div>
         </div>
       </div>
