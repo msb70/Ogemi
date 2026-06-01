@@ -37,6 +37,7 @@ export interface Factura {
   fecha_cobro: string | null;
   banco_cuenta_id: string | null;
   notas: string | null;
+  monto_pagado: number;
   created_at: string;
   updated_at: string;
   // Joins
@@ -58,6 +59,7 @@ export interface Compra {
   banco_cuenta_id: string | null;
   fecha_pago: string | null;
   notas: string | null;
+  monto_pagado: number;
   created_at: string;
   updated_at: string;
   // Joins
@@ -115,6 +117,36 @@ export interface UserRoleRecord {
   created_at: string;
 }
 
+export interface Anticipo {
+  id: string;
+  cliente_id: string;
+  cuenta_id: string;
+  fecha: string;
+  monto: number;
+  numero_deposito: string | null;
+  notas: string | null;
+  estado: 'activo' | 'aplicado' | 'anulado';
+  created_at: string;
+  updated_at: string;
+  // Joins
+  clientes?: Cliente;
+  banco_cuentas?: BancoCuenta;
+}
+
+export interface Pago {
+  id: string;
+  factura_id: string | null;
+  compra_id: string | null;
+  cuenta_id: string;
+  monto: number;
+  fecha: string;
+  referencia: string | null;
+  notas: string | null;
+  created_at: string;
+  // Joins
+  banco_cuentas?: BancoCuenta;
+}
+
 export interface CarteraVencida {
   id: string;
   numero_factura: number;
@@ -124,6 +156,8 @@ export interface CarteraVencida {
   monto: number;
   itbms: number;
   total: number;
+  monto_pagado: number;
+  saldo_pendiente: number;
   dias_vencida: number;
   tramo: TramoCartera;
 }

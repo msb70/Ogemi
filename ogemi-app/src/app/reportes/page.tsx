@@ -6,17 +6,22 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate, tramoColor } from '@/lib/utils'
 import { CarteraVencida } from '@/types'
-import { Download, Filter, Search, X, TrendingUp, TrendingDown, FileText, ShoppingCart, CreditCard, Building2 } from 'lucide-react'
+import {
+  Download, Filter, Search, X, TrendingUp, TrendingDown,
+  FileText, ShoppingCart, CreditCard, Building2, BookOpen, BarChart2
+} from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from 'recharts'
 
-type ReporteTab = 'ventas' | 'compras' | 'nc' | 'banco'
+type ReporteTab = 'ventas' | 'compras' | 'nc' | 'banco' | 'libros' | 'pivot'
 type VentasSubTab = 'listado' | 'cartera' | 'porcliente' | 'pormes'
 type ComprasSubTab = 'listado' | 'cxp' | 'porproveedor' | 'pormes'
 type NcSubTab = 'listado' | 'porcliente'
 type BancoSubTab = 'movimientos' | 'flujo' | 'cierres'
+type LibroSubTab = 'venta' | 'compra'
+type PivotSubTab = 'semanal' | 'antigüedad'
 
 const TRAMO_LABELS: Record<string, string> = {
   'corriente': 'Al día', '1-30': '1–30 días',
@@ -43,22 +48,155 @@ function exportCSV(headers: string[], rows: any[][], filename: string) {
   a.click()
 }
 
+// ============================================================
+// VENCIMIENTO SEMANAL: próximos 4 viernes desde hoy
+// ============================================================
+function getNextFridays(n = 4): Date[] {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const d = new Date(today)
+  const dow = d.getDay() // 0=dom, 5=vie
+  const daysToFri = dow === 5 ? 7 : (5 - dow + 7) % 7 || 7
+  d.setDate(d.getDate() + daysToFri)
+  const fridays: Date[] = []
+  for (let i = 0; i < n; i++) {
+    fridays.push(new Date(d))
+    d.setDate(d.getDate() + 7)
+  }
+  return fridays
+}
+
+function buildVencimientoViernes(facturas: any[], fridays: Date[]) {
+  const lastFriday = fridays[fridays.length - 1]
+  const rows = facturas
+    .filter(f => {
+      if (f.estado !== 'pendiente' || isNC(f.tipo_documento)) return false
+      const fp = f.fecha_pago ? new Date(f.fecha_pago + 'T00:00:00') : null
+      return fp !== null && fp <= lastFriday
+    })
+    .map(f => {
+      const fp = new Date(f.fecha_pago + 'T00:00:00')
+      const fridayIdx = fridays.findIndex(fri => fp <= fri)
+      return { ...f, fridayIdx }
+    })
+    .sort((a, b) => (a.fecha_pago < b.fecha_pago ? -1 : 1))
+
+  const totals = fridays.map((_, i) =>
+    rows.filter(r => r.fridayIdx === i).reduce((s, r) => s + (r.total || 0), 0)
+  )
+  const grandTotal = totals.reduce((s, t) => s + t, 0)
+  return { rows, totals, grandTotal }
+}
+
+// ============================================================
+// PIVOT SEMANAL (antiguo — mantenido para compatibilidad)
+// ============================================================
+function buildPivotSemanal(
+  facturas: any[],
+  fechaDesde: string,
+  fechaHasta: string
+): { clientes: string[]; semanas: string[]; data: Record<string, Record<string, number>>; factByCliente: Record<string, any[]> } {
+  const desde = new Date(fechaDesde + 'T00:00:00')
+  const hasta = new Date(fechaHasta + 'T00:00:00')
+  const semanas: { label: string; start: Date; end: Date }[] = []
+  let cur = new Date(desde)
+  let semNum = 1
+  while (cur <= hasta) {
+    const start = new Date(cur)
+    const end = new Date(cur)
+    end.setDate(end.getDate() + 6)
+    if (end > hasta) end.setTime(hasta.getTime())
+    semanas.push({
+      label: `Sem ${semNum} (${start.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit' })}–${end.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit' })})`,
+      start, end,
+    })
+    cur.setDate(cur.getDate() + 7)
+    semNum++
+  }
+  const pending = facturas.filter(f => {
+    if (f.estado !== 'pendiente' || f.total <= 0 || isNC(f.tipo_documento)) return false
+    const fp = f.fecha_pago ? new Date(f.fecha_pago + 'T00:00:00') : null
+    if (!fp) return false
+    return fp >= desde && fp <= hasta
+  })
+  const clienteSet = new Set<string>()
+  const data: Record<string, Record<string, number>> = {}
+  const factByCliente: Record<string, any[]> = {}
+  pending.forEach(f => {
+    const cliente = f.clientes?.nombre || 'N/A'
+    const fp = new Date(f.fecha_pago + 'T00:00:00')
+    clienteSet.add(cliente)
+    if (!data[cliente]) data[cliente] = {}
+    if (!factByCliente[cliente]) factByCliente[cliente] = []
+    factByCliente[cliente].push(f)
+    const semana = semanas.find(s => fp >= s.start && fp <= s.end)
+    if (semana) {
+      data[cliente][semana.label] = (data[cliente][semana.label] || 0) + (f.total - (f.monto_pagado || 0))
+    }
+  })
+  const clientes = Array.from(clienteSet).sort()
+  return { clientes, semanas: semanas.map(s => s.label), data, factByCliente }
+}
+
+// ============================================================
+// PIVOT ANTIGÜEDAD
+// ============================================================
+const BUCKETS = [
+  { key: 'corriente', label: 'Al día' },
+  { key: '1-30', label: '1–30 días' },
+  { key: '31-60', label: '31–60 días' },
+  { key: '61-90', label: '61–90 días' },
+  { key: '+120', label: '+120 días' },
+]
+
+function buildPivotAntiguedad(cartera: CarteraVencida[]): {
+  clientes: string[]
+  data: Record<string, Record<string, number>>
+  factByCliente: Record<string, any[]>
+} {
+  const clienteSet = new Set<string>()
+  const data: Record<string, Record<string, number>> = {}
+  const factByCliente: Record<string, any[]> = {}
+
+  cartera.forEach(c => {
+    clienteSet.add(c.cliente)
+    if (!data[c.cliente]) data[c.cliente] = {}
+    if (!factByCliente[c.cliente]) factByCliente[c.cliente] = []
+    factByCliente[c.cliente].push(c)
+    data[c.cliente][c.tramo] = (data[c.cliente][c.tramo] || 0) + (c.saldo_pendiente ?? c.total)
+  })
+
+  const clientes = Array.from(clienteSet).sort()
+  return { clientes, data, factByCliente }
+}
+
+// ============================================================
+// PÁGINA PRINCIPAL
+// ============================================================
 export default function ReportesPage() {
   const [tab, setTab] = useState<ReporteTab>('ventas')
   const [ventasTab, setVentasTab] = useState<VentasSubTab>('listado')
   const [comprasTab, setComprasTab] = useState<ComprasSubTab>('listado')
   const [ncTab, setNcTab] = useState<NcSubTab>('listado')
   const [bancoTab, setBancoTab] = useState<BancoSubTab>('movimientos')
+  const [libroTab, setLibroTab] = useState<LibroSubTab>('venta')
+  const [pivotTab, setPivotTab] = useState<PivotSubTab>('semanal')
   const [loading, setLoading] = useState(false)
 
-  // Filtros comunes
   const [search, setSearch] = useState('')
   const [fechaDesde, setFechaDesde] = useState(() => {
     const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0]
   })
   const [fechaHasta, setFechaHasta] = useState(new Date().toISOString().split('T')[0])
 
-  // Datos
+  // Pivot semanal: default hoy + 1 mes
+  const [pivotDesde, setPivotDesde] = useState(new Date().toISOString().split('T')[0])
+  const [pivotHasta, setPivotHasta] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString().split('T')[0]
+  })
+  const [pivotExpandidos, setPivotExpandidos] = useState<Record<string, boolean>>({})
+  const [antExpandidos, setAntExpandidos] = useState<Record<string, boolean>>({})
+
   const [facturas, setFacturas] = useState<any[]>([])
   const [compras, setCompras] = useState<any[]>([])
   const [cartera, setCartera] = useState<CarteraVencida[]>([])
@@ -95,7 +233,6 @@ export default function ReportesPage() {
       setCuentaSeleccionada(cuentasData[0].id)
     }
 
-    // Saldos bancarios
     const saldosMap: Record<string, number> = {}
     for (const c of (cuentasData || [])) {
       const { data: movs } = await supabase.from('banco_movimientos').select('tipo,monto').eq('cuenta_id', c.id)
@@ -125,7 +262,7 @@ export default function ReportesPage() {
   useEffect(() => { if (bancoTab === 'movimientos') loadMovimientos() }, [bancoTab, cuentaSeleccionada, loadMovimientos])
   useEffect(() => { if (bancoTab === 'cierres') loadCierres() }, [bancoTab, loadCierres])
 
-  // Derivados ventas
+  // Derivados
   const ventas = facturas.filter(f => !isNC(f.tipo_documento))
   const nc = facturas.filter(f => isNC(f.tipo_documento))
 
@@ -150,7 +287,15 @@ export default function ReportesPage() {
     return ok1 && ok2 && ok3
   })
 
-  // Agrupaciones por mes
+  // Libro de Venta: ventas + NC filtradas
+  const libroVentaFiltrado = [...ventasFiltradas, ...ncFiltradas].sort((a, b) => {
+    if (a.fecha !== b.fecha) return a.fecha < b.fecha ? -1 : 1
+    return (a.numero_factura || 0) - (b.numero_factura || 0)
+  })
+
+  // Libro de Compra: compras filtradas
+  const libroCompraFiltrado = comprasFiltradas.slice().sort((a, b) => a.fecha < b.fecha ? -1 : 1)
+
   const ventasPorMes = (() => {
     const map: Record<string, { ventas: number; nc: number; count: number }> = {}
     ventas.forEach(f => {
@@ -173,37 +318,24 @@ export default function ReportesPage() {
     return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0])).map(([mes, v]) => ({ mes, ...v }))
   })()
 
-  // Top clientes por ventas
   const topClientesVentas = (() => {
     const map: Record<string, number> = {}
-    ventas.forEach(f => {
-      const n = f.clientes?.nombre || 'N/A'
-      map[n] = (map[n] || 0) + (f.total || 0)
-    })
+    ventas.forEach(f => { const n = f.clientes?.nombre || 'N/A'; map[n] = (map[n] || 0) + (f.total || 0) })
     return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 15)
   })()
 
-  // Top proveedores por compras
   const topProveedores = (() => {
     const map: Record<string, number> = {}
-    compras.forEach(c => {
-      const n = c.proveedores?.nombre || 'N/A'
-      map[n] = (map[n] || 0) + (c.total || 0)
-    })
+    compras.forEach(c => { const n = c.proveedores?.nombre || 'N/A'; map[n] = (map[n] || 0) + (c.total || 0) })
     return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 15)
   })()
 
-  // NC por cliente
   const ncPorCliente = (() => {
     const map: Record<string, number> = {}
-    nc.forEach(f => {
-      const n = f.clientes?.nombre || 'N/A'
-      map[n] = (map[n] || 0) + Math.abs(f.total || 0)
-    })
+    nc.forEach(f => { const n = f.clientes?.nombre || 'N/A'; map[n] = (map[n] || 0) + Math.abs(f.total || 0) })
     return Object.entries(map).sort((a, b) => b[1] - a[1])
   })()
 
-  // Flujo de caja por mes (banco)
   const flujoPorMes = (() => {
     const map: Record<string, { ingresos: number; egresos: number }> = {}
     movimientos.forEach(m => {
@@ -215,11 +347,28 @@ export default function ReportesPage() {
     return Object.entries(map).sort().map(([mes, v]) => ({ mes, ...v, neto: v.ingresos - v.egresos }))
   })()
 
+  // Pivot semanal — 4 viernes automáticos
+  const nextFridays = getNextFridays(4)
+  const vencViernes = buildVencimientoViernes(facturas, nextFridays)
+  const [viernesSearch, setViernesSearch] = useState('')
+  const viernesRows = vencViernes.rows.filter(r => {
+    if (!viernesSearch) return true
+    const q = viernesSearch.toLowerCase()
+    return (r.clientes?.nombre || '').toLowerCase().includes(q) ||
+      String(r.numero_factura).includes(q)
+  })
+
+  // Pivot semanal (antiguo)
+  const pivotSemanal = buildPivotSemanal(facturas, pivotDesde, pivotHasta)
+  const pivotAnt = buildPivotAntiguedad(cartera)
+
   const tabs: { key: ReporteTab; label: string; icon: React.ElementType }[] = [
     { key: 'ventas',  label: 'Ventas',          icon: FileText },
     { key: 'compras', label: 'Compras',          icon: ShoppingCart },
     { key: 'nc',      label: 'Notas de crédito', icon: CreditCard },
     { key: 'banco',   label: 'Banco',            icon: Building2 },
+    { key: 'libros',  label: 'Libros',           icon: BookOpen },
+    { key: 'pivot',   label: 'Cartera Pivot',    icon: BarChart2 },
   ]
 
   const FiltrosBar = ({ showSearch = true }: { showSearch?: boolean }) => (
@@ -252,16 +401,16 @@ export default function ReportesPage() {
 
   return (
     <AppLayout>
-      <Header title="Reportes" subtitle="Análisis financiero" />
+      <Header title="Reportes" subtitle="Análisis financiero y contable" />
 
       {/* Main tabs */}
       <div className="bg-white border-b border-gray-200 px-6">
-        <div className="flex gap-1">
+        <div className="flex gap-1 overflow-x-auto">
           {tabs.map(t => {
             const Icon = t.icon
             return (
               <button key={t.key} onClick={() => { setTab(t.key); setSearch('') }}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   tab === t.key ? 'border-brand-600 text-brand-700' : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}>
                 <Icon size={14} />{t.label}
@@ -278,7 +427,6 @@ export default function ReportesPage() {
             ================================================================ */}
         {tab === 'ventas' && (
           <div className="p-6 space-y-4">
-            {/* Sub-tabs */}
             <div className="flex gap-2 flex-wrap">
               {[
                 { key: 'listado',    label: 'Listado' },
@@ -295,10 +443,9 @@ export default function ReportesPage() {
               ))}
             </div>
 
-            {/* Sub-tab: Listado */}
             {ventasTab === 'listado' && (
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <FiltrosBar />
                   <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() =>
                     exportCSV(
@@ -310,7 +457,6 @@ export default function ReportesPage() {
                     <Download size={14} />Exportar
                   </button>
                 </div>
-                {/* Totales rápidos */}
                 <div className="grid grid-cols-4 gap-3">
                   {[
                     { label: 'Total facturado', val: ventasFiltradas.reduce((s, f) => s + (f.total||0), 0), color: 'text-brand-700' },
@@ -359,7 +505,6 @@ export default function ReportesPage() {
               </div>
             )}
 
-            {/* Sub-tab: Cartera vencida */}
             {ventasTab === 'cartera' && (
               <div className="space-y-4">
                 <div className="grid grid-cols-5 gap-3">
@@ -371,7 +516,7 @@ export default function ReportesPage() {
                           <div className="w-3 h-3 rounded-full" style={{ background: TRAMO_COLORS_HEX[tramo] }} />
                           <span className="text-xs font-medium text-gray-600">{TRAMO_LABELS[tramo]}</span>
                         </div>
-                        <p className="text-lg font-bold">{formatCurrency(items.reduce((s,c)=>s+c.total,0))}</p>
+                        <p className="text-lg font-bold">{formatCurrency(items.reduce((s,c)=>s+(c.saldo_pendiente??c.total),0))}</p>
                         <p className="text-xs text-gray-400">{items.length} facturas</p>
                       </div>
                     )
@@ -380,7 +525,7 @@ export default function ReportesPage() {
                 <div className="card p-4 bg-brand-50 border-brand-200">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium text-brand-700">Total cartera pendiente</span>
-                    <span className="text-2xl font-bold text-brand-800">{formatCurrency(cartera.reduce((s,c)=>s+c.total,0))}</span>
+                    <span className="text-2xl font-bold text-brand-800">{formatCurrency(cartera.reduce((s,c)=>s+(c.saldo_pendiente??c.total),0))}</span>
                   </div>
                 </div>
                 <div className="card overflow-hidden">
@@ -390,8 +535,9 @@ export default function ReportesPage() {
                       <th className="table-header">Fecha</th>
                       <th className="table-header">Cliente</th>
                       <th className="table-header">Vencimiento</th>
-                      <th className="table-header text-right">Días</th>
                       <th className="table-header text-right">Total</th>
+                      <th className="table-header text-right">Saldo</th>
+                      <th className="table-header text-right">Días</th>
                       <th className="table-header">Tramo</th>
                     </tr></thead>
                     <tbody className="divide-y divide-gray-100">
@@ -401,12 +547,13 @@ export default function ReportesPage() {
                           <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha)}</td>
                           <td className="table-cell max-w-[200px]"><span className="truncate block">{c.cliente}</span></td>
                           <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha_pago)}</td>
+                          <td className="table-cell text-right">{formatCurrency(c.total)}</td>
+                          <td className="table-cell text-right font-semibold text-orange-600">{formatCurrency(c.saldo_pendiente ?? c.total)}</td>
                           <td className="table-cell text-right">
                             <span className={c.dias_vencida > 0 ? 'text-red-600 font-medium' : 'text-green-600'}>
                               {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
                             </span>
                           </td>
-                          <td className="table-cell text-right font-semibold">{formatCurrency(c.total)}</td>
                           <td className="table-cell"><span className={`badge ${tramoColor(c.tramo)}`}>{TRAMO_LABELS[c.tramo]}</span></td>
                         </tr>
                       ))}
@@ -416,12 +563,11 @@ export default function ReportesPage() {
               </div>
             )}
 
-            {/* Sub-tab: Por cliente */}
             {ventasTab === 'porcliente' && (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="card p-5">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Top clientes por ventas totales</h3>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Top clientes</h3>
                     <ResponsiveContainer width="100%" height={320}>
                       <BarChart data={topClientesVentas.slice(0,10).map(([n,v])=>({ name: n.substring(0,18), monto: v }))}
                         layout="vertical" margin={{ left:10, right:30 }}>
@@ -434,7 +580,7 @@ export default function ReportesPage() {
                     </ResponsiveContainer>
                   </div>
                   <div className="card p-5">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Distribución de ventas</h3>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Distribución</h3>
                     <ResponsiveContainer width="100%" height={320}>
                       <PieChart>
                         <Pie data={topClientesVentas.slice(0,8).map(([n,v])=>({ name:n.substring(0,20), value:v }))}
@@ -447,41 +593,9 @@ export default function ReportesPage() {
                     </ResponsiveContainer>
                   </div>
                 </div>
-                <div className="card overflow-hidden">
-                  <table className="w-full">
-                    <thead><tr className="border-b border-gray-200">
-                      <th className="table-header">#</th>
-                      <th className="table-header">Cliente</th>
-                      <th className="table-header text-right">Total ventas</th>
-                      <th className="table-header text-right">% del total</th>
-                    </tr></thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {topClientesVentas.map(([nombre, monto], i) => {
-                        const totalV = topClientesVentas.reduce((s, [, v]) => s + v, 0)
-                        const p = totalV > 0 ? ((monto / totalV) * 100).toFixed(1) : '0'
-                        return (
-                          <tr key={nombre} className="hover:bg-gray-50">
-                            <td className="table-cell text-gray-400 font-mono">{i+1}</td>
-                            <td className="table-cell font-medium">{nombre}</td>
-                            <td className="table-cell text-right font-semibold text-brand-700">{formatCurrency(monto)}</td>
-                            <td className="table-cell text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <div className="w-24 bg-gray-100 rounded-full h-2">
-                                  <div className="bg-brand-500 h-2 rounded-full" style={{ width: `${p}%` }} />
-                                </div>
-                                <span className="text-xs text-gray-500 w-10 text-right">{p}%</span>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
               </div>
             )}
 
-            {/* Sub-tab: Por período */}
             {ventasTab === 'pormes' && (
               <div className="space-y-4">
                 <div className="card p-5">
@@ -495,32 +609,6 @@ export default function ReportesPage() {
                       <Bar dataKey="ventas" name="Ventas" fill="#0284c7" radius={[4,4,0,0]} />
                     </BarChart>
                   </ResponsiveContainer>
-                </div>
-                <div className="card overflow-hidden">
-                  <table className="w-full">
-                    <thead><tr className="border-b border-gray-200">
-                      <th className="table-header">Mes</th>
-                      <th className="table-header text-right"># Facturas</th>
-                      <th className="table-header text-right">Total ventas</th>
-                      <th className="table-header text-right">Promedio por factura</th>
-                    </tr></thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {ventasPorMes.map(m => (
-                        <tr key={m.mes} className="hover:bg-gray-50">
-                          <td className="table-cell font-medium">{m.mes}</td>
-                          <td className="table-cell text-right text-gray-600">{m.count}</td>
-                          <td className="table-cell text-right font-semibold text-brand-700">{formatCurrency(m.ventas)}</td>
-                          <td className="table-cell text-right text-gray-500">{formatCurrency(m.count > 0 ? m.ventas / m.count : 0)}</td>
-                        </tr>
-                      ))}
-                      <tr className="bg-gray-50 font-semibold">
-                        <td className="table-cell">Total</td>
-                        <td className="table-cell text-right">{ventasPorMes.reduce((s,m)=>s+m.count,0)}</td>
-                        <td className="table-cell text-right text-brand-700">{formatCurrency(ventasPorMes.reduce((s,m)=>s+m.ventas,0))}</td>
-                        <td className="table-cell" />
-                      </tr>
-                    </tbody>
-                  </table>
                 </div>
               </div>
             )}
@@ -585,11 +673,10 @@ export default function ReportesPage() {
                       <th className="table-header text-right">ITBMS</th>
                       <th className="table-header text-right">Total</th>
                       <th className="table-header">Estado</th>
-                      <th className="table-header">Vencimiento</th>
                     </tr></thead>
                     <tbody className="divide-y divide-gray-100">
                       {comprasFiltradas.length === 0 ? (
-                        <tr><td colSpan={8} className="text-center py-8 text-gray-400">Sin resultados</td></tr>
+                        <tr><td colSpan={7} className="text-center py-8 text-gray-400">Sin resultados</td></tr>
                       ) : comprasFiltradas.slice(0,200).map(c => (
                         <tr key={c.id} className="hover:bg-gray-50">
                           <td className="table-cell text-sm">{formatDate(c.fecha)}</td>
@@ -603,7 +690,6 @@ export default function ReportesPage() {
                               {c.estado==='pagada' ? 'Pagada' : 'Pendiente'}
                             </span>
                           </td>
-                          <td className="table-cell text-sm text-gray-400">{formatDate(c.vencimiento)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -629,16 +715,9 @@ export default function ReportesPage() {
                     )
                   })}
                 </div>
-                <div className="card p-4 bg-orange-50 border-orange-200">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-orange-700">Total cuentas por pagar</span>
-                    <span className="text-2xl font-bold text-orange-800">{formatCurrency(cxp.reduce((s:number,c:any)=>s+c.total,0))}</span>
-                  </div>
-                </div>
                 <div className="card overflow-hidden">
                   <table className="w-full">
                     <thead><tr className="border-b border-gray-200">
-                      <th className="table-header">Fecha</th>
                       <th className="table-header">Proveedor</th>
                       <th className="table-header">Concepto</th>
                       <th className="table-header">Vencimiento</th>
@@ -649,7 +728,6 @@ export default function ReportesPage() {
                     <tbody className="divide-y divide-gray-100">
                       {cxp.map((c: any) => (
                         <tr key={c.id} className="hover:bg-gray-50">
-                          <td className="table-cell text-sm">{formatDate(c.fecha)}</td>
                           <td className="table-cell font-medium">{c.proveedor}</td>
                           <td className="table-cell text-sm text-gray-500">{c.concepto || '—'}</td>
                           <td className="table-cell text-sm text-gray-400">{formatDate(c.vencimiento)}</td>
@@ -673,109 +751,33 @@ export default function ReportesPage() {
             )}
 
             {comprasTab === 'porproveedor' && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="card p-5">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Top proveedores</h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={topProveedores.slice(0,10).map(([n,v])=>({ name: n.substring(0,18), monto: v }))}
-                        layout="vertical" margin={{ left:10, right:30 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
-                        <XAxis type="number" tick={{ fontSize:11 }} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} />
-                        <YAxis type="category" dataKey="name" tick={{ fontSize:10 }} width={130} />
-                        <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                        <Bar dataKey="monto" name="Compras" fill="#f97316" radius={[0,4,4,0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="card p-5">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Distribución</h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie data={topProveedores.slice(0,8).map(([n,v])=>({ name:n.substring(0,20), value:v }))}
-                          cx="50%" cy="50%" innerRadius={55} outerRadius={95} paddingAngle={2} dataKey="value">
-                          {topProveedores.slice(0,8).map((_,i)=><Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]} />)}
-                        </Pie>
-                        <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                        <Legend wrapperStyle={{ fontSize:'11px' }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-                <div className="card overflow-hidden">
-                  <table className="w-full">
-                    <thead><tr className="border-b border-gray-200">
-                      <th className="table-header">#</th>
-                      <th className="table-header">Proveedor</th>
-                      <th className="table-header text-right">Total compras</th>
-                      <th className="table-header text-right">% del total</th>
-                    </tr></thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {topProveedores.map(([nombre, monto], i) => {
-                        const totalC = topProveedores.reduce((s,[,v])=>s+v, 0)
-                        const p = totalC > 0 ? ((monto/totalC)*100).toFixed(1) : '0'
-                        return (
-                          <tr key={nombre} className="hover:bg-gray-50">
-                            <td className="table-cell text-gray-400 font-mono">{i+1}</td>
-                            <td className="table-cell font-medium">{nombre}</td>
-                            <td className="table-cell text-right font-semibold text-orange-600">{formatCurrency(monto)}</td>
-                            <td className="table-cell text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <div className="w-24 bg-gray-100 rounded-full h-2">
-                                  <div className="bg-orange-500 h-2 rounded-full" style={{ width:`${p}%` }} />
-                                </div>
-                                <span className="text-xs text-gray-500 w-10 text-right">{p}%</span>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+              <div className="card p-5">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Top proveedores</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={topProveedores.slice(0,10).map(([n,v])=>({ name: n.substring(0,18), monto: v }))}
+                    layout="vertical" margin={{ left:10, right:30 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                    <XAxis type="number" tick={{ fontSize:11 }} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize:10 }} width={130} />
+                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                    <Bar dataKey="monto" name="Compras" fill="#f97316" radius={[0,4,4,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             )}
 
             {comprasTab === 'pormes' && (
-              <div className="space-y-4">
-                <div className="card p-5">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-4">Compras mensuales</h3>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={comprasPorMes} margin={{ top:5, right:20, bottom:5, left:10 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="mes" tick={{ fontSize:11 }} />
-                      <YAxis tick={{ fontSize:11 }} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} />
-                      <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                      <Bar dataKey="total" name="Compras" fill="#f97316" radius={[4,4,0,0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="card overflow-hidden">
-                  <table className="w-full">
-                    <thead><tr className="border-b border-gray-200">
-                      <th className="table-header">Mes</th>
-                      <th className="table-header text-right"># Compras</th>
-                      <th className="table-header text-right">Total</th>
-                      <th className="table-header text-right">Promedio</th>
-                    </tr></thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {comprasPorMes.map(m => (
-                        <tr key={m.mes} className="hover:bg-gray-50">
-                          <td className="table-cell font-medium">{m.mes}</td>
-                          <td className="table-cell text-right text-gray-500">{m.count}</td>
-                          <td className="table-cell text-right font-semibold text-orange-600">{formatCurrency(m.total)}</td>
-                          <td className="table-cell text-right text-gray-500">{formatCurrency(m.count>0?m.total/m.count:0)}</td>
-                        </tr>
-                      ))}
-                      <tr className="bg-gray-50 font-semibold">
-                        <td className="table-cell">Total</td>
-                        <td className="table-cell text-right">{comprasPorMes.reduce((s,m)=>s+m.count,0)}</td>
-                        <td className="table-cell text-right text-orange-600">{formatCurrency(comprasPorMes.reduce((s,m)=>s+m.total,0))}</td>
-                        <td className="table-cell" />
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+              <div className="card p-5">
+                <h3 className="text-sm font-semibold text-gray-700 mb-4">Compras mensuales</h3>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={comprasPorMes} margin={{ top:5, right:20, bottom:5, left:10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="mes" tick={{ fontSize:11 }} />
+                    <YAxis tick={{ fontSize:11 }} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} />
+                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                    <Bar dataKey="total" name="Compras" fill="#f97316" radius={[4,4,0,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             )}
           </div>
@@ -787,10 +789,7 @@ export default function ReportesPage() {
         {tab === 'nc' && (
           <div className="p-6 space-y-4">
             <div className="flex gap-2 mb-2">
-              {[
-                { key: 'listado',    label: 'Listado' },
-                { key: 'porcliente', label: 'Por cliente' },
-              ].map(s => (
+              {[{ key: 'listado', label: 'Listado' }, { key: 'porcliente', label: 'Por cliente' }].map(s => (
                 <button key={s.key} onClick={() => setNcTab(s.key as NcSubTab)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
                     ncTab === s.key ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'
@@ -799,7 +798,6 @@ export default function ReportesPage() {
                 </button>
               ))}
             </div>
-
             {ncTab === 'listado' && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between flex-wrap gap-2">
@@ -813,22 +811,6 @@ export default function ReportesPage() {
                   }>
                     <Download size={14} />Exportar
                   </button>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="card p-3">
-                    <p className="text-xs text-gray-500">Total notas de crédito</p>
-                    <p className="text-xl font-bold text-amber-700">{formatCurrency(ncFiltradas.reduce((s,f)=>s+Math.abs(f.total||0),0))}</p>
-                  </div>
-                  <div className="card p-3">
-                    <p className="text-xs text-gray-500"># Documentos</p>
-                    <p className="text-xl font-bold text-gray-700">{ncFiltradas.length}</p>
-                  </div>
-                  <div className="card p-3">
-                    <p className="text-xs text-gray-500">Promedio por NC</p>
-                    <p className="text-xl font-bold text-gray-700">
-                      {formatCurrency(ncFiltradas.length > 0 ? ncFiltradas.reduce((s,f)=>s+Math.abs(f.total||0),0)/ncFiltradas.length : 0)}
-                    </p>
-                  </div>
                 </div>
                 <div className="card overflow-hidden">
                   <table className="w-full">
@@ -860,53 +842,19 @@ export default function ReportesPage() {
                 </div>
               </div>
             )}
-
             {ncTab === 'porcliente' && (
-              <div className="space-y-4">
-                <div className="card p-5">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Notas de crédito por cliente</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={ncPorCliente.slice(0,15).map(([n,v])=>({ name:n.substring(0,20), monto:v }))}
-                      layout="vertical" margin={{ left:10, right:30 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
-                      <XAxis type="number" tick={{ fontSize:11 }} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize:10 }} width={140} />
-                      <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                      <Bar dataKey="monto" name="NC" fill="#d97706" radius={[0,4,4,0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="card overflow-hidden">
-                  <table className="w-full">
-                    <thead><tr className="border-b border-gray-200">
-                      <th className="table-header">#</th>
-                      <th className="table-header">Cliente</th>
-                      <th className="table-header text-right">Total NC</th>
-                      <th className="table-header text-right">% del total</th>
-                    </tr></thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {ncPorCliente.map(([nombre, monto], i) => {
-                        const totalNC = ncPorCliente.reduce((s,[,v])=>s+v,0)
-                        const p = totalNC > 0 ? ((monto/totalNC)*100).toFixed(1) : '0'
-                        return (
-                          <tr key={nombre} className="hover:bg-gray-50">
-                            <td className="table-cell text-gray-400 font-mono">{i+1}</td>
-                            <td className="table-cell font-medium">{nombre}</td>
-                            <td className="table-cell text-right font-semibold text-amber-700">{formatCurrency(monto)}</td>
-                            <td className="table-cell text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <div className="w-24 bg-gray-100 rounded-full h-2">
-                                  <div className="bg-amber-400 h-2 rounded-full" style={{ width:`${p}%` }} />
-                                </div>
-                                <span className="text-xs text-gray-500 w-10 text-right">{p}%</span>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+              <div className="card p-5">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Notas de crédito por cliente</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={ncPorCliente.slice(0,15).map(([n,v])=>({ name:n.substring(0,20), monto:v }))}
+                    layout="vertical" margin={{ left:10, right:30 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                    <XAxis type="number" tick={{ fontSize:11 }} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize:10 }} width={140} />
+                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                    <Bar dataKey="monto" name="NC" fill="#d97706" radius={[0,4,4,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             )}
           </div>
@@ -918,11 +866,7 @@ export default function ReportesPage() {
         {tab === 'banco' && (
           <div className="p-6 space-y-4">
             <div className="flex gap-2 flex-wrap mb-2">
-              {[
-                { key: 'movimientos', label: 'Movimientos' },
-                { key: 'flujo',       label: 'Flujo de caja' },
-                { key: 'cierres',     label: 'Cierres de mes' },
-              ].map(s => (
+              {[{ key: 'movimientos', label: 'Movimientos' }, { key: 'flujo', label: 'Flujo de caja' }, { key: 'cierres', label: 'Cierres de mes' }].map(s => (
                 <button key={s.key} onClick={() => setBancoTab(s.key as BancoSubTab)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
                     bancoTab === s.key ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'
@@ -931,8 +875,6 @@ export default function ReportesPage() {
                 </button>
               ))}
             </div>
-
-            {/* Saldos por cuenta */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {cuentas.map(c => (
                 <div key={c.id} className="card p-4">
@@ -942,14 +884,6 @@ export default function ReportesPage() {
                   </p>
                 </div>
               ))}
-              {cuentas.length > 1 && (
-                <div className="card p-4 bg-brand-50">
-                  <p className="text-xs text-brand-600">Saldo total bancos</p>
-                  <p className="text-xl font-bold text-brand-800 mt-0.5">
-                    {formatCurrency(Object.values(saldos).reduce((s, v) => s + v, 0))}
-                  </p>
-                </div>
-              )}
             </div>
 
             {bancoTab === 'movimientos' && (
@@ -977,29 +911,6 @@ export default function ReportesPage() {
                     )}>
                     <Download size={14} />Exportar
                   </button>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="card p-3">
-                    <p className="text-xs text-gray-500">Ingresos en período</p>
-                    <p className="text-lg font-bold text-green-600">
-                      {formatCurrency(movimientos.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+m.monto,0))}
-                    </p>
-                  </div>
-                  <div className="card p-3">
-                    <p className="text-xs text-gray-500">Egresos en período</p>
-                    <p className="text-lg font-bold text-red-600">
-                      {formatCurrency(movimientos.filter(m=>m.tipo==='egreso').reduce((s,m)=>s+m.monto,0))}
-                    </p>
-                  </div>
-                  <div className="card p-3">
-                    <p className="text-xs text-gray-500">Neto en período</p>
-                    <p className="text-lg font-bold text-brand-700">
-                      {formatCurrency(
-                        movimientos.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+m.monto,0) -
-                        movimientos.filter(m=>m.tipo==='egreso').reduce((s,m)=>s+m.monto,0)
-                      )}
-                    </p>
-                  </div>
                 </div>
                 <div className="card overflow-hidden">
                   <table className="w-full">
@@ -1036,84 +947,555 @@ export default function ReportesPage() {
             )}
 
             {bancoTab === 'flujo' && (
-              <div className="space-y-4">
-                <div className="card p-5">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-4">Flujo de caja mensual</h3>
-                  {flujoPorMes.length === 0 ? (
-                    <div className="h-48 flex items-center justify-center text-gray-400 text-sm">Sin datos</div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={280}>
-                      <BarChart data={flujoPorMes} margin={{ top:5, right:20, bottom:5, left:10 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                        <XAxis dataKey="mes" tick={{ fontSize:11 }} />
-                        <YAxis tick={{ fontSize:11 }} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} />
-                        <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                        <Legend wrapperStyle={{ fontSize:'12px' }} />
-                        <Bar dataKey="ingresos" name="Ingresos" fill="#22c55e" radius={[4,4,0,0]} />
-                        <Bar dataKey="egresos" name="Egresos" fill="#ef4444" radius={[4,4,0,0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
+              <div className="card p-5">
+                <h3 className="text-sm font-semibold text-gray-700 mb-4">Flujo de caja mensual</h3>
+                {flujoPorMes.length === 0 ? (
+                  <div className="h-48 flex items-center justify-center text-gray-400 text-sm">Sin datos</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={flujoPorMes} margin={{ top:5, right:20, bottom:5, left:10 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis dataKey="mes" tick={{ fontSize:11 }} />
+                      <YAxis tick={{ fontSize:11 }} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} />
+                      <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                      <Legend wrapperStyle={{ fontSize:'12px' }} />
+                      <Bar dataKey="ingresos" name="Ingresos" fill="#22c55e" radius={[4,4,0,0]} />
+                      <Bar dataKey="egresos" name="Egresos" fill="#ef4444" radius={[4,4,0,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            )}
+
+            {bancoTab === 'cierres' && (
+              <div className="card overflow-hidden">
+                <table className="w-full">
+                  <thead><tr className="border-b border-gray-200">
+                    <th className="table-header">Período</th>
+                    <th className="table-header">Cuenta</th>
+                    <th className="table-header text-right">Saldo sistema</th>
+                    <th className="table-header text-right">Saldo banco</th>
+                    <th className="table-header text-right">Diferencia</th>
+                    <th className="table-header">Estado</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {cierres.length === 0 ? (
+                      <tr><td colSpan={6} className="text-center py-8 text-gray-400">Sin cierres</td></tr>
+                    ) : cierres.map(c => (
+                      <tr key={c.id} className="hover:bg-gray-50">
+                        <td className="table-cell font-medium">{c.periodo}</td>
+                        <td className="table-cell text-sm text-gray-500">{(c.banco_cuentas as any)?.nombre}</td>
+                        <td className="table-cell text-right">{formatCurrency(c.saldo_sistema)}</td>
+                        <td className="table-cell text-right">{formatCurrency(c.saldo_banco)}</td>
+                        <td className={`table-cell text-right font-semibold ${Math.abs(c.diferencia) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
+                          {c.diferencia >= 0 ? '+' : ''}{formatCurrency(c.diferencia)}
+                        </td>
+                        <td className="table-cell">
+                          <span className={`badge ${c.cerrado ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {c.cerrado ? 'Cerrado' : 'Abierto'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ================================================================
+            TAB: LIBROS CONTABLES (Libro de Venta y Libro de Compra)
+            ================================================================ */}
+        {tab === 'libros' && (
+          <div className="p-6 space-y-4">
+            <div className="flex gap-2 flex-wrap">
+              {[{ key: 'venta', label: 'Libro de Venta' }, { key: 'compra', label: 'Libro de Compra' }].map(s => (
+                <button key={s.key} onClick={() => setLibroTab(s.key as LibroSubTab)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                    libroTab === s.key ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+
+            {/* LIBRO DE VENTA */}
+            {libroTab === 'venta' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <FiltrosBar showSearch={false} />
+                  <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() =>
+                    exportCSV(
+                      ['N°','Fecha','Cliente','Tipo Documento','Doc. Afectado','Monto Gravable','ITBMS','Total'],
+                      libroVentaFiltrado.map((f, i) => [
+                        i + 1, f.fecha, f.clientes?.nombre, f.tipo_documento,
+                        f.documento_afectado || '', f.monto, f.itbms, f.total
+                      ]),
+                      `libro_venta_${fechaDesde}_${fechaHasta}.csv`
+                    )
+                  }>
+                    <Download size={14} />Exportar CSV
+                  </button>
                 </div>
+
+                {/* Resumen del período */}
+                <div className="grid grid-cols-4 gap-3">
+                  {[
+                    { label: 'Total ventas', val: ventasFiltradas.reduce((s,f)=>s+(f.total||0),0), color:'text-brand-700' },
+                    { label: 'Total NC', val: ncFiltradas.reduce((s,f)=>s+Math.abs(f.total||0),0), color:'text-amber-600' },
+                    { label: 'ITBMS recaudado', val: ventasFiltradas.reduce((s,f)=>s+(f.itbms||0),0), color:'text-purple-600' },
+                    { label: 'Neto (Ventas - NC)', val: ventasFiltradas.reduce((s,f)=>s+(f.total||0),0) - ncFiltradas.reduce((s,f)=>s+Math.abs(f.total||0),0), color:'text-green-700' },
+                  ].map(s => (
+                    <div key={s.label} className="card p-3">
+                      <p className="text-xs text-gray-500">{s.label}</p>
+                      <p className={`text-lg font-bold ${s.color}`}>{formatCurrency(s.val as number)}</p>
+                    </div>
+                  ))}
+                </div>
+
                 <div className="card overflow-hidden">
+                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                      Libro de Ventas · {fechaDesde} al {fechaHasta}
+                    </p>
+                  </div>
                   <table className="w-full">
-                    <thead><tr className="border-b border-gray-200">
-                      <th className="table-header">Mes</th>
-                      <th className="table-header text-right">Ingresos</th>
-                      <th className="table-header text-right">Egresos</th>
-                      <th className="table-header text-right">Neto</th>
-                    </tr></thead>
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-gray-50">
+                        <th className="table-header w-10">N°</th>
+                        <th className="table-header">Fecha</th>
+                        <th className="table-header">#Factura</th>
+                        <th className="table-header">Cliente</th>
+                        <th className="table-header">Tipo Documento</th>
+                        <th className="table-header">Doc. Afectado</th>
+                        <th className="table-header text-right">Monto Gravable</th>
+                        <th className="table-header text-right">ITBMS (7%)</th>
+                        <th className="table-header text-right">Total</th>
+                      </tr>
+                    </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {flujoPorMes.map(m => (
-                        <tr key={m.mes} className="hover:bg-gray-50">
-                          <td className="table-cell font-medium">{m.mes}</td>
-                          <td className="table-cell text-right text-green-600 font-medium">{formatCurrency(m.ingresos)}</td>
-                          <td className="table-cell text-right text-red-600 font-medium">{formatCurrency(m.egresos)}</td>
-                          <td className={`table-cell text-right font-bold ${m.neto>=0?'text-green-700':'text-red-700'}`}>
-                            {m.neto >= 0 ? '+' : ''}{formatCurrency(m.neto)}
-                          </td>
-                        </tr>
-                      ))}
+                      {libroVentaFiltrado.length === 0 ? (
+                        <tr><td colSpan={9} className="text-center py-8 text-gray-400">Sin registros en el período</td></tr>
+                      ) : libroVentaFiltrado.map((f, i) => {
+                        const esNC = isNC(f.tipo_documento)
+                        return (
+                          <tr key={f.id} className={`hover:bg-gray-50 ${esNC ? 'bg-amber-50/40' : ''}`}>
+                            <td className="table-cell text-gray-400 text-xs w-10">{i + 1}</td>
+                            <td className="table-cell text-sm">{formatDate(f.fecha)}</td>
+                            <td className="table-cell font-mono text-sm">#{f.numero_factura}</td>
+                            <td className="table-cell max-w-[180px]">
+                              <span className="truncate block text-sm">{f.clientes?.nombre}</span>
+                            </td>
+                            <td className="table-cell">
+                              <span className={`badge text-xs ${esNC ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                                {f.tipo_documento}
+                              </span>
+                            </td>
+                            <td className="table-cell text-sm text-gray-400">
+                              {f.documento_afectado ? `#${f.documento_afectado}` : '—'}
+                            </td>
+                            <td className="table-cell text-right">
+                              <span className={esNC ? 'text-amber-600' : ''}>{formatCurrency(Math.abs(f.monto))}</span>
+                            </td>
+                            <td className="table-cell text-right text-gray-500">{formatCurrency(Math.abs(f.itbms))}</td>
+                            <td className="table-cell text-right font-semibold">
+                              <span className={esNC ? 'text-amber-700' : 'text-brand-700'}>{formatCurrency(Math.abs(f.total))}</span>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
+                        <td colSpan={6} className="table-cell text-right text-sm text-gray-600">TOTALES</td>
+                        <td className="table-cell text-right text-brand-700">
+                          {formatCurrency(libroVentaFiltrado.reduce((s,f)=>s+Math.abs(f.monto||0),0))}
+                        </td>
+                        <td className="table-cell text-right text-gray-600">
+                          {formatCurrency(libroVentaFiltrado.reduce((s,f)=>s+Math.abs(f.itbms||0),0))}
+                        </td>
+                        <td className="table-cell text-right text-brand-800">
+                          {formatCurrency(libroVentaFiltrado.reduce((s,f)=>s+Math.abs(f.total||0),0))}
+                        </td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               </div>
             )}
 
-            {bancoTab === 'cierres' && (
+            {/* LIBRO DE COMPRA */}
+            {libroTab === 'compra' && (
               <div className="space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <FiltrosBar showSearch={false} />
+                  <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() =>
+                    exportCSV(
+                      ['N°','Fecha','Proveedor','Concepto','Referencia','Monto Gravable','ITBMS','Total','Estado'],
+                      libroCompraFiltrado.map((c, i) => [
+                        i + 1, c.fecha, c.proveedores?.nombre, c.concepto || '',
+                        c.referencia || '', c.monto, c.itbms, c.total, c.estado
+                      ]),
+                      `libro_compra_${fechaDesde}_${fechaHasta}.csv`
+                    )
+                  }>
+                    <Download size={14} />Exportar CSV
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-4 gap-3">
+                  {[
+                    { label: 'Total compras', val: libroCompraFiltrado.reduce((s,c)=>s+(c.total||0),0), color:'text-orange-600' },
+                    { label: 'ITBMS acreditable', val: libroCompraFiltrado.reduce((s,c)=>s+(c.itbms||0),0), color:'text-purple-600' },
+                    { label: 'Pagadas', val: libroCompraFiltrado.filter(c=>c.estado==='pagada').reduce((s,c)=>s+(c.total||0),0), color:'text-green-600' },
+                    { label: 'Pendientes', val: libroCompraFiltrado.filter(c=>c.estado==='pendiente').reduce((s,c)=>s+(c.total||0),0), color:'text-red-600' },
+                  ].map(s => (
+                    <div key={s.label} className="card p-3">
+                      <p className="text-xs text-gray-500">{s.label}</p>
+                      <p className={`text-lg font-bold ${s.color}`}>{formatCurrency(s.val as number)}</p>
+                    </div>
+                  ))}
+                </div>
+
                 <div className="card overflow-hidden">
+                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                      Libro de Compras · {fechaDesde} al {fechaHasta}
+                    </p>
+                  </div>
                   <table className="w-full">
-                    <thead><tr className="border-b border-gray-200">
-                      <th className="table-header">Período</th>
-                      <th className="table-header">Cuenta</th>
-                      <th className="table-header text-right">Saldo sistema</th>
-                      <th className="table-header text-right">Saldo banco</th>
-                      <th className="table-header text-right">Diferencia</th>
-                      <th className="table-header">Estado</th>
-                    </tr></thead>
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-gray-50">
+                        <th className="table-header w-10">N°</th>
+                        <th className="table-header">Fecha</th>
+                        <th className="table-header">Proveedor</th>
+                        <th className="table-header">Concepto</th>
+                        <th className="table-header">Referencia</th>
+                        <th className="table-header text-right">Monto Gravable</th>
+                        <th className="table-header text-right">ITBMS (7%)</th>
+                        <th className="table-header text-right">Total</th>
+                        <th className="table-header">Estado</th>
+                      </tr>
+                    </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {cierres.length === 0 ? (
-                        <tr><td colSpan={6} className="text-center py-8 text-gray-400">Sin cierres registrados</td></tr>
-                      ) : cierres.map(c => (
+                      {libroCompraFiltrado.length === 0 ? (
+                        <tr><td colSpan={9} className="text-center py-8 text-gray-400">Sin registros en el período</td></tr>
+                      ) : libroCompraFiltrado.map((c, i) => (
                         <tr key={c.id} className="hover:bg-gray-50">
-                          <td className="table-cell font-medium">{c.periodo}</td>
-                          <td className="table-cell text-sm text-gray-500">{(c.banco_cuentas as any)?.nombre}</td>
-                          <td className="table-cell text-right">{formatCurrency(c.saldo_sistema)}</td>
-                          <td className="table-cell text-right">{formatCurrency(c.saldo_banco)}</td>
-                          <td className={`table-cell text-right font-semibold ${Math.abs(c.diferencia) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
-                            {c.diferencia >= 0 ? '+' : ''}{formatCurrency(c.diferencia)}
+                          <td className="table-cell text-gray-400 text-xs">{i + 1}</td>
+                          <td className="table-cell text-sm">{formatDate(c.fecha)}</td>
+                          <td className="table-cell font-medium max-w-[150px]">
+                            <span className="truncate block">{c.proveedores?.nombre}</span>
                           </td>
+                          <td className="table-cell text-sm text-gray-500 max-w-[150px]">
+                            <span className="truncate block">{c.concepto || '—'}</span>
+                          </td>
+                          <td className="table-cell text-sm font-mono text-gray-400">{c.referencia || '—'}</td>
+                          <td className="table-cell text-right">{formatCurrency(c.monto)}</td>
+                          <td className="table-cell text-right text-gray-500">{formatCurrency(c.itbms)}</td>
+                          <td className="table-cell text-right font-semibold text-orange-700">{formatCurrency(c.total)}</td>
                           <td className="table-cell">
-                            <span className={`badge ${c.cerrado ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                              {c.cerrado ? 'Cerrado' : 'Abierto'}
+                            <span className={`badge text-xs ${c.estado==='pagada' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                              {c.estado==='pagada' ? 'Pagada' : 'Pendiente'}
                             </span>
                           </td>
                         </tr>
                       ))}
                     </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
+                        <td colSpan={5} className="table-cell text-right text-sm text-gray-600">TOTALES</td>
+                        <td className="table-cell text-right text-orange-700">
+                          {formatCurrency(libroCompraFiltrado.reduce((s,c)=>s+(c.monto||0),0))}
+                        </td>
+                        <td className="table-cell text-right text-gray-600">
+                          {formatCurrency(libroCompraFiltrado.reduce((s,c)=>s+(c.itbms||0),0))}
+                        </td>
+                        <td className="table-cell text-right text-orange-800">
+                          {formatCurrency(libroCompraFiltrado.reduce((s,c)=>s+(c.total||0),0))}
+                        </td>
+                        <td className="table-cell" />
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ================================================================
+            TAB: PIVOT CARTERA
+            ================================================================ */}
+        {tab === 'pivot' && (
+          <div className="p-6 space-y-4">
+            <div className="flex gap-2 flex-wrap">
+              {[{ key: 'semanal', label: 'Vencimientos por semana' }, { key: 'antigüedad', label: 'Antigüedad de cartera' }].map(s => (
+                <button key={s.key} onClick={() => setPivotTab(s.key as PivotSubTab)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                    pivotTab === s.key ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+
+            {/* VENCIMIENTO POR VIERNES */}
+            {pivotTab === 'semanal' && (
+              <div className="space-y-4">
+                {/* Encabezado */}
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700">Vencimientos — próximos 4 viernes</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {vencViernes.rows.length} facturas pendientes · actualizado automáticamente desde hoy
+                    </p>
+                  </div>
+                  <div className="relative">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      className="input pl-8 text-sm py-1.5 max-w-[220px]"
+                      placeholder="Buscar cliente o #..."
+                      value={viernesSearch}
+                      onChange={e => setViernesSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* KPI Cards */}
+                {(() => {
+                  const colors = [
+                    { bg: 'bg-red-50',    border: 'border-red-500',    text: 'text-red-700',    label: 'text-red-500' },
+                    { bg: 'bg-orange-50', border: 'border-orange-400', text: 'text-orange-700', label: 'text-orange-500' },
+                    { bg: 'bg-yellow-50', border: 'border-yellow-400', text: 'text-yellow-700', label: 'text-yellow-600' },
+                    { bg: 'bg-green-50',  border: 'border-green-600',  text: 'text-green-700',  label: 'text-green-600' },
+                  ]
+                  return (
+                    <div className="grid grid-cols-4 gap-3">
+                      {nextFridays.map((fri, i) => {
+                        const c = colors[i]
+                        const cnt = vencViernes.rows.filter(r => r.fridayIdx === i).length
+                        return (
+                          <div key={i} className={`card p-4 border-t-4 ${c.bg} ${c.border}`}>
+                            <p className={`text-xs font-semibold uppercase tracking-wide ${c.label}`}>
+                              Viernes {i + 1}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5 mb-2">
+                              {fri.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                            </p>
+                            <p className={`text-lg font-bold ${c.text}`}>
+                              {formatCurrency(vencViernes.totals[i])}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              {cnt} {cnt === 1 ? 'factura' : 'facturas'}
+                            </p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
+
+                {/* Total general */}
+                <div className="card p-4 bg-brand-50 border border-brand-200 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-brand-700">Total general (4 viernes)</span>
+                  <span className="text-2xl font-bold text-brand-900">{formatCurrency(vencViernes.grandTotal)}</span>
+                </div>
+
+                {/* Tabla */}
+                {vencViernes.rows.length === 0 ? (
+                  <div className="card p-12 text-center text-gray-400">
+                    No hay facturas pendientes en los próximos 4 viernes
+                  </div>
+                ) : (
+                  <div className="card overflow-auto">
+                    <table className="w-full min-w-max">
+                      <thead>
+                        <tr className="border-b-2 border-gray-300 bg-gray-50">
+                          <th className="table-header text-left sticky left-0 bg-gray-50 z-10 min-w-[200px]">Cliente</th>
+                          <th className="table-header text-center min-w-[90px]">Nº Factura</th>
+                          <th className="table-header text-center min-w-[100px]">F. Factura</th>
+                          <th className="table-header text-center min-w-[100px]">F. Vencimiento</th>
+                          {nextFridays.map((fri, i) => (
+                            <th key={i} className="table-header text-right min-w-[120px]">
+                              Vie {i + 1}<br />
+                              <span className="font-normal text-[10px] opacity-80">
+                                {fri.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit' })}
+                              </span>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {viernesRows.map((f: any) => (
+                          <tr key={f.id} className="hover:bg-gray-50">
+                            <td className="table-cell sticky left-0 bg-white z-10 max-w-[220px]">
+                              <span className="truncate block text-sm">{f.clientes?.nombre || '—'}</span>
+                            </td>
+                            <td className="table-cell text-center font-mono text-sm text-gray-500">#{f.numero_factura}</td>
+                            <td className="table-cell text-center text-sm text-gray-400">{formatDate(f.fecha)}</td>
+                            <td className="table-cell text-center text-sm font-semibold text-red-600">{formatDate(f.fecha_pago)}</td>
+                            {nextFridays.map((_, i) => (
+                              <td key={i} className="table-cell text-right text-sm">
+                                {f.fridayIdx === i
+                                  ? <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>
+                                      {formatCurrency(f.total)}
+                                    </span>
+                                  : <span className="text-gray-200">—</span>
+                                }
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">
+                          <td colSpan={4} className="table-cell text-right sticky left-0 bg-gray-100 z-10 text-sm text-gray-600">
+                            TOTAL SEMANAL
+                          </td>
+                          {vencViernes.totals.map((t, i) => (
+                            <td key={i} className="table-cell text-right text-brand-800">
+                              {t > 0 ? formatCurrency(t) : '—'}
+                            </td>
+                          ))}
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+
+                {viernesSearch && viernesRows.length === 0 && (
+                  <p className="text-center text-gray-400 text-sm">Sin resultados para "{viernesSearch}"</p>
+                )}
+              </div>
+            )}
+
+            {/* PIVOT ANTIGÜEDAD */}
+            {pivotTab === 'antigüedad' && (
+              <div className="space-y-4">
+                {/* KPIs por tramo */}
+                <div className="grid grid-cols-5 gap-3">
+                  {BUCKETS.map(bucket => {
+                    const total = pivotAnt.clientes.reduce((s, c) => s + (pivotAnt.data[c]?.[bucket.key] || 0), 0)
+                    return (
+                      <div key={bucket.key} className="card p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-3 h-3 rounded-full" style={{ background: TRAMO_COLORS_HEX[bucket.key] }} />
+                          <span className="text-xs font-medium text-gray-600">{bucket.label}</span>
+                        </div>
+                        <p className="text-lg font-bold">{formatCurrency(total)}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="card p-4 bg-brand-50 border-brand-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-brand-700">Total cartera pendiente</span>
+                    <span className="text-2xl font-bold text-brand-800">
+                      {formatCurrency(cartera.reduce((s,c)=>s+(c.saldo_pendiente??c.total),0))}
+                    </span>
+                  </div>
+                </div>
+
+                {pivotAnt.clientes.length === 0 ? (
+                  <div className="card p-12 text-center text-gray-400">No hay cartera pendiente</div>
+                ) : (
+                  <div className="card overflow-auto">
+                    <table className="w-full min-w-max">
+                      <thead>
+                        <tr className="border-b-2 border-gray-300 bg-gray-50">
+                          <th className="table-header text-left sticky left-0 bg-gray-50 z-10 min-w-[220px]">
+                            Cliente / Factura
+                          </th>
+                          {BUCKETS.map(b => (
+                            <th key={b.key} className="table-header text-right min-w-[120px]">
+                              <div className="flex items-center justify-end gap-1">
+                                <div className="w-2 h-2 rounded-full" style={{ background: TRAMO_COLORS_HEX[b.key] }} />
+                                {b.label}
+                              </div>
+                            </th>
+                          ))}
+                          <th className="table-header text-right min-w-[120px] bg-gray-100">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pivotAnt.clientes.map(cliente => {
+                          const clienteTotal = BUCKETS.reduce((s, b) => s + (pivotAnt.data[cliente]?.[b.key] || 0), 0)
+                          const expandido = antExpandidos[cliente] ?? false
+                          return (
+                            <>
+                              <tr key={`c-${cliente}`}
+                                className="border-b border-gray-200 bg-brand-50/30 hover:bg-brand-50 cursor-pointer"
+                                onClick={() => setAntExpandidos(p => ({ ...p, [cliente]: !expandido }))}>
+                                <td className="table-cell sticky left-0 bg-brand-50/30 z-10 font-semibold text-brand-800">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-xs transition-transform ${expandido ? 'rotate-90' : ''}`}>▶</span>
+                                    {cliente}
+                                  </div>
+                                </td>
+                                {BUCKETS.map(b => (
+                                  <td key={b.key} className="table-cell text-right font-semibold">
+                                    {(pivotAnt.data[cliente]?.[b.key] || 0) > 0 ? (
+                                      <span style={{ color: TRAMO_COLORS_HEX[b.key] }}>
+                                        {formatCurrency(pivotAnt.data[cliente][b.key])}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-300">—</span>
+                                    )}
+                                  </td>
+                                ))}
+                                <td className="table-cell text-right font-bold text-brand-900 bg-brand-50">
+                                  {formatCurrency(clienteTotal)}
+                                </td>
+                              </tr>
+
+                              {expandido && (pivotAnt.factByCliente[cliente] || []).map((c: any) => (
+                                <tr key={`f-${c.id}`} className="border-b border-gray-100 bg-white hover:bg-gray-50">
+                                  <td className="table-cell sticky left-0 bg-white z-10 pl-10 text-sm">
+                                    <span className="font-mono text-gray-400 mr-2">#{c.numero_factura}</span>
+                                    <span className="text-gray-500">Vence: {formatDate(c.fecha_pago)}</span>
+                                  </td>
+                                  {BUCKETS.map(b => (
+                                    <td key={b.key} className="table-cell text-right text-sm">
+                                      {c.tramo === b.key ? (
+                                        <span style={{ color: TRAMO_COLORS_HEX[b.key] }}>
+                                          {formatCurrency(c.saldo_pendiente ?? c.total)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-200">—</span>
+                                      )}
+                                    </td>
+                                  ))}
+                                  <td className="table-cell text-right text-sm font-medium bg-brand-50/30">
+                                    {formatCurrency(c.saldo_pendiente ?? c.total)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </>
+                          )
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">
+                          <td className="table-cell sticky left-0 bg-gray-100 z-10">TOTAL</td>
+                          {BUCKETS.map(b => {
+                            const total = pivotAnt.clientes.reduce((s, c) => s + (pivotAnt.data[c]?.[b.key] || 0), 0)
+                            return (
+                              <td key={b.key} className="table-cell text-right" style={{ color: total > 0 ? TRAMO_COLORS_HEX[b.key] : '#d1d5db' }}>
+                                {total > 0 ? formatCurrency(total) : '—'}
+                              </td>
+                            )
+                          })}
+                          <td className="table-cell text-right text-brand-900 bg-gray-200">
+                            {formatCurrency(cartera.reduce((s,c)=>s+(c.saldo_pendiente??c.total),0))}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -8,11 +8,17 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { Compra, Proveedor, BancoCuenta } from '@/types'
 import {
   Plus, Search, X, Download, Filter,
-  TrendingDown, Clock, CheckCircle, ShoppingCart, Pencil
+  TrendingDown, Clock, CheckCircle, ShoppingCart, Pencil, Trash2
 } from 'lucide-react'
 
 type Tab = 'listado' | 'vencidas'
 type EstadoFilter = 'todos' | 'pendiente' | 'pagada'
+
+interface LineaPago {
+  cuenta_id: string
+  monto: string
+  referencia: string
+}
 
 const TRAMO_COLORS: Record<string, string> = {
   'corriente': '#22c55e', '1-30': '#facc15',
@@ -37,6 +43,14 @@ export default function ComprasPage() {
 
   // Vencidas
   const [vencidas, setVencidas] = useState<any[]>([])
+
+  // Modal de abonos
+  const [selectedCompra, setSelectedCompra] = useState<Compra | null>(null)
+  const [showPagoModal, setShowPagoModal] = useState(false)
+  const [fechaPago, setFechaPago] = useState('')
+  const [lineas, setLineas] = useState<LineaPago[]>([{ cuenta_id: '', monto: '', referencia: '' }])
+  const [savingPago, setSavingPago] = useState(false)
+  const [pagosExistentes, setPagosExistentes] = useState<any[]>([])
 
   const [form, setForm] = useState({
     proveedor_id: '',
@@ -137,6 +151,43 @@ export default function ComprasPage() {
       banco_cuenta_id: cuentaId,
       fecha_pago: new Date().toISOString().split('T')[0],
     }).eq('id', c.id)
+    load()
+  }
+
+  const openPagarModal = async (c: Compra) => {
+    setSelectedCompra(c)
+    setFechaPago(new Date().toISOString().split('T')[0])
+    setLineas([{ cuenta_id: cuentas[0]?.id || '', monto: '', referencia: '' }])
+    setShowPagoModal(true)
+    const { data } = await supabase
+      .from('pagos')
+      .select('*, banco_cuentas(nombre, banco)')
+      .eq('compra_id', c.id)
+      .order('fecha', { ascending: false })
+    setPagosExistentes(data || [])
+  }
+
+  const addLinea = () => setLineas(p => [...p, { cuenta_id: cuentas[0]?.id || '', monto: '', referencia: '' }])
+  const removeLinea = (idx: number) => setLineas(p => p.filter((_, i) => i !== idx))
+  const updateLinea = (idx: number, field: keyof LineaPago, value: string) =>
+    setLineas(p => p.map((l, i) => i === idx ? { ...l, [field]: value } : l))
+
+  const handleRegistrarAbono = async () => {
+    if (!selectedCompra) return
+    const validas = lineas.filter(l => l.cuenta_id && parseFloat(l.monto) > 0)
+    if (validas.length === 0) return
+    setSavingPago(true)
+    await supabase.from('pagos').insert(
+      validas.map(l => ({
+        compra_id: selectedCompra.id,
+        cuenta_id: l.cuenta_id,
+        monto: parseFloat(l.monto),
+        fecha: fechaPago,
+        referencia: l.referencia || null,
+      }))
+    )
+    setSavingPago(false)
+    setShowPagoModal(false)
     load()
   }
 
@@ -312,17 +363,14 @@ export default function ComprasPage() {
                               title="Editar">
                               <Pencil size={14} />
                             </button>
-                            {c.estado === 'pendiente' && cuentas.length > 0 && (
-                              <select
-                                className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-brand-600 hover:border-brand-400 cursor-pointer"
-                                defaultValue=""
-                                onChange={e => { if (e.target.value) handlePagar(c, e.target.value) }}
+                            {c.estado === 'pendiente' && (
+                              <button
+                                onClick={() => openPagarModal(c)}
+                                className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 font-medium border border-green-200 rounded-lg px-2 py-1"
                               >
-                                <option value="" disabled>Pagar con...</option>
-                                {cuentas.map(ct => (
-                                  <option key={ct.id} value={ct.id}>{ct.nombre} – {ct.banco}</option>
-                                ))}
-                              </select>
+                                <CheckCircle size={12} />
+                                {(c.monto_pagado || 0) > 0 ? 'Abonar' : 'Pagar'}
+                              </button>
                             )}
                           </div>
                         </td>
@@ -408,6 +456,106 @@ export default function ComprasPage() {
           </div>
         )}
       </div>
+
+      {/* Modal: Registrar Abono/Pago en Compra */}
+      {showPagoModal && selectedCompra && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-semibold mb-1">Registrar pago</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              {(selectedCompra.proveedores as any)?.nombre} · {selectedCompra.concepto || 'Compra'}
+            </p>
+
+            <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-1.5">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Total compra</span>
+                <span className="font-semibold">{formatCurrency(selectedCompra.total)}</span>
+              </div>
+              {(selectedCompra.monto_pagado || 0) > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Ya pagado</span>
+                  <span className="text-green-600">{formatCurrency(selectedCompra.monto_pagado || 0)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm font-semibold border-t pt-1.5 mt-1.5">
+                <span>Saldo pendiente</span>
+                <span className="text-orange-600">
+                  {formatCurrency(selectedCompra.total - (selectedCompra.monto_pagado || 0))}
+                </span>
+              </div>
+            </div>
+
+            {pagosExistentes.length > 0 && (
+              <div className="mb-4">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-2">Pagos anteriores</p>
+                <div className="space-y-1.5">
+                  {pagosExistentes.map(p => (
+                    <div key={p.id} className="flex justify-between text-sm bg-green-50 rounded-lg px-3 py-2">
+                      <span className="text-gray-600">{formatDate(p.fecha)} · {p.banco_cuentas?.nombre}</span>
+                      <span className="font-medium text-green-700">{formatCurrency(p.monto)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mb-4">
+              <label className="label">Fecha de pago</label>
+              <input type="date" className="input" value={fechaPago}
+                onChange={e => setFechaPago(e.target.value)} />
+            </div>
+
+            <div className="space-y-3 mb-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-gray-700">Forma de pago</p>
+                <button onClick={addLinea} className="text-xs flex items-center gap-1 text-brand-600">
+                  <Plus size={13} /> Agregar cuenta
+                </button>
+              </div>
+              {lineas.map((linea, idx) => (
+                <div key={idx} className="border border-gray-200 rounded-xl p-3 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-xs text-gray-500">Pago {idx + 1}</span>
+                    {lineas.length > 1 && (
+                      <button onClick={() => removeLinea(idx)} className="text-red-400">
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                  <div>
+                    <label className="label text-xs">Cuenta</label>
+                    <select className="input text-sm" value={linea.cuenta_id}
+                      onChange={e => updateLinea(idx, 'cuenta_id', e.target.value)}>
+                      <option value="">Seleccionar...</option>
+                      {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>)}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="label text-xs">Monto (USD)</label>
+                      <input type="number" step="0.01" className="input text-sm" placeholder="0.00"
+                        value={linea.monto} onChange={e => updateLinea(idx, 'monto', e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="label text-xs">Referencia</label>
+                      <input className="input text-sm" placeholder="Cheque, transferencia..."
+                        value={linea.referencia} onChange={e => updateLinea(idx, 'referencia', e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-3">
+              <button className="btn-secondary flex-1" onClick={() => setShowPagoModal(false)}>Cancelar</button>
+              <button className="btn-primary flex-1" onClick={handleRegistrarAbono}
+                disabled={savingPago || lineas.every(l => !l.cuenta_id || !l.monto)}>
+                {savingPago ? 'Guardando...' : 'Registrar pago'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal nueva/editar compra */}
       {showForm && (

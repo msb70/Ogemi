@@ -6,7 +6,7 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { BancoCuenta, BancoMovimiento } from '@/types'
-import { Plus, Building2, TrendingUp, TrendingDown, Calendar } from 'lucide-react'
+import { Plus, Building2, TrendingUp, TrendingDown, Calendar, Printer } from 'lucide-react'
 
 type Tab = 'cuentas' | 'movimientos' | 'cierre'
 
@@ -35,6 +35,9 @@ export default function BancoPage() {
   // Nueva cuenta
   const [showNuevaCuenta, setShowNuevaCuenta] = useState(false)
   const [nuevaCuenta, setNuevaCuenta] = useState({ nombre: '', banco: '', numero_cuenta: '', saldo_inicial: '0' })
+
+  // Recibo de movimiento
+  const [reciboMovimiento, setReciboMovimiento] = useState<any | null>(null)
 
   const supabase = createClient()
 
@@ -80,18 +83,25 @@ export default function BancoPage() {
   const handleGuardarMovimiento = async () => {
     const cId = nuevoForm.cuenta_id || cuentaSelected
     if (!cId || !nuevoForm.concepto || !nuevoForm.monto) return
-    await supabase.from('banco_movimientos').insert({
+    const { data, error } = await supabase.from('banco_movimientos').insert({
       cuenta_id: cId,
       tipo: nuevoForm.tipo,
       concepto: nuevoForm.concepto,
       monto: parseFloat(nuevoForm.monto),
       fecha: nuevoForm.fecha,
       referencia: nuevoForm.referencia || null,
-    })
+    }).select('*, banco_cuentas(nombre, banco, numero_cuenta)').single()
+
     setShowNuevo(false)
+    const payload = nuevoForm
     setNuevoForm({ tipo: 'ingreso', concepto: '', monto: '', fecha: new Date().toISOString().split('T')[0], referencia: '', cuenta_id: '' })
     loadData()
     loadMovimientos()
+
+    // Mostrar recibo
+    if (!error && data) {
+      setReciboMovimiento(data)
+    }
   }
 
   const handleCrearCuenta = async () => {
@@ -235,6 +245,7 @@ export default function BancoPage() {
                     <th className="table-header">Referencia</th>
                     <th className="table-header">Tipo</th>
                     <th className="table-header text-right">Monto</th>
+                    <th className="table-header"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -253,6 +264,15 @@ export default function BancoPage() {
                       </td>
                       <td className={`table-cell text-right font-semibold ${m.tipo === 'ingreso' ? 'text-green-700' : 'text-red-600'}`}>
                         {m.tipo === 'egreso' ? '-' : ''}{formatCurrency(m.monto)}
+                      </td>
+                      <td className="table-cell">
+                        <button
+                          onClick={() => setReciboMovimiento({ ...m, banco_cuentas: cuentas.find(c => c.id === m.cuenta_id) })}
+                          className="text-gray-400 hover:text-brand-600 transition-colors"
+                          title="Imprimir recibo"
+                        >
+                          <Printer size={14} />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -332,6 +352,26 @@ export default function BancoPage() {
         )}
       </div>
 
+      {/* Modal: Recibo de movimiento bancario */}
+      {reciboMovimiento && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 print:hidden">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="p-6 border-b border-gray-100">
+              <h2 className="text-base font-semibold">Recibo de movimiento bancario</h2>
+            </div>
+            <div className="p-6">
+              <ReciboMovimiento movimiento={reciboMovimiento} />
+            </div>
+            <div className="flex gap-3 p-6 pt-0">
+              <button className="btn-secondary flex-1" onClick={() => setReciboMovimiento(null)}>Cerrar</button>
+              <button className="btn-primary flex-1 flex items-center justify-center gap-2" onClick={() => window.print()}>
+                <Printer size={16} />Imprimir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal: Nuevo movimiento */}
       {showNuevo && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -380,5 +420,81 @@ export default function BancoPage() {
         </div>
       )}
     </AppLayout>
+  )
+}
+
+// ============================================================
+// Componente: Recibo de movimiento bancario
+// ============================================================
+function ReciboMovimiento({ movimiento }: { movimiento: any }) {
+  const hoy = new Date().toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const esIngreso = movimiento.tipo === 'ingreso'
+
+  return (
+    <div className="font-sans text-gray-900 text-sm">
+      <div className="text-center border-b-2 border-gray-900 pb-3 mb-4">
+        <h1 className="text-base font-bold uppercase">Ogemi · Impresoras Comerciales</h1>
+        <p className="text-xs text-gray-500 mt-0.5">
+          Comprobante de {esIngreso ? 'Ingreso' : 'Egreso'} Bancario
+        </p>
+      </div>
+
+      <div className="flex justify-between text-xs mb-4">
+        <div>
+          <span className="text-gray-500">Fecha emisión:</span>
+          <span className="ml-1 font-medium">{hoy}</span>
+        </div>
+        <div>
+          <span className="text-gray-500">Fecha movimiento:</span>
+          <span className="ml-1 font-medium">
+            {new Date(movimiento.fecha + 'T00:00:00').toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+          </span>
+        </div>
+      </div>
+
+      <div className="border border-gray-200 rounded-lg p-3 mb-4 space-y-1.5">
+        <div className="flex justify-between">
+          <span className="text-gray-500">Cuenta:</span>
+          <span className="font-medium">{movimiento.banco_cuentas?.nombre} · {movimiento.banco_cuentas?.banco}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-500">Concepto:</span>
+          <span className="font-medium text-right max-w-[220px]">{movimiento.concepto}</span>
+        </div>
+        {movimiento.referencia && (
+          <div className="flex justify-between">
+            <span className="text-gray-500">Referencia:</span>
+            <span className="font-mono">{movimiento.referencia}</span>
+          </div>
+        )}
+        <div className="flex justify-between">
+          <span className="text-gray-500">Tipo:</span>
+          <span className={`font-semibold ${esIngreso ? 'text-green-700' : 'text-red-600'}`}>
+            {esIngreso ? 'INGRESO' : 'EGRESO'}
+          </span>
+        </div>
+      </div>
+
+      <div className={`border-2 rounded-lg p-4 text-center mb-4 ${esIngreso ? 'border-green-600 bg-green-50' : 'border-red-500 bg-red-50'}`}>
+        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Monto</p>
+        <p className={`text-3xl font-bold ${esIngreso ? 'text-green-800' : 'text-red-700'}`}>
+          {esIngreso ? '+' : '-'}
+          {new Intl.NumberFormat('es-PA', { style: 'currency', currency: 'USD' }).format(movimiento.monto)}
+        </p>
+      </div>
+
+      <div className="text-center text-xs text-gray-400 border-t border-gray-200 pt-3">
+        <p>Comprobante generado por el sistema Ogemi.</p>
+      </div>
+
+      <div className="flex justify-between mt-8 pt-4">
+        <div className="text-center">
+          <div className="border-t border-gray-400 pt-1 w-32 text-xs text-gray-500">Elaborado por</div>
+        </div>
+        <div className="text-center">
+          <div className="border-t border-gray-400 pt-1 w-32 text-xs text-gray-500">Autorizado por</div>
+        </div>
+      </div>
+    </div>
   )
 }

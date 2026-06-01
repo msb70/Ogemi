@@ -6,9 +6,15 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate, tramoColor } from '@/lib/utils'
 import { Factura, BancoCuenta } from '@/types'
-import { Search, CheckCircle, Filter, X } from 'lucide-react'
+import { Search, CheckCircle, Filter, X, Plus, Trash2 } from 'lucide-react'
 
 type EstadoFilter = 'todos' | 'pendiente' | 'pagada'
+
+interface LineaPago {
+  cuenta_id: string
+  monto: string
+  referencia: string
+}
 
 export default function FacturasPage() {
   const [facturas, setFacturas] = useState<Factura[]>([])
@@ -16,11 +22,14 @@ export default function FacturasPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('todos')
+
+  // Modal de abonos
   const [selectedFactura, setSelectedFactura] = useState<Factura | null>(null)
   const [showModal, setShowModal] = useState(false)
-  const [fechaCobro, setFechaCobro] = useState('')
-  const [cuentaSeleccionada, setCuentaSeleccionada] = useState('')
+  const [fechaPago, setFechaPago] = useState('')
+  const [lineas, setLineas] = useState<LineaPago[]>([{ cuenta_id: '', monto: '', referencia: '' }])
   const [saving, setSaving] = useState(false)
+  const [pagosExistentes, setPagosExistentes] = useState<any[]>([])
 
   const supabase = createClient()
 
@@ -40,10 +49,7 @@ export default function FacturasPage() {
     setFacturas(data || [])
 
     const { data: cuentasData } = await supabase
-      .from('banco_cuentas')
-      .select('*')
-      .eq('activo', true)
-      .order('nombre')
+      .from('banco_cuentas').select('*').eq('activo', true).order('nombre')
     setCuentas(cuentasData || [])
     setLoading(false)
   }, [estadoFilter])
@@ -60,25 +66,56 @@ export default function FacturasPage() {
     )
   })
 
-  const openPagoModal = (f: Factura) => {
+  const openPagoModal = async (f: Factura) => {
     setSelectedFactura(f)
-    setFechaCobro(new Date().toISOString().split('T')[0])
-    setCuentaSeleccionada(cuentas[0]?.id || '')
+    setFechaPago(new Date().toISOString().split('T')[0])
+    setLineas([{ cuenta_id: cuentas[0]?.id || '', monto: '', referencia: '' }])
     setShowModal(true)
+
+    // Cargar pagos existentes
+    const { data } = await supabase
+      .from('pagos')
+      .select('*, banco_cuentas(nombre, banco)')
+      .eq('factura_id', f.id)
+      .order('fecha', { ascending: false })
+    setPagosExistentes(data || [])
   }
 
-  const handleMarcarPagada = async () => {
-    if (!selectedFactura || !cuentaSeleccionada) return
+  const addLinea = () => {
+    setLineas(prev => [...prev, { cuenta_id: cuentas[0]?.id || '', monto: '', referencia: '' }])
+  }
+
+  const removeLinea = (idx: number) => {
+    setLineas(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const updateLinea = (idx: number, field: keyof LineaPago, value: string) => {
+    setLineas(prev => prev.map((l, i) => i === idx ? { ...l, [field]: value } : l))
+  }
+
+  const totalLineas = lineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0)
+
+  const saldoPendiente = selectedFactura
+    ? (selectedFactura.total - (selectedFactura.monto_pagado || 0))
+    : 0
+
+  const handleRegistrarAbono = async () => {
+    if (!selectedFactura) return
+    const lineasValidas = lineas.filter(l => l.cuenta_id && parseFloat(l.monto) > 0)
+    if (lineasValidas.length === 0) return
+
     setSaving(true)
 
-    const { error } = await supabase
-      .from('facturas')
-      .update({
-        estado: 'pagada',
-        fecha_cobro: fechaCobro,
-        banco_cuenta_id: cuentaSeleccionada,
-      })
-      .eq('id', selectedFactura.id)
+    // Insertar cada línea como un pago
+    const pagosInsert = lineasValidas.map(l => ({
+      factura_id: selectedFactura.id,
+      cuenta_id: l.cuenta_id,
+      monto: parseFloat(l.monto),
+      fecha: fechaPago,
+      referencia: l.referencia || null,
+    }))
+
+    const { error } = await supabase.from('pagos').insert(pagosInsert)
 
     setSaving(false)
     if (!error) {
@@ -125,7 +162,6 @@ export default function FacturasPage() {
             </button>
           )}
         </div>
-
         <div className="flex items-center gap-2">
           <Filter size={16} className="text-gray-400" />
           {(['todos', 'pendiente', 'pagada'] as EstadoFilter[]).map(e => (
@@ -154,9 +190,9 @@ export default function FacturasPage() {
                 <th className="table-header">Fecha</th>
                 <th className="table-header">Cliente</th>
                 <th className="table-header">Tipo</th>
-                <th className="table-header text-right">Monto</th>
-                <th className="table-header text-right">ITBMS</th>
                 <th className="table-header text-right">Total</th>
+                <th className="table-header text-right">Pagado</th>
+                <th className="table-header text-right">Saldo</th>
                 <th className="table-header">Vence</th>
                 <th className="table-header">Estado</th>
                 <th className="table-header">Acción</th>
@@ -172,11 +208,13 @@ export default function FacturasPage() {
                   const dias = f.estado === 'pendiente' ? getDiasVencida(f) : 0
                   const tramo = f.estado === 'pendiente' ? getTramo(dias) : null
                   const tipoCorto = f.tipo_documento.includes('CREDITO') ? 'N. CRÉDITO' : 'FACTURA'
+                  const montoPagado = f.monto_pagado || 0
+                  const saldo = f.total - montoPagado
                   return (
                     <tr key={f.id} className="hover:bg-gray-50 transition-colors">
                       <td className="table-cell font-mono font-medium">#{f.numero_factura}</td>
                       <td className="table-cell text-gray-500">{formatDate(f.fecha)}</td>
-                      <td className="table-cell max-w-[200px]">
+                      <td className="table-cell max-w-[180px]">
                         <span className="truncate block" title={f.clientes?.nombre}>{f.clientes?.nombre}</span>
                       </td>
                       <td className="table-cell">
@@ -184,9 +222,13 @@ export default function FacturasPage() {
                           {tipoCorto}
                         </span>
                       </td>
-                      <td className="table-cell text-right">{formatCurrency(f.monto)}</td>
-                      <td className="table-cell text-right">{formatCurrency(f.itbms)}</td>
                       <td className="table-cell text-right font-semibold">{formatCurrency(f.total)}</td>
+                      <td className="table-cell text-right text-green-600">
+                        {montoPagado > 0 ? formatCurrency(montoPagado) : '—'}
+                      </td>
+                      <td className="table-cell text-right font-semibold text-orange-600">
+                        {f.estado === 'pagada' ? <span className="text-green-600 text-sm">Saldada</span> : formatCurrency(saldo)}
+                      </td>
                       <td className="table-cell">
                         <div className="flex flex-col">
                           <span className="text-xs">{formatDate(f.fecha_pago)}</span>
@@ -196,8 +238,8 @@ export default function FacturasPage() {
                         </div>
                       </td>
                       <td className="table-cell">
-                        <span className={`badge ${f.estado === 'pagada' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                          {f.estado}
+                        <span className={`badge ${f.estado === 'pagada' ? 'bg-green-100 text-green-700' : montoPagado > 0 ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                          {f.estado === 'pagada' ? 'pagada' : montoPagado > 0 ? 'abono' : 'pendiente'}
                         </span>
                       </td>
                       <td className="table-cell">
@@ -207,7 +249,7 @@ export default function FacturasPage() {
                             className="flex items-center gap-1.5 text-sm text-green-600 hover:text-green-800 font-medium"
                           >
                             <CheckCircle size={15} />
-                            Cobrar
+                            {montoPagado > 0 ? 'Abonar' : 'Cobrar'}
                           </button>
                         )}
                         {f.estado === 'pagada' && (
@@ -223,65 +265,147 @@ export default function FacturasPage() {
         </div>
       </div>
 
-      {/* Modal: Registrar Cobro */}
+      {/* Modal: Registrar Abono/Cobro */}
       {showModal && selectedFactura && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold mb-1">Registrar Cobro</h2>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-semibold mb-1">
+              {(selectedFactura.monto_pagado || 0) > 0 ? 'Registrar abono' : 'Registrar cobro'}
+            </h2>
             <p className="text-sm text-gray-500 mb-4">
               Factura #{selectedFactura.numero_factura} · {selectedFactura.clientes?.nombre}
             </p>
 
+            {/* Resumen */}
             <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-1.5">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Monto</span>
-                <span>{formatCurrency(selectedFactura.monto)}</span>
+                <span className="text-gray-500">Total factura</span>
+                <span className="font-semibold">{formatCurrency(selectedFactura.total)}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">ITBMS</span>
-                <span>{formatCurrency(selectedFactura.itbms)}</span>
-              </div>
+              {(selectedFactura.monto_pagado || 0) > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Ya pagado</span>
+                  <span className="text-green-600">{formatCurrency(selectedFactura.monto_pagado || 0)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-sm font-semibold border-t pt-1.5 mt-1.5">
-                <span>Total a cobrar</span>
-                <span className="text-brand-700">{formatCurrency(selectedFactura.total)}</span>
+                <span>Saldo pendiente</span>
+                <span className="text-orange-600">{formatCurrency(saldoPendiente)}</span>
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div>
-                <label className="label">Fecha de cobro</label>
-                <input
-                  type="date"
-                  className="input"
-                  value={fechaCobro}
-                  onChange={(e) => setFechaCobro(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label">Cuenta bancaria</label>
-                <select
-                  className="input"
-                  value={cuentaSeleccionada}
-                  onChange={(e) => setCuentaSeleccionada(e.target.value)}
-                >
-                  <option value="">Seleccionar cuenta...</option>
-                  {cuentas.map(c => (
-                    <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>
+            {/* Pagos existentes */}
+            {pagosExistentes.length > 0 && (
+              <div className="mb-4">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-2">Pagos registrados</p>
+                <div className="space-y-1.5">
+                  {pagosExistentes.map(p => (
+                    <div key={p.id} className="flex justify-between text-sm bg-green-50 rounded-lg px-3 py-2">
+                      <span className="text-gray-600">{formatDate(p.fecha)} · {p.banco_cuentas?.nombre}</span>
+                      <span className="font-medium text-green-700">{formatCurrency(p.monto)}</span>
+                    </div>
                   ))}
-                </select>
+                </div>
               </div>
+            )}
+
+            {/* Fecha de pago */}
+            <div className="mb-4">
+              <label className="label">Fecha de cobro</label>
+              <input
+                type="date"
+                className="input"
+                value={fechaPago}
+                onChange={e => setFechaPago(e.target.value)}
+              />
             </div>
 
-            <div className="flex gap-3 mt-6">
+            {/* Líneas de pago (multi-cuenta) */}
+            <div className="space-y-3 mb-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-gray-700">Forma de pago</p>
+                <button
+                  onClick={addLinea}
+                  className="text-xs flex items-center gap-1 text-brand-600 hover:text-brand-800"
+                >
+                  <Plus size={13} /> Agregar cuenta
+                </button>
+              </div>
+
+              {lineas.map((linea, idx) => (
+                <div key={idx} className="border border-gray-200 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500 font-medium">Pago {idx + 1}</span>
+                    {lineas.length > 1 && (
+                      <button onClick={() => removeLinea(idx)} className="text-red-400 hover:text-red-600">
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                  <div>
+                    <label className="label text-xs">Cuenta bancaria</label>
+                    <select
+                      className="input text-sm"
+                      value={linea.cuenta_id}
+                      onChange={e => updateLinea(idx, 'cuenta_id', e.target.value)}
+                    >
+                      <option value="">Seleccionar cuenta...</option>
+                      {cuentas.map(c => (
+                        <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="label text-xs">Monto (USD)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        className="input text-sm"
+                        placeholder="0.00"
+                        value={linea.monto}
+                        onChange={e => updateLinea(idx, 'monto', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="label text-xs">Referencia</label>
+                      <input
+                        className="input text-sm"
+                        placeholder="Cheque, transferencia..."
+                        value={linea.referencia}
+                        onChange={e => updateLinea(idx, 'referencia', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Total líneas */}
+              {lineas.length > 1 && (
+                <div className="flex justify-between text-sm font-semibold bg-brand-50 rounded-lg px-3 py-2">
+                  <span className="text-brand-700">Total este abono</span>
+                  <span className="text-brand-800">{formatCurrency(totalLineas)}</span>
+                </div>
+              )}
+
+              {totalLineas > saldoPendiente + 0.01 && (
+                <div className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">
+                  ⚠ El monto supera el saldo pendiente ({formatCurrency(saldoPendiente)})
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3">
               <button className="btn-secondary flex-1" onClick={() => setShowModal(false)}>
                 Cancelar
               </button>
               <button
                 className="btn-primary flex-1"
-                onClick={handleMarcarPagada}
-                disabled={saving || !cuentaSeleccionada}
+                onClick={handleRegistrarAbono}
+                disabled={saving || lineas.every(l => !l.cuenta_id || !l.monto)}
               >
-                {saving ? 'Guardando...' : 'Confirmar cobro'}
+                {saving ? 'Guardando...' : 'Registrar pago'}
               </button>
             </div>
           </div>

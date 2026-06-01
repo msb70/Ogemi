@@ -7,13 +7,14 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, FileText, Users, Building2,
   BarChart3, Upload, ShieldCheck, LogOut, ChevronRight,
-  ShoppingCart, Truck
+  ShoppingCart, Truck, Wallet
 } from 'lucide-react'
 
 const navItems = [
   { href: '/dashboard',   label: 'Dashboard',      icon: LayoutDashboard },
   { href: '/facturas',    label: 'Facturas',        icon: FileText },
   { href: '/clientes',    label: 'Clientes',        icon: Users },
+  { href: '/anticipos',   label: 'Anticipos',       icon: Wallet },
   { href: '/compras',     label: 'Compras',         icon: ShoppingCart },
   { href: '/proveedores', label: 'Proveedores',     icon: Truck },
   { href: '/banco',       label: 'Banco',           icon: Building2 },
