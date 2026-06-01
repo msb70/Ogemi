@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, formatDateObj } from '@/lib/utils'
 import { BancoCuenta, BancoMovimiento } from '@/types'
 import { Plus, Building2, TrendingUp, TrendingDown, Calendar, Printer } from 'lucide-react'
 
@@ -427,7 +427,7 @@ export default function BancoPage() {
 // Componente: Recibo de movimiento bancario
 // ============================================================
 function ReciboMovimiento({ movimiento }: { movimiento: any }) {
-  const hoy = new Date().toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const hoy = formatDateObj(new Date())
   const esIngreso = movimiento.tipo === 'ingreso'
 
   return (
@@ -447,7 +447,7 @@ function ReciboMovimiento({ movimiento }: { movimiento: any }) {
         <div>
           <span className="text-gray-500">Fecha movimiento:</span>
           <span className="ml-1 font-medium">
-            {new Date(movimiento.fecha + 'T00:00:00').toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+            {formatDate(movimiento.fecha)}
           </span>
         </div>
       </div>

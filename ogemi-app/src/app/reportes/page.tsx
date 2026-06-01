@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
-import { formatCurrency, formatDate, tramoColor } from '@/lib/utils'
+import { formatCurrency, formatDate, formatDateObj, tramoColor } from '@/lib/utils'
 import { CarteraVencida } from '@/types'
 import {
   Download, Filter, Search, X, TrendingUp, TrendingDown,
@@ -107,7 +107,7 @@ function buildPivotSemanal(
     end.setDate(end.getDate() + 6)
     if (end > hasta) end.setTime(hasta.getTime())
     semanas.push({
-      label: `Sem ${semNum} (${start.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit' })}–${end.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit' })})`,
+      label: `Sem ${semNum} (${formatDateObj(start).slice(0,5)}–${formatDateObj(end).slice(0,5)})`,
       start, end,
     })
     cur.setDate(cur.getDate() + 7)
@@ -1282,7 +1282,7 @@ export default function ReportesPage() {
                               Viernes {i + 1}
                             </p>
                             <p className="text-xs text-gray-500 mt-0.5 mb-2">
-                              {fri.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                              {formatDateObj(fri)}
                             </p>
                             <p className={`text-lg font-bold ${c.text}`}>
                               {formatCurrency(vencViernes.totals[i])}
@@ -1321,7 +1321,7 @@ export default function ReportesPage() {
                             <th key={i} className="table-header text-right min-w-[120px]">
                               Vie {i + 1}<br />
                               <span className="font-normal text-[10px] opacity-80">
-                                {fri.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit' })}
+                                {formatDateObj(fri).slice(0, 5)}
                               </span>
                             </th>
                           ))}

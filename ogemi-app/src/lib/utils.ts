@@ -13,10 +13,18 @@ export function formatCurrency(amount: number): string {
   }).format(amount)
 }
 
+/** Formatea un objeto Date a DD/MM/YYYY */
+export function formatDateObj(d: Date): string {
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const yyyy = d.getFullYear()
+  return `${dd}/${mm}/${yyyy}`
+}
+
+/** Formatea un string de fecha (YYYY-MM-DD) a DD/MM/YYYY */
 export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
-  const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return formatDateObj(new Date(dateStr + 'T00:00:00'))
 }
 
 export function classifyTramo(diasVencida: number): string {

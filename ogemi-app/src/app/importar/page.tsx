@@ -5,6 +5,7 @@ import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { parseLibroVentas } from '@/lib/excel-parser'
+import { formatDateObj } from '@/lib/utils'
 import { ImportResult, ExcelRow } from '@/types'
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, X, Eye } from 'lucide-react'
 
@@ -231,7 +232,7 @@ export default function ImportarPage() {
                       <tr key={i} className="hover:bg-gray-50">
                         <td className="table-cell text-gray-400">{i + 1}</td>
                         <td className="table-cell text-gray-500">
-                          {row.fecha.toLocaleDateString('es-PA')}
+                          {formatDateObj(row.fecha)}
                         </td>
                         <td className="table-cell">
                           <span className={`badge text-xs ${row.tipo_documento.includes('CREDITO') ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
