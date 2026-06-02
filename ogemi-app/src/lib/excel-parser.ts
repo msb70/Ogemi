@@ -2,17 +2,49 @@ import * as XLSX from 'xlsx'
 import { ExcelRow } from '@/types'
 
 /**
+ * =============================================================================
+ * FORMATO DE DOCUMENTO ESPERADO EN EL MÓDULO DE IMPORTAR
+ * =============================================================================
+ * Origen:  Sistema Premium Soft (adm.premium-soft.com)
+ * Ruta:    Reportes → Libro de Ventas → Exportar como Excel
+ * Archivo: LibroVentas_MMAAAA.xls  (en realidad es HTML con extensión .xls)
+ *
+ * El archivo NO es un Excel binario real — es HTML exportado por Premium Soft
+ * con Content-Type "application/vnd.ms-excel". SheetJS lo puede leer pero
+ * hay tres particularidades importantes documentadas abajo.
+ * =============================================================================
+ *
  * Parsea el Libro de Ventas de IMPRESOS COMERCIALES SA
- * Estructura: headers en fila 7 (índice 6), datos desde fila 8 (índice 7)
- * Columnas relevantes:
- *   A (0): Emision (fecha)
- *   D (3): Tipo Doc
- *   G (6): No.Doc (número de factura)
- *   H (7): Doc.Afectado
- *   I (8): Nombre (cliente)
- *   L (11): Neto (monto)
- *   P (15): Impuesto 7% (ITBMS)
- *   M (12): Total Final
+ * El archivo es HTML disfrazado de .xls (exportado por Premium Soft).
+ * SheetJS lo lee correctamente pero la estructura real es:
+ *   Fila 0: Encabezado empresa
+ *   Fila 1: Headers de grupos (IMPUESTO 7%, IMPUESTO EXENTO)
+ *   Fila 2: Headers de columnas
+ *   Fila 3+: Datos
+ *
+ * Columnas reales (0-indexed):
+ *   0:  Emision (fecha)
+ *   1:  Tipo Doc
+ *   2:  No.Doc (número de factura)
+ *   3:  Doc.Afectado
+ *   4:  Nombre (cliente)
+ *   5:  Recargos
+ *   6:  Propinas
+ *   7:  Neto
+ *   8:  Total Final
+ *   9:  Retenido
+ *   10: Base ITBMS 7%
+ *   11: Impuesto ITBMS 7%
+ *   12: Base Exento
+ *   13: Impuesto Exento
+ *
+ * PARTICULARIDADES DEL FORMATO (no cambiar sin validar contra el archivo real):
+ *   1. DATA_START_ROW = 3: el archivo tiene exactamente 3 filas de encabezado
+ *      antes de los datos. Si Premium Soft cambia el layout, este valor cambia.
+ *   2. Fechas mixtas: SheetJS parsea las primeras fechas del mes como tipo Date
+ *      y el resto como strings "DD/MM/YYYY". Se manejan ambos casos.
+ *   3. Números × 100: SheetJS lee "373,10" (decimal europeo con coma) como el
+ *      entero 37310. Todos los campos monetarios se dividen entre 100.
  */
 export function parseLibroVentas(buffer: ArrayBuffer): ExcelRow[] {
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
@@ -20,12 +52,12 @@ export function parseLibroVentas(buffer: ArrayBuffer): ExcelRow[] {
   const sheet = workbook.Sheets[sheetName]
 
   // Obtener rango de celdas
-  const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:R108')
+  const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:N100')
 
   const rows: ExcelRow[] = []
 
-  // Datos empiezan en fila 8 (índice 7, base 0)
-  const DATA_START_ROW = 7
+  // Datos empiezan en fila índice 3 (filas 0-2 son encabezados)
+  const DATA_START_ROW = 3
 
   for (let r = DATA_START_ROW; r <= range.e.r; r++) {
     const getCell = (col: number) => {
@@ -33,36 +65,49 @@ export function parseLibroVentas(buffer: ArrayBuffer): ExcelRow[] {
       return sheet[addr]
     }
 
-    const cellFecha = getCell(0)   // A: Emision
-    const cellTipo  = getCell(3)   // D: Tipo Doc
-    const cellDoc   = getCell(6)   // G: No.Doc
-    const cellAfect = getCell(7)   // H: Doc.Afectado
-    const cellNomb  = getCell(8)   // I: Nombre
-    const cellNeto  = getCell(11)  // L: Neto
-    const cellImp   = getCell(15)  // P: Impuesto 7%
-    const cellTotal = getCell(12)  // M: Total Final
+    const cellFecha = getCell(0)   // Emision
+    const cellTipo  = getCell(1)   // Tipo Doc
+    const cellDoc   = getCell(2)   // No.Doc
+    const cellAfect = getCell(3)   // Doc.Afectado
+    const cellNomb  = getCell(4)   // Nombre
+    const cellNeto  = getCell(7)   // Neto
+    const cellTotal = getCell(8)   // Total Final
+    const cellImp   = getCell(11)  // Impuesto 7% (ITBMS)
 
-    // Saltar filas vacías o filas de totales (empiezan con "TOTAL")
+    // Saltar filas vacías o filas de totales
     if (!cellFecha || !cellNomb) continue
     const nombreVal = cellNomb.v?.toString() || ''
     if (!nombreVal || nombreVal.startsWith('TOTAL') || nombreVal.startsWith('BASE')) continue
 
     // Validar que la fecha sea válida
+    // SheetJS a veces parsea fechas como Date, a veces como número serial,
+    // y a veces las deja como string "DD/MM/YYYY" según el HTML de origen.
     let fecha: Date
     if (cellFecha.t === 'd') {
       fecha = cellFecha.v as Date
     } else if (cellFecha.t === 'n') {
       const parsed = XLSX.SSF.parse_date_code(cellFecha.v as number)
       fecha = new Date(parsed.y, parsed.m - 1, parsed.d)
+    } else if (cellFecha.t === 's') {
+      // Formato "DD/MM/YYYY" (separador de fecha europeo)
+      const str = cellFecha.v as string
+      const m = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+      if (!m) continue
+      fecha = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]))
     } else {
       continue // saltar si no es fecha válida
     }
 
     if (!fecha || isNaN(fecha.getTime())) continue
 
+    // SheetJS lee números con coma decimal europea ("373,10") como enteros * 100.
+    // Si el valor es número entero y parece estar * 100, dividir entre 100.
     const parseNumero = (cell: XLSX.CellObject | undefined): number => {
       if (!cell) return 0
-      if (typeof cell.v === 'number') return cell.v
+      if (typeof cell.v === 'number') {
+        // Los valores monetarios vienen como enteros × 100 (ej: 37310 = 373.10)
+        return cell.v / 100
+      }
       const str = cell.v?.toString().replace(',', '.').replace(/[^\d.-]/g, '') || '0'
       return parseFloat(str) || 0
     }
@@ -70,8 +115,8 @@ export function parseLibroVentas(buffer: ArrayBuffer): ExcelRow[] {
     const row: ExcelRow = {
       fecha,
       tipo_documento: cellTipo?.v?.toString().trim() || 'FACTURA DE OPERACION INTERNA',
-      numero_factura: Math.abs(parseNumero(cellDoc)),
-      documento_afectado: cellAfect ? Math.abs(parseNumero(cellAfect)) || null : null,
+      numero_factura: cellDoc?.t === 'n' ? Math.abs(cellDoc.v as number) : Math.abs(parseNumero(cellDoc)),
+      documento_afectado: cellAfect && cellAfect.v ? Math.abs(parseNumero(cellAfect)) || null : null,
       nombre_cliente: nombreVal.trim(),
       neto: parseNumero(cellNeto),
       impuesto: parseNumero(cellImp),
