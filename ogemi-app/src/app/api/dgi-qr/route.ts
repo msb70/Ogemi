@@ -114,13 +114,16 @@ export async function POST(req: NextRequest) {
       return parseFloat(s.replace(/,/g, '')) || 0
     }
 
-    const monto = parseAmount(valorTotalMatch?.[1])
+    // "Valor Total" en DGI = total de la factura (base + ITBMS)
+    // monto base = Valor Total - ITBMS Total
+    const total = parseAmount(valorTotalMatch?.[1])
     const itbms = parseAmount(itbmsMatch?.[1])
+    const monto = Math.round((total - itbms) * 100) / 100  // base sin ITBMS
 
-    if (!numero_factura || !emisor_nombre || monto === 0) {
+    if (!numero_factura || !emisor_nombre || total === 0) {
       return NextResponse.json({
         error: 'No se pudieron extraer los datos de la factura. Verifica que la URL del QR sea correcta.',
-        debug: { numero_factura, fecha, emisor_nombre, emisor_ruc, monto, itbms }
+        debug: { numero_factura, fecha, emisor_nombre, emisor_ruc, total, itbms }
       }, { status: 422 })
     }
 
@@ -129,9 +132,9 @@ export async function POST(req: NextRequest) {
       fecha,
       emisor_nombre,
       emisor_ruc,
-      monto,
+      monto,   // base sin ITBMS
       itbms,
-      total: monto + itbms,
+      total,   // total con ITBMS
     })
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Error interno' }, { status: 500 })
