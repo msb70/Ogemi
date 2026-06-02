@@ -132,7 +132,9 @@ export function parseLibroVentas(buffer: ArrayBuffer): ExcelRow[] {
       fecha,
       tipo_documento: cellTipo?.v?.toString().trim() || 'FACTURA DE OPERACION INTERNA',
       numero_factura: cellDoc?.t === 'n' ? Math.abs(cellDoc.v as number) : Math.abs(parseNumero(cellDoc)),
-      documento_afectado: cellAfect && cellAfect.v ? Math.abs(parseNumero(cellAfect)) || null : null,
+      documento_afectado: cellAfect && cellAfect.v
+        ? Math.abs(cellAfect.t === 'n' ? (cellAfect.v as number) : parseInt(cellAfect.v?.toString() || '0')) || null
+        : null,
       nombre_cliente: nombreVal.trim(),
       neto: parseNumero(cellNeto),
       impuesto: parseNumero(cellImp),
