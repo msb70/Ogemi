@@ -8,7 +8,8 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { Compra, Proveedor, BancoCuenta } from '@/types'
 import {
   Plus, Search, X, Download, Filter,
-  TrendingDown, Clock, CheckCircle, ShoppingCart, Pencil, Trash2
+  TrendingDown, Clock, CheckCircle, ShoppingCart, Pencil, Trash2,
+  QrCode, Loader2, AlertCircle
 } from 'lucide-react'
 
 type Tab = 'listado' | 'vencidas'
@@ -51,6 +52,12 @@ export default function ComprasPage() {
   const [lineas, setLineas] = useState<LineaPago[]>([{ cuenta_id: '', monto: '', referencia: '' }])
   const [savingPago, setSavingPago] = useState(false)
   const [pagosExistentes, setPagosExistentes] = useState<any[]>([])
+
+  // QR Scanner
+  const [showQrModal, setShowQrModal] = useState(false)
+  const [qrUrl, setQrUrl] = useState('')
+  const [qrLoading, setQrLoading] = useState(false)
+  const [qrError, setQrError] = useState('')
 
   const [form, setForm] = useState({
     proveedor_id: '',
@@ -191,6 +198,66 @@ export default function ComprasPage() {
     load()
   }
 
+  const handleQrScan = async () => {
+    if (!qrUrl.trim()) return
+    setQrLoading(true)
+    setQrError('')
+    try {
+      const res = await fetch('/api/dgi-qr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: qrUrl.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setQrError(data.error || 'Error al consultar el DGI')
+        return
+      }
+
+      // Buscar o crear proveedor por nombre
+      let proveedorId = ''
+      const nombreNorm = data.emisor_nombre.trim().toUpperCase()
+      const existente = proveedores.find(
+        p => p.nombre.toUpperCase() === nombreNorm
+      )
+      if (existente) {
+        proveedorId = existente.id
+      } else {
+        // Crear proveedor automáticamente
+        const { data: nuevo, error } = await supabase
+          .from('proveedores')
+          .insert({ nombre: data.emisor_nombre.trim(), dias_credito: 30, activo: true })
+          .select()
+          .single()
+        if (error || !nuevo) {
+          setQrError('Error al crear el proveedor: ' + (error?.message || ''))
+          return
+        }
+        proveedorId = nuevo.id
+        await load() // recargar lista de proveedores
+      }
+
+      // Pre-llenar el formulario
+      setForm(f => ({
+        ...f,
+        proveedor_id: proveedorId,
+        fecha: data.fecha || f.fecha,
+        referencia: data.numero_factura ? `FAC-${data.numero_factura}` : f.referencia,
+        monto: String(data.monto),
+        itbms: String(data.itbms),
+        concepto: `Factura ${data.numero_factura} - ${data.emisor_nombre}`,
+      }))
+
+      setShowQrModal(false)
+      setQrUrl('')
+      setShowForm(true)
+    } catch (e: any) {
+      setQrError(e.message || 'Error inesperado')
+    } finally {
+      setQrLoading(false)
+    }
+  }
+
   const exportCSV = () => {
     const rows = filtered.map(c => [
       c.fecha, (c.proveedores as any)?.nombre || '', c.concepto || '',
@@ -237,6 +304,9 @@ export default function ComprasPage() {
           <div className="flex items-center gap-2">
             <button className="btn-secondary flex items-center gap-2" onClick={exportCSV}>
               <Download size={16} />Exportar
+            </button>
+            <button className="btn-secondary flex items-center gap-2" onClick={() => { setQrUrl(''); setQrError(''); setShowQrModal(true) }}>
+              <QrCode size={16} />Escanear QR
             </button>
             <button className="btn-primary flex items-center gap-2" onClick={() => handleOpenForm()}>
               <Plus size={16} />Nueva compra
@@ -656,6 +726,63 @@ export default function ComprasPage() {
           </div>
         </div>
       )}
+      {/* Modal: Escanear QR DGI */}
+      {showQrModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <QrCode size={20} className="text-brand-600" />
+                <h2 className="text-lg font-semibold">Escanear QR de Factura DGI</h2>
+              </div>
+              <button onClick={() => setShowQrModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-500 mb-4">
+              Escanea el código QR de la factura con tu teléfono, copia la URL y pégala aquí.
+              Se extraerán automáticamente los datos del emisor, fecha y montos.
+            </p>
+
+            <div className="mb-4">
+              <label className="label">URL del QR (dgi-fep.mef.gob.pa)</label>
+              <textarea
+                className="input resize-none text-xs font-mono"
+                rows={4}
+                placeholder="https://dgi-fep.mef.gob.pa/Consultas/FacturasPorQR?chFE=..."
+                value={qrUrl}
+                onChange={e => { setQrUrl(e.target.value); setQrError('') }}
+              />
+            </div>
+
+            {qrError && (
+              <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-sm text-red-700">
+                <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                <span>{qrError}</span>
+              </div>
+            )}
+
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-5 text-xs text-blue-700">
+              <strong>¿Cómo obtener la URL?</strong> Abre la cámara de tu teléfono, apunta al QR de la factura y copia el enlace que aparece. El proveedor se creará automáticamente si no existe.
+            </div>
+
+            <div className="flex gap-3">
+              <button className="btn-secondary flex-1" onClick={() => setShowQrModal(false)}>
+                Cancelar
+              </button>
+              <button
+                className="btn-primary flex-1 flex items-center justify-center gap-2"
+                onClick={handleQrScan}
+                disabled={qrLoading || !qrUrl.trim()}
+              >
+                {qrLoading ? <><Loader2 size={16} className="animate-spin" />Consultando DGI...</> : <><QrCode size={16} />Importar factura</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </AppLayout>
   )
 }
