@@ -126,11 +126,11 @@ export default function PresupuestosPage() {
   }
 
   const resetForm = () => {
-    setForm({ numero_presupuesto: '', fecha: new Date().toISOString().split('T')[0], cliente_id: '', tipo_documento: 'PRESUPUESTO', monto: '', itbms: '', notas: '' })
+    setForm({ numero_presupuesto: '', fecha: new Date().toISOString().split('T')[0], cliente_id: '', tipo_documento: 'PRESUPUESTO', monto: '', itbms: '0', notas: '' })
     setEditId(null)
   }
 
-  const openForm = (p?: Presupuesto) => {
+  const openForm = async (p?: Presupuesto) => {
     if (p) {
       setEditId(p.id)
       setForm({
@@ -143,7 +143,15 @@ export default function PresupuestosPage() {
         notas: p.notas || '',
       })
     } else {
+      // Auto-numerar: max actual + 1
+      const { data } = await supabase
+        .from('presupuestos')
+        .select('numero_presupuesto')
+        .order('numero_presupuesto', { ascending: false })
+        .limit(1)
+      const siguiente = data && data.length > 0 ? (data[0].numero_presupuesto + 1) : 1
       resetForm()
+      setForm(f => ({ ...f, numero_presupuesto: String(siguiente), itbms: '0' }))
     }
     setShowForm(true)
   }
@@ -386,9 +394,11 @@ export default function PresupuestosPage() {
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Número *</label>
-                  <input className="input" type="number" placeholder="001" value={form.numero_presupuesto}
-                    onChange={e => setForm(f => ({ ...f, numero_presupuesto: e.target.value }))} />
+                  <label className="label">Número</label>
+                  <div className="input bg-gray-50 text-gray-500 font-mono flex items-center">
+                    #{form.numero_presupuesto || '—'}
+                    {!editId && <span className="ml-auto text-xs text-gray-400">Auto</span>}
+                  </div>
                 </div>
                 <div>
                   <label className="label">Fecha *</label>
@@ -411,14 +421,16 @@ export default function PresupuestosPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Monto sin ITBMS *</label>
+                  <label className="label">Monto *</label>
                   <input type="number" step="0.01" className="input" placeholder="0.00"
-                    value={form.monto} onChange={e => setForm(f => ({ ...f, monto: e.target.value }))} />
+                    value={form.monto} autoFocus
+                    onChange={e => setForm(f => ({ ...f, monto: e.target.value }))} />
                 </div>
                 <div>
                   <label className="label">ITBMS</label>
-                  <input type="number" step="0.01" className="input" placeholder="0.00"
-                    value={form.itbms} onChange={e => setForm(f => ({ ...f, itbms: e.target.value }))} />
+                  <input type="number" step="0.01" className="input"
+                    value={form.itbms}
+                    onChange={e => setForm(f => ({ ...f, itbms: e.target.value }))} />
                 </div>
               </div>
               {(parseFloat(form.monto) || 0) + (parseFloat(form.itbms) || 0) > 0 && (
