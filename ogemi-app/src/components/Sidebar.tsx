@@ -7,20 +7,21 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, FileText, Users, Building2,
   BarChart3, Upload, ShieldCheck, LogOut, ChevronRight,
-  ShoppingCart, Truck, Wallet
+  ShoppingCart, Truck, Wallet, ClipboardList
 } from 'lucide-react'
 
 const navItems = [
-  { href: '/dashboard',   label: 'Dashboard',      icon: LayoutDashboard },
-  { href: '/facturas',    label: 'Facturas',        icon: FileText },
-  { href: '/clientes',    label: 'Clientes',        icon: Users },
-  { href: '/anticipos',   label: 'Anticipos',       icon: Wallet },
-  { href: '/compras',     label: 'Compras',         icon: ShoppingCart },
-  { href: '/proveedores', label: 'Proveedores',     icon: Truck },
-  { href: '/banco',       label: 'Banco',           icon: Building2 },
-  { href: '/reportes',    label: 'Reportes',        icon: BarChart3 },
-  { href: '/importar',    label: 'Importar',        icon: Upload },
-  { href: '/admin',       label: 'Administración',  icon: ShieldCheck },
+  { href: '/dashboard',     label: 'Dashboard',      icon: LayoutDashboard },
+  { href: '/facturas',      label: 'Facturas',        icon: FileText },
+  { href: '/presupuestos',  label: 'Presupuestos',    icon: ClipboardList },
+  { href: '/clientes',      label: 'Clientes',        icon: Users },
+  { href: '/anticipos',     label: 'Anticipos',       icon: Wallet },
+  { href: '/compras',       label: 'Compras',         icon: ShoppingCart },
+  { href: '/proveedores',   label: 'Proveedores',     icon: Truck },
+  { href: '/banco',         label: 'Banco',           icon: Building2 },
+  { href: '/reportes',      label: 'Reportes',        icon: BarChart3 },
+  { href: '/importar',      label: 'Importar',        icon: Upload },
+  { href: '/admin',         label: 'Administración',  icon: ShieldCheck },
 ]
 
 export default function Sidebar() {

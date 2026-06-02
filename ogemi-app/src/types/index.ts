@@ -1,4 +1,5 @@
 export type UserRole = 'admin' | 'operador' | 'lectura';
+export type PresupuestoEstado = 'pendiente' | 'pagada';
 export type FacturaEstado = 'pendiente' | 'pagada';
 export type CompraEstado = 'pendiente' | 'pagada';
 export type MovimientoTipo = 'ingreso' | 'egreso';
@@ -43,6 +44,44 @@ export interface Factura {
   // Joins
   clientes?: Cliente;
   banco_cuentas?: BancoCuenta;
+}
+
+export interface Presupuesto {
+  id: string;
+  numero_presupuesto: number;
+  fecha: string;
+  cliente_id: string;
+  tipo_documento: string;
+  documento_afectado: number | null;
+  monto: number;
+  itbms: number;
+  total: number;
+  fecha_pago: string | null;
+  estado: PresupuestoEstado;
+  fecha_cobro: string | null;
+  banco_cuenta_id: string | null;
+  notas: string | null;
+  monto_pagado: number;
+  created_at: string;
+  updated_at: string;
+  // Joins
+  clientes?: Cliente;
+  banco_cuentas?: BancoCuenta;
+}
+
+export interface CarteraPresupuesto {
+  id: string;
+  numero_presupuesto: number;
+  fecha: string;
+  fecha_pago: string;
+  cliente: string;
+  monto: number;
+  itbms: number;
+  total: number;
+  monto_pagado: number;
+  saldo_pendiente: number;
+  dias_vencida: number;
+  tramo: TramoCartera;
 }
 
 export interface Compra {
