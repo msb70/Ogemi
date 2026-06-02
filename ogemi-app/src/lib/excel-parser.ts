@@ -100,15 +100,31 @@ export function parseLibroVentas(buffer: ArrayBuffer): ExcelRow[] {
 
     if (!fecha || isNaN(fecha.getTime())) continue
 
-    // SheetJS lee números con coma decimal europea ("373,10") como enteros * 100.
-    // Si el valor es número entero y parece estar * 100, dividir entre 100.
+    // El archivo usa formato numérico europeo: punto = separador de miles, coma = decimal.
+    // SheetJS tiene dos comportamientos según el valor:
+    //
+    //   Caso A — sin punto de miles: "373,10"
+    //     SheetJS strips la coma → entero 37310 → hay que dividir entre 100 → 373.10
+    //
+    //   Caso B — con punto de miles: "1.836,00" o "1.964,52"
+    //     SheetJS interpreta el punto como decimal → 1.836 / 1.96452
+    //     El valor correcto se obtiene multiplicando por 1000 → 1836.00 / 1964.52
+    //
+    // Regla: Number.isInteger(v) → Caso A (÷100) | tiene decimales → Caso B (×1000)
     const parseNumero = (cell: XLSX.CellObject | undefined): number => {
       if (!cell) return 0
       if (typeof cell.v === 'number') {
-        // Los valores monetarios vienen como enteros × 100 (ej: 37310 = 373.10)
-        return cell.v / 100
+        if (Number.isInteger(cell.v)) {
+          return cell.v / 100  // Caso A: "373,10" → 37310 → 373.10
+        } else {
+          return cell.v * 1000 // Caso B: "1.836,00" → 1.836 → 1836.00
+        }
       }
-      const str = cell.v?.toString().replace(',', '.').replace(/[^\d.-]/g, '') || '0'
+      // Fallback para strings: convertir separadores europeos a formato JS
+      const str = cell.v?.toString()
+        .replace(/\./g, '')     // quitar puntos de miles
+        .replace(',', '.')      // coma decimal → punto
+        .replace(/[^\d.-]/g, '') || '0'
       return parseFloat(str) || 0
     }
 
