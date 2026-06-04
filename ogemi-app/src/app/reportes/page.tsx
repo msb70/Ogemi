@@ -381,16 +381,33 @@ export default function ReportesPage() {
     return Object.entries(map).sort().map(([mes, v]) => ({ mes, ...v, neto: v.ingresos - v.egresos }))
   })()
 
-  // Pivot semanal — 4 viernes automáticos
-  const nextFridays = getNextFridays(4)
-  const vencViernes = buildVencimientoViernes(facturas, nextFridays)
+  // Pivot semanal — 4 semanas con fechas editables
+  const [weekDates, setWeekDates] = useState<string[]>(() =>
+    getNextFridays(4).map(d => d.toISOString().split('T')[0])
+  )
+  const weekDateObjs = weekDates.map(d => new Date(d + 'T00:00:00'))
+  const vencViernes = buildVencimientoViernes(facturas, weekDateObjs)
   const [viernesSearch, setViernesSearch] = useState('')
+  const [semanaFilter, setSemanaFilter] = useState<string>('all')
+  const [noPagaraSet, setNoPagaraSet] = useState<Set<number>>(new Set())
   const viernesRows = vencViernes.rows.filter(r => {
-    if (!viernesSearch) return true
-    const q = viernesSearch.toLowerCase()
-    return (r.clientes?.nombre || '').toLowerCase().includes(q) ||
-      String(r.numero_factura).includes(q)
+    const matchSearch = !viernesSearch ||
+      (r.clientes?.nombre || '').toLowerCase().includes(viernesSearch.toLowerCase()) ||
+      String(r.numero_factura).includes(viernesSearch)
+    const matchSemana = semanaFilter === 'all' || r.fridayIdx === parseInt(semanaFilter)
+    return matchSearch && matchSemana
   })
+  // Totales desglosados por No Pagará
+  const totProbable = weekDateObjs.map((_, i) =>
+    vencViernes.rows.filter(r => r.fridayIdx === i && !noPagaraSet.has(r.id))
+      .reduce((s, r) => s + (r.total || 0), 0)
+  )
+  const totNoPaga = weekDateObjs.map((_, i) =>
+    vencViernes.rows.filter(r => r.fridayIdx === i && noPagaraSet.has(r.id))
+      .reduce((s, r) => s + (r.total || 0), 0)
+  )
+  const grandProbable = totProbable.reduce((s, t) => s + t, 0)
+  const grandNoPaga = totNoPaga.reduce((s, t) => s + t, 0)
 
   // Pivot semanal (antiguo)
   const pivotSemanal = buildPivotSemanal(facturas, pivotDesde, pivotHasta)
@@ -1475,19 +1492,32 @@ export default function ReportesPage() {
                 {/* Encabezado */}
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-gray-700">Vencimientos — próximos 4 viernes</p>
+                    <p className="text-sm font-semibold text-gray-700">Vencimientos — próximas 4 semanas</p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {vencViernes.rows.length} facturas pendientes · actualizado automáticamente desde hoy
+                      {vencViernes.rows.length} facturas pendientes
                     </p>
                   </div>
-                  <div className="relative">
-                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      className="input pl-8 text-sm py-1.5 max-w-[220px]"
-                      placeholder="Buscar cliente o #..."
-                      value={viernesSearch}
-                      onChange={e => setViernesSearch(e.target.value)}
-                    />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="relative">
+                      <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        className="input pl-8 text-sm py-1.5 max-w-[220px]"
+                        placeholder="Buscar cliente o #..."
+                        value={viernesSearch}
+                        onChange={e => setViernesSearch(e.target.value)}
+                      />
+                    </div>
+                    <select
+                      value={semanaFilter}
+                      onChange={e => setSemanaFilter(e.target.value)}
+                      className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-600 bg-white focus:outline-none focus:border-gray-400"
+                    >
+                      <option value="all">Todas las semanas</option>
+                      <option value="0">Semana 1</option>
+                      <option value="1">Semana 2</option>
+                      <option value="2">Semana 3</option>
+                      <option value="3">Semana 4</option>
+                    </select>
                   </div>
                 </div>
 
@@ -1501,17 +1531,24 @@ export default function ReportesPage() {
                   ]
                   return (
                     <div className="grid grid-cols-4 gap-3">
-                      {nextFridays.map((fri, i) => {
+                      {weekDateObjs.map((_, i) => {
                         const c = colors[i]
                         const cnt = vencViernes.rows.filter(r => r.fridayIdx === i).length
                         return (
                           <div key={i} className={`card p-4 border-t-4 ${c.bg} ${c.border}`}>
                             <p className={`text-xs font-semibold uppercase tracking-wide ${c.label}`}>
-                              Viernes {i + 1}
+                              Semana {i + 1}
                             </p>
-                            <p className="text-xs text-gray-500 mt-0.5 mb-2">
-                              {formatDateObj(fri)}
-                            </p>
+                            <input
+                              type="date"
+                              value={weekDates[i]}
+                              onChange={e => {
+                                const nd = [...weekDates]
+                                nd[i] = e.target.value
+                                setWeekDates(nd)
+                              }}
+                              className="text-xs text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 mt-0.5 mb-2 w-full bg-white focus:outline-none focus:border-gray-400"
+                            />
                             <p className={`text-lg font-bold ${c.text}`}>
                               {formatCurrency(vencViernes.totals[i])}
                             </p>
@@ -1526,15 +1563,25 @@ export default function ReportesPage() {
                 })()}
 
                 {/* Total general */}
-                <div className="card p-4 bg-brand-50 border border-brand-200 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-brand-700">Total general (4 viernes)</span>
-                  <span className="text-2xl font-bold text-brand-900">{formatCurrency(vencViernes.grandTotal)}</span>
+                <div className="card p-4 bg-brand-50 border border-brand-200 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-brand-700">Total general vencido</span>
+                    <span className="text-2xl font-bold text-brand-900">{formatCurrency(vencViernes.grandTotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-green-600 font-medium">↳ Probable pago</span>
+                    <span className="text-sm font-bold text-green-700">{formatCurrency(grandProbable)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-red-500 font-medium">↳ No pagará</span>
+                    <span className="text-sm font-bold text-red-600">{formatCurrency(grandNoPaga)}</span>
+                  </div>
                 </div>
 
                 {/* Tabla */}
                 {vencViernes.rows.length === 0 ? (
                   <div className="card p-12 text-center text-gray-400">
-                    No hay facturas pendientes en los próximos 4 viernes
+                    No hay facturas pendientes en las próximas 4 semanas
                   </div>
                 ) : (
                   <div className="card overflow-auto">
@@ -1545,26 +1592,29 @@ export default function ReportesPage() {
                           <th className="table-header text-center min-w-[90px]">Nº Factura</th>
                           <th className="table-header text-center min-w-[100px]">F. Factura</th>
                           <th className="table-header text-center min-w-[100px]">F. Vencimiento</th>
-                          {nextFridays.map((fri, i) => (
+                          {weekDateObjs.map((fri, i) => (
                             <th key={i} className="table-header text-right min-w-[120px]">
-                              Vie {i + 1}<br />
+                              Sem {i + 1}<br />
                               <span className="font-normal text-[10px] opacity-80">
                                 {formatDateObj(fri).slice(0, 5)}
                               </span>
                             </th>
                           ))}
+                          <th className="table-header text-center min-w-[60px] text-[11px]">No<br/>Pagará</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {viernesRows.map((f: any) => (
-                          <tr key={f.id} className="hover:bg-gray-50">
-                            <td className="table-cell sticky left-0 bg-white z-10 max-w-[220px]">
+                        {viernesRows.map((f: any) => {
+                          const isNoPaga = noPagaraSet.has(f.id)
+                          return (
+                          <tr key={f.id} className={`hover:bg-gray-50 transition-opacity ${isNoPaga ? 'opacity-50 bg-red-50/40' : ''}`}>
+                            <td className={`table-cell sticky left-0 z-10 max-w-[220px] ${isNoPaga ? 'bg-red-50' : 'bg-white'}`}>
                               <span className="truncate block text-sm">{f.clientes?.nombre || '—'}</span>
                             </td>
                             <td className="table-cell text-center font-mono text-sm text-gray-500">#{f.numero_factura}</td>
                             <td className="table-cell text-center text-sm text-gray-400">{formatDate(f.fecha)}</td>
                             <td className="table-cell text-center text-sm font-semibold text-red-600">{formatDate(f.fecha_pago)}</td>
-                            {nextFridays.map((_, i) => (
+                            {weekDateObjs.map((_, i) => (
                               <td key={i} className="table-cell text-right text-sm">
                                 {f.fridayIdx === i
                                   ? <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>
@@ -1574,19 +1624,59 @@ export default function ReportesPage() {
                                 }
                               </td>
                             ))}
+                            <td className="table-cell text-center">
+                              <input
+                                type="checkbox"
+                                checked={isNoPaga}
+                                onChange={e => {
+                                  setNoPagaraSet(prev => {
+                                    const next = new Set(prev)
+                                    if (e.target.checked) next.add(f.id)
+                                    else next.delete(f.id)
+                                    return next
+                                  })
+                                }}
+                                className="w-4 h-4 accent-red-600 cursor-pointer"
+                                title="Marcar como No Pagará"
+                              />
+                            </td>
                           </tr>
-                        ))}
+                          )
+                        })}
                       </tbody>
                       <tfoot>
                         <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">
                           <td colSpan={4} className="table-cell text-right sticky left-0 bg-gray-100 z-10 text-sm text-gray-600">
-                            TOTAL SEMANAL
+                            TOTAL VENCIDO
                           </td>
                           {vencViernes.totals.map((t, i) => (
                             <td key={i} className="table-cell text-right text-brand-800">
                               {t > 0 ? formatCurrency(t) : '—'}
                             </td>
                           ))}
+                          <td className="table-cell" />
+                        </tr>
+                        <tr className="bg-green-50 text-xs font-semibold">
+                          <td colSpan={4} className="table-cell text-right sticky left-0 bg-green-50 z-10 text-green-700">
+                            ↳ Probable Pago
+                          </td>
+                          {totProbable.map((t, i) => (
+                            <td key={i} className="table-cell text-right text-green-700">
+                              {t > 0 ? formatCurrency(t) : '—'}
+                            </td>
+                          ))}
+                          <td className="table-cell" />
+                        </tr>
+                        <tr className="bg-red-50 text-xs font-semibold">
+                          <td colSpan={4} className="table-cell text-right sticky left-0 bg-red-50 z-10 text-red-600">
+                            ↳ No Pagará
+                          </td>
+                          {totNoPaga.map((t, i) => (
+                            <td key={i} className="table-cell text-right text-red-600">
+                              {t > 0 ? formatCurrency(t) : '—'}
+                            </td>
+                          ))}
+                          <td className="table-cell" />
                         </tr>
                       </tfoot>
                     </table>
