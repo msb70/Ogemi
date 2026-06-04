@@ -17,8 +17,8 @@ import {
 
 type ReporteTab = 'ventas' | 'presupuestos' | 'compras' | 'nc' | 'banco' | 'libros' | 'pivot'
 type VentasSubTab = 'listado' | 'cartera' | 'porcliente' | 'pormes'
-type PresupuestosSubTab = 'listado' | 'cartera' | 'porcliente' | 'pormes'
-type ComprasSubTab = 'listado' | 'cxp' | 'porproveedor' | 'pormes'
+type PresupuestosSubTab = 'listado' | 'cartera' | 'porcliente' | 'pormes' | 'semanal'
+type ComprasSubTab = 'listado' | 'cxp' | 'porproveedor' | 'pormes' | 'semanal'
 type NcSubTab = 'listado' | 'porcliente'
 type BancoSubTab = 'movimientos' | 'flujo' | 'cierres'
 type LibroSubTab = 'venta' | 'compra'
@@ -83,6 +83,30 @@ function buildVencimientoViernes(facturas: any[], fridays: Date[]) {
     .sort((a, b) => (a.fecha_pago < b.fecha_pago ? -1 : 1))
 
   const totals = fridays.map((_, i) =>
+    rows.filter(r => r.fridayIdx === i).reduce((s, r) => s + (r.total || 0), 0)
+  )
+  const grandTotal = totals.reduce((s, t) => s + t, 0)
+  return { rows, totals, grandTotal }
+}
+
+// ============================================================
+// VENCIMIENTO SEMANAL — genérico (presupuestos y compras)
+// ============================================================
+function buildVencimientoSemanal(items: any[], dates: Date[], dateField: string) {
+  const lastDate = dates[dates.length - 1]
+  const rows = items
+    .filter(item => {
+      if (item.estado !== 'pendiente') return false
+      const fd = item[dateField] ? new Date(item[dateField] + 'T00:00:00') : null
+      return fd !== null && fd <= lastDate
+    })
+    .map(item => {
+      const fd = new Date(item[dateField] + 'T00:00:00')
+      const fridayIdx = dates.findIndex(d => fd <= d)
+      return { ...item, fridayIdx }
+    })
+    .sort((a, b) => (a[dateField] < b[dateField] ? -1 : 1))
+  const totals = dates.map((_, i) =>
     rows.filter(r => r.fridayIdx === i).reduce((s, r) => s + (r.total || 0), 0)
   )
   const grandTotal = totals.reduce((s, t) => s + t, 0)
@@ -409,6 +433,61 @@ export default function ReportesPage() {
   const grandProbable = totProbable.reduce((s, t) => s + t, 0)
   const grandNoPaga = totNoPaga.reduce((s, t) => s + t, 0)
 
+  // Presupuestos — vencimiento semanal
+  const [presWeekDates, setPresWeekDates] = useState<string[]>(() =>
+    getNextFridays(4).map(d => d.toISOString().split('T')[0])
+  )
+  const presWeekDateObjs = presWeekDates.map(d => new Date(d + 'T00:00:00'))
+  const vencPresupuestos = buildVencimientoSemanal(presupuestos, presWeekDateObjs, 'fecha_pago')
+  const [presSearch, setPresSearch] = useState('')
+  const [presSemFilter, setPresSemFilter] = useState<string>('all')
+  const [presNoPagaraSet, setPresNoPagaraSet] = useState<Set<number>>(new Set())
+  const presRows = vencPresupuestos.rows.filter(r => {
+    const matchSearch = !presSearch ||
+      (r.clientes?.nombre || '').toLowerCase().includes(presSearch.toLowerCase()) ||
+      String(r.numero_presupuesto).includes(presSearch)
+    const matchSem = presSemFilter === 'all' || r.fridayIdx === parseInt(presSemFilter)
+    return matchSearch && matchSem
+  })
+  const presTotProbable = presWeekDateObjs.map((_, i) =>
+    vencPresupuestos.rows.filter(r => r.fridayIdx === i && !presNoPagaraSet.has(r.id))
+      .reduce((s, r) => s + (r.total || 0), 0)
+  )
+  const presTotNoPaga = presWeekDateObjs.map((_, i) =>
+    vencPresupuestos.rows.filter(r => r.fridayIdx === i && presNoPagaraSet.has(r.id))
+      .reduce((s, r) => s + (r.total || 0), 0)
+  )
+  const presGrandProbable = presTotProbable.reduce((s, t) => s + t, 0)
+  const presGrandNoPaga = presTotNoPaga.reduce((s, t) => s + t, 0)
+
+  // Compras — vencimiento semanal
+  const [compWeekDates, setCompWeekDates] = useState<string[]>(() =>
+    getNextFridays(4).map(d => d.toISOString().split('T')[0])
+  )
+  const compWeekDateObjs = compWeekDates.map(d => new Date(d + 'T00:00:00'))
+  const vencCompras = buildVencimientoSemanal(compras, compWeekDateObjs, 'vencimiento')
+  const [compSearch, setCompSearch] = useState('')
+  const [compSemFilter, setCompSemFilter] = useState<string>('all')
+  const [compNoPagaraSet, setCompNoPagaraSet] = useState<Set<number>>(new Set())
+  const compRows = vencCompras.rows.filter(r => {
+    const matchSearch = !compSearch ||
+      (r.proveedores?.nombre || '').toLowerCase().includes(compSearch.toLowerCase()) ||
+      (r.concepto || '').toLowerCase().includes(compSearch.toLowerCase()) ||
+      (r.referencia || '').toLowerCase().includes(compSearch.toLowerCase())
+    const matchSem = compSemFilter === 'all' || r.fridayIdx === parseInt(compSemFilter)
+    return matchSearch && matchSem
+  })
+  const compTotProbable = compWeekDateObjs.map((_, i) =>
+    vencCompras.rows.filter(r => r.fridayIdx === i && !compNoPagaraSet.has(r.id))
+      .reduce((s, r) => s + (r.total || 0), 0)
+  )
+  const compTotNoPaga = compWeekDateObjs.map((_, i) =>
+    vencCompras.rows.filter(r => r.fridayIdx === i && compNoPagaraSet.has(r.id))
+      .reduce((s, r) => s + (r.total || 0), 0)
+  )
+  const compGrandProbable = compTotProbable.reduce((s, t) => s + t, 0)
+  const compGrandNoPaga = compTotNoPaga.reduce((s, t) => s + t, 0)
+
   // Pivot semanal (antiguo)
   const pivotSemanal = buildPivotSemanal(facturas, pivotDesde, pivotHasta)
   const pivotAnt = buildPivotAntiguedad(cartera)
@@ -485,6 +564,7 @@ export default function ReportesPage() {
                 { key: 'cartera',    label: 'Cartera vencida' },
                 { key: 'porcliente', label: 'Por cliente' },
                 { key: 'pormes',     label: 'Por período' },
+                { key: 'semanal',    label: 'Vencimiento semanal' },
               ].map(s => (
                 <button key={s.key} onClick={() => setVentasTab(s.key as VentasSubTab)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
@@ -678,6 +758,7 @@ export default function ReportesPage() {
                 { key: 'cartera',    label: 'Cartera vencida' },
                 { key: 'porcliente', label: 'Por cliente' },
                 { key: 'pormes',     label: 'Por período' },
+                { key: 'semanal',    label: 'Vencimiento semanal' },
               ].map(s => (
                 <button key={s.key} onClick={() => setPresupuestosTab(s.key as PresupuestosSubTab)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
@@ -857,6 +938,152 @@ export default function ReportesPage() {
                 </div>
               </div>
             )}
+
+            {presupuestosTab === 'semanal' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700">Vencimientos — próximas 4 semanas</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{vencPresupuestos.rows.length} presupuestos pendientes</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="relative">
+                      <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input className="input pl-8 text-sm py-1.5 max-w-[220px]" placeholder="Buscar cliente o #..."
+                        value={presSearch} onChange={e => setPresSearch(e.target.value)} />
+                    </div>
+                    <select value={presSemFilter} onChange={e => setPresSemFilter(e.target.value)}
+                      className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-600 bg-white focus:outline-none focus:border-gray-400">
+                      <option value="all">Todas las semanas</option>
+                      <option value="0">Semana 1</option>
+                      <option value="1">Semana 2</option>
+                      <option value="2">Semana 3</option>
+                      <option value="3">Semana 4</option>
+                    </select>
+                  </div>
+                </div>
+
+                {(() => {
+                  const colors = [
+                    { bg: 'bg-red-50',    border: 'border-red-500',    text: 'text-red-700',    label: 'text-red-500' },
+                    { bg: 'bg-orange-50', border: 'border-orange-400', text: 'text-orange-700', label: 'text-orange-500' },
+                    { bg: 'bg-yellow-50', border: 'border-yellow-400', text: 'text-yellow-700', label: 'text-yellow-600' },
+                    { bg: 'bg-green-50',  border: 'border-green-600',  text: 'text-green-700',  label: 'text-green-600' },
+                  ]
+                  return (
+                    <div className="grid grid-cols-4 gap-3">
+                      {presWeekDateObjs.map((_, i) => {
+                        const c = colors[i]
+                        const cnt = vencPresupuestos.rows.filter(r => r.fridayIdx === i).length
+                        return (
+                          <div key={i} className={`card p-4 border-t-4 ${c.bg} ${c.border}`}>
+                            <p className={`text-xs font-semibold uppercase tracking-wide ${c.label}`}>Semana {i + 1}</p>
+                            <input type="date" value={presWeekDates[i]}
+                              onChange={e => { const nd = [...presWeekDates]; nd[i] = e.target.value; setPresWeekDates(nd) }}
+                              className="text-xs text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 mt-0.5 mb-2 w-full bg-white focus:outline-none focus:border-gray-400" />
+                            <p className={`text-lg font-bold ${c.text}`}>{formatCurrency(vencPresupuestos.totals[i])}</p>
+                            <p className="text-xs text-gray-400 mt-1">{cnt} {cnt === 1 ? 'presupuesto' : 'presupuestos'}</p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
+
+                <div className="card p-4 bg-brand-50 border border-brand-200 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-brand-700">Total general vencido</span>
+                    <span className="text-2xl font-bold text-brand-900">{formatCurrency(vencPresupuestos.grandTotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-green-600 font-medium">↳ Probable pago</span>
+                    <span className="text-sm font-bold text-green-700">{formatCurrency(presGrandProbable)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-red-500 font-medium">↳ No pagará</span>
+                    <span className="text-sm font-bold text-red-600">{formatCurrency(presGrandNoPaga)}</span>
+                  </div>
+                </div>
+
+                {vencPresupuestos.rows.length === 0 ? (
+                  <div className="card p-12 text-center text-gray-400">No hay presupuestos pendientes en las próximas 4 semanas</div>
+                ) : (
+                  <div className="card overflow-auto">
+                    <table className="w-full min-w-max">
+                      <thead>
+                        <tr className="border-b-2 border-gray-300 bg-gray-50">
+                          <th className="table-header text-left sticky left-0 bg-gray-50 z-10 min-w-[200px]">Cliente</th>
+                          <th className="table-header text-center min-w-[100px]">Nº Presupuesto</th>
+                          <th className="table-header text-center min-w-[100px]">F. Presupuesto</th>
+                          <th className="table-header text-center min-w-[100px]">F. Vencimiento</th>
+                          {presWeekDateObjs.map((fri, i) => (
+                            <th key={i} className="table-header text-right min-w-[120px]">
+                              Sem {i + 1}<br />
+                              <span className="font-normal text-[10px] opacity-80">{formatDateObj(fri).slice(0, 5)}</span>
+                            </th>
+                          ))}
+                          <th className="table-header text-center min-w-[60px] text-[11px]">No<br/>Pagará</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {presRows.map((p: any) => {
+                          const isNoPaga = presNoPagaraSet.has(p.id)
+                          return (
+                            <tr key={p.id} className={`hover:bg-gray-50 transition-opacity ${isNoPaga ? 'opacity-50 bg-red-50/40' : ''}`}>
+                              <td className={`table-cell sticky left-0 z-10 max-w-[220px] ${isNoPaga ? 'bg-red-50' : 'bg-white'}`}>
+                                <span className="truncate block text-sm">{p.clientes?.nombre || '—'}</span>
+                              </td>
+                              <td className="table-cell text-center font-mono text-sm text-gray-500">#{p.numero_presupuesto}</td>
+                              <td className="table-cell text-center text-sm text-gray-400">{formatDate(p.fecha)}</td>
+                              <td className="table-cell text-center text-sm font-semibold text-red-600">{formatDate(p.fecha_pago)}</td>
+                              {presWeekDateObjs.map((_, i) => (
+                                <td key={i} className="table-cell text-right text-sm">
+                                  {p.fridayIdx === i
+                                    ? <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>{formatCurrency(p.total)}</span>
+                                    : <span className="text-gray-200">—</span>}
+                                </td>
+                              ))}
+                              <td className="table-cell text-center">
+                                <input type="checkbox" checked={isNoPaga}
+                                  onChange={e => { setPresNoPagaraSet(prev => { const next = new Set(prev); e.target.checked ? next.add(p.id) : next.delete(p.id); return next }) }}
+                                  className="w-4 h-4 accent-red-600 cursor-pointer" title="Marcar como No Pagará" />
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">
+                          <td colSpan={4} className="table-cell text-right sticky left-0 bg-gray-100 z-10 text-sm text-gray-600">TOTAL VENCIDO</td>
+                          {vencPresupuestos.totals.map((t, i) => (
+                            <td key={i} className="table-cell text-right text-brand-800">{t > 0 ? formatCurrency(t) : '—'}</td>
+                          ))}
+                          <td className="table-cell" />
+                        </tr>
+                        <tr className="bg-green-50 text-xs font-semibold">
+                          <td colSpan={4} className="table-cell text-right sticky left-0 bg-green-50 z-10 text-green-700">↳ Probable Pago</td>
+                          {presTotProbable.map((t, i) => (
+                            <td key={i} className="table-cell text-right text-green-700">{t > 0 ? formatCurrency(t) : '—'}</td>
+                          ))}
+                          <td className="table-cell" />
+                        </tr>
+                        <tr className="bg-red-50 text-xs font-semibold">
+                          <td colSpan={4} className="table-cell text-right sticky left-0 bg-red-50 z-10 text-red-600">↳ No Pagará</td>
+                          {presTotNoPaga.map((t, i) => (
+                            <td key={i} className="table-cell text-right text-red-600">{t > 0 ? formatCurrency(t) : '—'}</td>
+                          ))}
+                          <td className="table-cell" />
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+
+                {presSearch && presRows.length === 0 && (
+                  <p className="text-center text-gray-400 text-sm">Sin resultados para "{presSearch}"</p>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -871,6 +1098,7 @@ export default function ReportesPage() {
                 { key: 'cxp',          label: 'Cuentas por pagar' },
                 { key: 'porproveedor', label: 'Por proveedor' },
                 { key: 'pormes',       label: 'Por período' },
+                { key: 'semanal',      label: 'Vencimiento semanal' },
               ].map(s => (
                 <button key={s.key} onClick={() => setComprasTab(s.key as ComprasSubTab)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
@@ -1023,6 +1251,154 @@ export default function ReportesPage() {
                     <Bar dataKey="total" name="Compras" fill="#f97316" radius={[4,4,0,0]} />
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+            )}
+
+            {comprasTab === 'semanal' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700">Vencimientos — próximas 4 semanas</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{vencCompras.rows.length} compras pendientes</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="relative">
+                      <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input className="input pl-8 text-sm py-1.5 max-w-[220px]" placeholder="Buscar proveedor o concepto..."
+                        value={compSearch} onChange={e => setCompSearch(e.target.value)} />
+                    </div>
+                    <select value={compSemFilter} onChange={e => setCompSemFilter(e.target.value)}
+                      className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-600 bg-white focus:outline-none focus:border-gray-400">
+                      <option value="all">Todas las semanas</option>
+                      <option value="0">Semana 1</option>
+                      <option value="1">Semana 2</option>
+                      <option value="2">Semana 3</option>
+                      <option value="3">Semana 4</option>
+                    </select>
+                  </div>
+                </div>
+
+                {(() => {
+                  const colors = [
+                    { bg: 'bg-red-50',    border: 'border-red-500',    text: 'text-red-700',    label: 'text-red-500' },
+                    { bg: 'bg-orange-50', border: 'border-orange-400', text: 'text-orange-700', label: 'text-orange-500' },
+                    { bg: 'bg-yellow-50', border: 'border-yellow-400', text: 'text-yellow-700', label: 'text-yellow-600' },
+                    { bg: 'bg-green-50',  border: 'border-green-600',  text: 'text-green-700',  label: 'text-green-600' },
+                  ]
+                  return (
+                    <div className="grid grid-cols-4 gap-3">
+                      {compWeekDateObjs.map((_, i) => {
+                        const c = colors[i]
+                        const cnt = vencCompras.rows.filter(r => r.fridayIdx === i).length
+                        return (
+                          <div key={i} className={`card p-4 border-t-4 ${c.bg} ${c.border}`}>
+                            <p className={`text-xs font-semibold uppercase tracking-wide ${c.label}`}>Semana {i + 1}</p>
+                            <input type="date" value={compWeekDates[i]}
+                              onChange={e => { const nd = [...compWeekDates]; nd[i] = e.target.value; setCompWeekDates(nd) }}
+                              className="text-xs text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 mt-0.5 mb-2 w-full bg-white focus:outline-none focus:border-gray-400" />
+                            <p className={`text-lg font-bold ${c.text}`}>{formatCurrency(vencCompras.totals[i])}</p>
+                            <p className="text-xs text-gray-400 mt-1">{cnt} {cnt === 1 ? 'compra' : 'compras'}</p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
+
+                <div className="card p-4 bg-brand-50 border border-brand-200 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-brand-700">Total general vencido</span>
+                    <span className="text-2xl font-bold text-brand-900">{formatCurrency(vencCompras.grandTotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-green-600 font-medium">↳ Probable pago</span>
+                    <span className="text-sm font-bold text-green-700">{formatCurrency(compGrandProbable)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-red-500 font-medium">↳ No pagará</span>
+                    <span className="text-sm font-bold text-red-600">{formatCurrency(compGrandNoPaga)}</span>
+                  </div>
+                </div>
+
+                {vencCompras.rows.length === 0 ? (
+                  <div className="card p-12 text-center text-gray-400">No hay compras pendientes en las próximas 4 semanas</div>
+                ) : (
+                  <div className="card overflow-auto">
+                    <table className="w-full min-w-max">
+                      <thead>
+                        <tr className="border-b-2 border-gray-300 bg-gray-50">
+                          <th className="table-header text-left sticky left-0 bg-gray-50 z-10 min-w-[180px]">Proveedor</th>
+                          <th className="table-header text-center min-w-[140px]">Concepto</th>
+                          <th className="table-header text-center min-w-[100px]">F. Compra</th>
+                          <th className="table-header text-center min-w-[100px]">F. Vencimiento</th>
+                          {compWeekDateObjs.map((fri, i) => (
+                            <th key={i} className="table-header text-right min-w-[120px]">
+                              Sem {i + 1}<br />
+                              <span className="font-normal text-[10px] opacity-80">{formatDateObj(fri).slice(0, 5)}</span>
+                            </th>
+                          ))}
+                          <th className="table-header text-center min-w-[60px] text-[11px]">No<br/>Pagará</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {compRows.map((c: any) => {
+                          const isNoPaga = compNoPagaraSet.has(c.id)
+                          return (
+                            <tr key={c.id} className={`hover:bg-gray-50 transition-opacity ${isNoPaga ? 'opacity-50 bg-red-50/40' : ''}`}>
+                              <td className={`table-cell sticky left-0 z-10 max-w-[180px] ${isNoPaga ? 'bg-red-50' : 'bg-white'}`}>
+                                <span className="truncate block text-sm font-medium">{c.proveedores?.nombre || '—'}</span>
+                              </td>
+                              <td className="table-cell text-center text-sm text-gray-500 max-w-[140px]">
+                                <span className="truncate block">{c.concepto || c.referencia || '—'}</span>
+                              </td>
+                              <td className="table-cell text-center text-sm text-gray-400">{formatDate(c.fecha)}</td>
+                              <td className="table-cell text-center text-sm font-semibold text-red-600">{formatDate(c.vencimiento)}</td>
+                              {compWeekDateObjs.map((_, i) => (
+                                <td key={i} className="table-cell text-right text-sm">
+                                  {c.fridayIdx === i
+                                    ? <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>{formatCurrency(c.total)}</span>
+                                    : <span className="text-gray-200">—</span>}
+                                </td>
+                              ))}
+                              <td className="table-cell text-center">
+                                <input type="checkbox" checked={isNoPaga}
+                                  onChange={e => { setCompNoPagaraSet(prev => { const next = new Set(prev); e.target.checked ? next.add(c.id) : next.delete(c.id); return next }) }}
+                                  className="w-4 h-4 accent-red-600 cursor-pointer" title="Marcar como No Pagará" />
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">
+                          <td colSpan={4} className="table-cell text-right sticky left-0 bg-gray-100 z-10 text-sm text-gray-600">TOTAL VENCIDO</td>
+                          {vencCompras.totals.map((t, i) => (
+                            <td key={i} className="table-cell text-right text-brand-800">{t > 0 ? formatCurrency(t) : '—'}</td>
+                          ))}
+                          <td className="table-cell" />
+                        </tr>
+                        <tr className="bg-green-50 text-xs font-semibold">
+                          <td colSpan={4} className="table-cell text-right sticky left-0 bg-green-50 z-10 text-green-700">↳ Probable Pago</td>
+                          {compTotProbable.map((t, i) => (
+                            <td key={i} className="table-cell text-right text-green-700">{t > 0 ? formatCurrency(t) : '—'}</td>
+                          ))}
+                          <td className="table-cell" />
+                        </tr>
+                        <tr className="bg-red-50 text-xs font-semibold">
+                          <td colSpan={4} className="table-cell text-right sticky left-0 bg-red-50 z-10 text-red-600">↳ No Pagará</td>
+                          {compTotNoPaga.map((t, i) => (
+                            <td key={i} className="table-cell text-right text-red-600">{t > 0 ? formatCurrency(t) : '—'}</td>
+                          ))}
+                          <td className="table-cell" />
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+
+                {compSearch && compRows.length === 0 && (
+                  <p className="text-center text-gray-400 text-sm">Sin resultados para "{compSearch}"</p>
+                )}
               </div>
             )}
           </div>
