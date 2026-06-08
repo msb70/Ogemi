@@ -213,7 +213,7 @@ $$ LANGUAGE plpgsql;
 -- ============================================================
 -- VISTA: cartera_vencida (antigüedad de saldos)
 -- ============================================================
-CREATE OR REPLACE VIEW cartera_vencida AS
+CREATE OR REPLACE VIEW cartera_vencida WITH (security_invoker = true) AS
 SELECT
   f.id,
   f.numero_factura,

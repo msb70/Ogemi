@@ -107,7 +107,7 @@ CREATE OR REPLACE TRIGGER trg_registrar_pago_compra
 -- ============================================================
 -- VISTA: compras_vencidas (cuentas por pagar vencidas)
 -- ============================================================
-CREATE OR REPLACE VIEW compras_vencidas AS
+CREATE OR REPLACE VIEW compras_vencidas WITH (security_invoker = true) AS
 SELECT
   c.id,
   c.fecha,

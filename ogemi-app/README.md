@@ -11,16 +11,19 @@ Stack: Next.js 14 + TypeScript + Supabase + Tailwind CSS
 ### Paso 1 — Crear proyecto en Supabase
 
 1. Ir a https://supabase.com → **New project**
-2. Nombre: `ogemi-app` | Región: la más cercana a Panamá (us-east-1)
+2. Proyecto usado actualmente: `tnuzaaetfbbnxtbedlhs`
 3. Guardar la contraseña de la base de datos
 4. Esperar ~2 minutos a que el proyecto se inicialice
 
-### Paso 2 — Correr el schema SQL
+### Paso 2 — Correr los SQL de base de datos
 
 1. En el dashboard de Supabase → **SQL Editor** → **New query**
-2. Pegar el contenido completo de `supabase/schema.sql`
-3. Clic en **Run** (▶)
-4. Verificar que no haya errores rojos
+2. Ejecutar estos archivos en orden:
+   - `supabase/schema.sql`
+   - `supabase/schema_compras.sql`
+   - `supabase/migrations/20260602151942_create_presupuestos_module.sql`
+   - `supabase/migrations/002_anticipos_pagos.sql`
+3. Verificar que no haya errores rojos
 
 ### Paso 3 — Crear el primer usuario administrador
 
@@ -44,7 +47,7 @@ VALUES ('<PEGAR-UUID-AQUI>', 'admin', true, true, true);
 
 ```bash
 # .env.local
-NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://tnuzaaetfbbnxtbedlhs.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhb...
 ```
 
@@ -145,7 +148,9 @@ pm2 start npm --name "ogemi" -- start
 ```
 ogemi-app/
 ├── supabase/
-│   └── schema.sql          # Schema completo de la base de datos
+│   ├── schema.sql          # Schema base: clientes, facturas, banco y seguridad
+│   ├── schema_compras.sql  # Compras y proveedores
+│   └── migrations/         # Presupuestos, anticipos y pagos parciales
 ├── src/
 │   ├── app/
 │   │   ├── login/           # Página de login

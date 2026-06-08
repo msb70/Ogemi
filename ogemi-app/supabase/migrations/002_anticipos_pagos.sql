@@ -73,6 +73,7 @@ UPDATE compras SET monto_pagado = total WHERE estado = 'pagada' AND monto_pagado
 -- Eliminar el trigger antiguo que crea movimientos al marcar como pagada
 -- (ahora los movimientos se crean al registrar pagos)
 DROP TRIGGER IF EXISTS trg_registrar_cobro ON facturas;
+DROP TRIGGER IF EXISTS trg_registrar_pago_compra ON compras;
 
 -- Nuevo trigger: cuando se inserta un pago de factura
 CREATE OR REPLACE FUNCTION procesar_pago()
@@ -185,7 +186,7 @@ CREATE POLICY "delete_pagos" ON pagos FOR DELETE
 -- 7. ACTUALIZAR vista cartera_vencida para considerar abonos
 -- ============================================================
 DROP VIEW IF EXISTS cartera_vencida;
-CREATE VIEW cartera_vencida AS
+CREATE VIEW cartera_vencida WITH (security_invoker = true) AS
 SELECT
   f.id,
   f.numero_factura,
