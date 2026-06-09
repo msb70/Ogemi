@@ -108,7 +108,7 @@ export function buildVencimientoSemanal(
       const fridayIdx = dates.findIndex(d => fd <= d)
       return { ...item, fridayIdx }
     })
-    .sort((a, b) => ((a[dateField] as string) < (b[dateField] as string) ? -1 : 1))
+    .sort((a, b) => (((a as Record<string, unknown>)[dateField] as string) < ((b as Record<string, unknown>)[dateField] as string) ? -1 : 1))
 
   const totals = dates.map((_, i) =>
     rows.filter(r => r.fridayIdx === i).reduce((s, r) => s + ((r.total as number) || 0), 0)
