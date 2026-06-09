@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const supabase = createClient()
 
   async function loadProfile(authUser: User) {
-    const { data: prof } = await supabase
+    const { data: prof, error: profileError } = await supabase
       .from('user_profiles')
       .select('*')
       .eq('id', authUser.id)
@@ -63,14 +63,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
+    const storedProfile = profileError ? null : (prof as UserProfile | null)
 
     const normalizedProfile: UserProfile = {
       ...fallbackProfile,
-      ...(prof as UserProfile | null),
-      rol_id: legacyRolId === 'admin' ? 'admin' : ((prof as UserProfile | null)?.rol_id || fallbackProfile.rol_id),
+      ...storedProfile,
+      rol_id: legacyRolId === 'admin' ? 'admin' : (storedProfile?.rol_id || fallbackProfile.rol_id),
     }
 
-    if (!prof) {
+    if (!storedProfile && !profileError) {
       await supabase.from('user_profiles').insert({
         id: normalizedProfile.id,
         email: normalizedProfile.email,

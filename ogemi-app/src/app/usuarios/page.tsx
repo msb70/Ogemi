@@ -118,6 +118,12 @@ function UsuariosPage() {
 
   useEffect(() => {
     if (!selectedRoleId) return
+    if (selectedRoleId === '__new__') {
+      setRoleForm({ nombre: '', descripcion: '' })
+      setPermissionDraft(emptyPermissions())
+      return
+    }
+
     const role = roleById[selectedRoleId]
     setRoleForm({
       nombre: role?.nombre || '',
@@ -177,7 +183,7 @@ function UsuariosPage() {
   async function saveRole(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setSavingRole(true)
-    const isNew = selectedRoleId === '__new__'
+    const isNew = selectedRoleId === '__new__' || !selectedRoleId || !roleById[selectedRoleId]
     const payload = {
       id: isNew ? undefined : selectedRoleId,
       nombre: roleForm.nombre,
@@ -186,14 +192,14 @@ function UsuariosPage() {
     }
 
     try {
-      await fetchJson('/api/admin/roles', {
+      const result = await fetchJson('/api/admin/roles', {
         method: isNew ? 'POST' : 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
       showToast(isNew ? 'Rol creado.' : 'Rol actualizado.')
       await loadAll()
-      if (isNew) setSelectedRoleId('')
+      if (isNew && result.role?.id) setSelectedRoleId(result.role.id)
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'No se pudo guardar el rol.', 'error')
     } finally {
