@@ -8,7 +8,7 @@ import type { Modulo } from '@/types/auth'
 import {
   LayoutDashboard, FileText, Users, Building2,
   BarChart3, Upload, ShieldCheck, LogOut, ChevronRight,
-  ShoppingCart, Truck, Wallet, ClipboardList
+  ShoppingCart, Truck, Wallet, ClipboardList, CalendarClock
 } from 'lucide-react'
 
 const navItems: { href: string; label: string; icon: React.ElementType; modulo: Modulo }[] = [
@@ -20,6 +20,7 @@ const navItems: { href: string; label: string; icon: React.ElementType; modulo: 
   { href: '/compras',      label: 'Compras',        icon: ShoppingCart,    modulo: 'compras'      },
   { href: '/proveedores',  label: 'Proveedores',    icon: Truck,           modulo: 'proveedores'  },
   { href: '/banco',        label: 'Banco',          icon: Building2,       modulo: 'banco'        },
+  { href: '/gastos-fijos', label: 'Gastos fijos',   icon: CalendarClock,   modulo: 'gastos_fijos' },
   { href: '/reportes',     label: 'Reportes',       icon: BarChart3,       modulo: 'reportes'     },
   { href: '/importar',     label: 'Importar',       icon: Upload,          modulo: 'importar'     },
   { href: '/usuarios',     label: 'Usuarios',       icon: ShieldCheck,     modulo: 'usuarios'     },

@@ -8,6 +8,7 @@ export type Modulo =
   | 'clientes'
   | 'proveedores'
   | 'banco'
+  | 'gastos_fijos'
   | 'reportes'
   | 'importar'
   | 'usuarios'

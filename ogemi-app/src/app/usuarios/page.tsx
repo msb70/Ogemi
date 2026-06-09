@@ -26,6 +26,7 @@ const MODULES: { id: Modulo; label: string }[] = [
   { id: 'clientes', label: 'Clientes' },
   { id: 'proveedores', label: 'Proveedores' },
   { id: 'banco', label: 'Banco' },
+  { id: 'gastos_fijos', label: 'Gastos fijos' },
   { id: 'reportes', label: 'Reportes' },
   { id: 'importar', label: 'Importar' },
   { id: 'usuarios', label: 'Usuarios' },
