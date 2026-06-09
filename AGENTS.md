@@ -26,3 +26,8 @@ npx -y vercel@latest inspect https://ogemi-iota.vercel.app --scope team_skSZ5uPb
 
 The deploy is successful when `ogemi-iota.vercel.app` is aliased to a deployment with `status Ready`.
 Avoid relying only on failed automatic Git deployments for debugging; when Vercel logs are missing, rerun the manual command above because it streams the build output.
+
+## Admin user management
+
+Creating/inviting users from the app requires the server-only Vercel environment variable `SUPABASE_SERVICE_ROLE_KEY`.
+Do not expose this key with a `NEXT_PUBLIC_` prefix. Without it, `/api/admin/users` can still report the missing configuration but cannot create Supabase Auth users.

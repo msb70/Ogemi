@@ -1,4 +1,4 @@
-export type RolId = 'admin' | 'contador' | 'visor'
+export type RolId = string
 
 export type Modulo =
   | 'dashboard'
@@ -36,4 +36,12 @@ export interface UserProfile {
 
 export interface UserWithRole extends UserProfile {
   permisos: Record<Modulo, { ver: boolean; agregar: boolean; editar: boolean; borrar: boolean }>
+}
+
+export interface RoleRecord {
+  id: RolId
+  nombre: string
+  descripcion: string | null
+  es_sistema: boolean
+  created_at: string
 }

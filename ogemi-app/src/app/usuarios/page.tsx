@@ -1,184 +1,470 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
-import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { withPagePermission } from '@/components/PermissionGuard'
 import { formatDate } from '@/lib/utils'
-import { UserCheck, UserX, Shield } from 'lucide-react'
-import type { UserProfile } from '@/types/auth'
+import { useToast } from '@/hooks/useToast'
+import { Toast } from '@/components/Toast'
+import {
+  Plus,
+  Save,
+  Shield,
+  UserCheck,
+  UserPlus,
+  UserX,
+} from 'lucide-react'
+import type { Modulo, RoleRecord, RolPermiso, UserProfile } from '@/types/auth'
 
-const ROLES = [
-  { id: 'admin',    label: 'Administrador', color: 'bg-red-100 text-red-700' },
-  { id: 'contador', label: 'Contador',      color: 'bg-blue-100 text-blue-700' },
-  { id: 'visor',    label: 'Solo lectura',  color: 'bg-gray-100 text-gray-600' },
+const MODULES: { id: Modulo; label: string }[] = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'facturas', label: 'Facturas' },
+  { id: 'presupuestos', label: 'Presupuestos' },
+  { id: 'compras', label: 'Compras' },
+  { id: 'clientes', label: 'Clientes' },
+  { id: 'proveedores', label: 'Proveedores' },
+  { id: 'banco', label: 'Banco' },
+  { id: 'reportes', label: 'Reportes' },
+  { id: 'importar', label: 'Importar' },
+  { id: 'usuarios', label: 'Usuarios' },
 ]
 
+type PermissionDraft = Record<Modulo, {
+  puede_ver: boolean
+  puede_agregar: boolean
+  puede_editar: boolean
+  puede_borrar: boolean
+}>
+
+const emptyPermissions = (): PermissionDraft =>
+  MODULES.reduce((acc, module) => {
+    acc[module.id] = {
+      puede_ver: false,
+      puede_agregar: false,
+      puede_editar: false,
+      puede_borrar: false,
+    }
+    return acc
+  }, {} as PermissionDraft)
+
+const roleColor = (roleId: string) => {
+  if (roleId === 'admin') return 'bg-red-100 text-red-700'
+  if (roleId === 'contador') return 'bg-blue-100 text-blue-700'
+  if (roleId === 'visor') return 'bg-gray-100 text-gray-600'
+  return 'bg-brand-100 text-brand-700'
+}
+
 function UsuariosPage() {
-  const { profile: myProfile } = useAuth()
+  const { profile: myProfile, puedeHacer } = useAuth()
+  const { toast, showToast, hideToast } = useToast()
   const [usuarios, setUsuarios] = useState<UserProfile[]>([])
+  const [roles, setRoles] = useState<RoleRecord[]>([])
+  const [permisos, setPermisos] = useState<RolPermiso[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
-  const supabase = createClient()
+  const [creatingUser, setCreatingUser] = useState(false)
+  const [savingRole, setSavingRole] = useState(false)
+  const [selectedRoleId, setSelectedRoleId] = useState('')
+  const [roleForm, setRoleForm] = useState({ nombre: '', descripcion: '' })
+  const [permissionDraft, setPermissionDraft] = useState<PermissionDraft>(emptyPermissions)
+  const [newUser, setNewUser] = useState({
+    email: '',
+    nombre: '',
+    rol_id: 'visor',
+    activo: true,
+  })
 
-  async function loadUsuarios() {
-    const { data } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .order('created_at', { ascending: true })
-    setUsuarios((data as UserProfile[]) || [])
-    setLoading(false)
+  const canAddUsers = puedeHacer('usuarios', 'agregar')
+  const canEditUsers = puedeHacer('usuarios', 'editar')
+  const canDeleteUsers = puedeHacer('usuarios', 'borrar')
+
+  const roleById = useMemo(() => {
+    const map: Record<string, RoleRecord> = {}
+    roles.forEach(role => { map[role.id] = role })
+    return map
+  }, [roles])
+
+  async function fetchJson(url: string, options?: RequestInit) {
+    const response = await fetch(url, options)
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(payload.error || 'No se pudo completar la operacion.')
+    }
+    return payload
   }
 
-  useEffect(() => { loadUsuarios() }, [])
+  async function loadAll() {
+    setLoading(true)
+    try {
+      const [usersPayload, rolesPayload] = await Promise.all([
+        fetchJson('/api/admin/users'),
+        fetchJson('/api/admin/roles'),
+      ])
+      setUsuarios(usersPayload.usuarios || [])
+      setRoles(rolesPayload.roles || [])
+      setPermisos(rolesPayload.permisos || [])
+      const firstRole = rolesPayload.roles?.[0]?.id || ''
+      if (!selectedRoleId && firstRole) setSelectedRoleId(firstRole)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'No se pudieron cargar usuarios y roles.', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
 
-  async function cambiarRol(userId: string, nuevoRol: string) {
+  useEffect(() => { loadAll() }, [])
+
+  useEffect(() => {
+    if (!selectedRoleId) return
+    const role = roleById[selectedRoleId]
+    setRoleForm({
+      nombre: role?.nombre || '',
+      descripcion: role?.descripcion || '',
+    })
+
+    const next = emptyPermissions()
+    permisos
+      .filter(permission => permission.rol_id === selectedRoleId)
+      .forEach(permission => {
+        next[permission.modulo] = {
+          puede_ver: permission.puede_ver,
+          puede_agregar: permission.puede_agregar,
+          puede_editar: permission.puede_editar,
+          puede_borrar: permission.puede_borrar,
+        }
+      })
+    setPermissionDraft(next)
+  }, [selectedRoleId, roleById, permisos])
+
+  async function createUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setCreatingUser(true)
+    try {
+      await fetchJson('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser),
+      })
+      setNewUser({ email: '', nombre: '', rol_id: 'visor', activo: true })
+      showToast('Usuario creado e invitado por correo.')
+      await loadAll()
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'No se pudo crear el usuario.', 'error')
+    } finally {
+      setCreatingUser(false)
+    }
+  }
+
+  async function updateUser(userId: string, updates: Partial<UserProfile>) {
     setSaving(userId)
-    await supabase
-      .from('user_profiles')
-      .update({ rol_id: nuevoRol, updated_at: new Date().toISOString() })
-      .eq('id', userId)
-    await loadUsuarios()
-    setSaving(null)
+    try {
+      await fetchJson('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: userId, ...updates }),
+      })
+      await loadAll()
+      showToast('Usuario actualizado.')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'No se pudo actualizar el usuario.', 'error')
+    } finally {
+      setSaving(null)
+    }
   }
 
-  async function toggleActivo(userId: string, activo: boolean) {
-    setSaving(userId)
-    await supabase
-      .from('user_profiles')
-      .update({ activo: !activo, updated_at: new Date().toISOString() })
-      .eq('id', userId)
-    await loadUsuarios()
-    setSaving(null)
+  async function saveRole(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setSavingRole(true)
+    const isNew = selectedRoleId === '__new__'
+    const payload = {
+      id: isNew ? undefined : selectedRoleId,
+      nombre: roleForm.nombre,
+      descripcion: roleForm.descripcion,
+      permisos: MODULES.map(module => ({ modulo: module.id, ...permissionDraft[module.id] })),
+    }
+
+    try {
+      await fetchJson('/api/admin/roles', {
+        method: isNew ? 'POST' : 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      showToast(isNew ? 'Rol creado.' : 'Rol actualizado.')
+      await loadAll()
+      if (isNew) setSelectedRoleId('')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'No se pudo guardar el rol.', 'error')
+    } finally {
+      setSavingRole(false)
+    }
   }
 
-  const getRolMeta = (rolId: string) => ROLES.find(r => r.id === rolId) ?? ROLES[2]
+  function setPermission(moduleId: Modulo, key: keyof PermissionDraft[Modulo], value: boolean) {
+    setPermissionDraft(prev => ({
+      ...prev,
+      [moduleId]: {
+        ...prev[moduleId],
+        [key]: value,
+      },
+    }))
+  }
+
+  const getRoleName = (roleId: string) => roleById[roleId]?.nombre || roleId
 
   return (
     <AppLayout>
       <Header
         title="Usuarios"
-        subtitle="Gestión de acceso y roles del sistema"
+        subtitle="Gestión de usuarios, roles y permisos por módulo"
       />
 
-      <div className="p-6">
-        <div className="card overflow-hidden">
+      <div className="p-6 space-y-6">
+        <section className="card p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <UserPlus size={16} className="text-brand-600" />
+            <h2 className="text-sm font-semibold text-gray-800">Crear usuario</h2>
+          </div>
+
+          <form onSubmit={createUser} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+            <label>
+              <span className="label">Email</span>
+              <input
+                type="email"
+                required
+                className="input"
+                value={newUser.email}
+                onChange={event => setNewUser(prev => ({ ...prev, email: event.target.value }))}
+              />
+            </label>
+            <label>
+              <span className="label">Nombre</span>
+              <input
+                className="input"
+                value={newUser.nombre}
+                onChange={event => setNewUser(prev => ({ ...prev, nombre: event.target.value }))}
+              />
+            </label>
+            <label>
+              <span className="label">Rol</span>
+              <select
+                className="input"
+                value={newUser.rol_id}
+                onChange={event => setNewUser(prev => ({ ...prev, rol_id: event.target.value }))}
+              >
+                {roles.map(role => (
+                  <option key={role.id} value={role.id}>{role.nombre}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="label">Estado</span>
+              <select
+                className="input"
+                value={newUser.activo ? 'activo' : 'inactivo'}
+                onChange={event => setNewUser(prev => ({ ...prev, activo: event.target.value === 'activo' }))}
+              >
+                <option value="activo">Activo</option>
+                <option value="inactivo">Inactivo</option>
+              </select>
+            </label>
+            <button
+              type="submit"
+              disabled={!canAddUsers || creatingUser}
+              className="btn-primary inline-flex items-center justify-center gap-2"
+            >
+              <Plus size={16} />
+              {creatingUser ? 'Creando...' : 'Crear'}
+            </button>
+          </form>
+        </section>
+
+        <section className="card overflow-hidden">
           <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
             <Shield size={14} className="text-brand-600" />
             <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-              Usuarios registrados — {usuarios.length}
+              Usuarios registrados - {usuarios.length}
             </p>
           </div>
 
           {loading ? (
             <div className="p-8 text-center text-sm text-gray-400">Cargando usuarios...</div>
           ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="table-header">Usuario</th>
-                  <th className="table-header">Email</th>
-                  <th className="table-header">Rol</th>
-                  <th className="table-header">Estado</th>
-                  <th className="table-header">Registrado</th>
-                  <th className="table-header">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {usuarios.map(u => {
-                  const rolMeta = getRolMeta(u.rol_id)
-                  const isMe = u.id === myProfile?.id
-                  const isBusy = saving === u.id
-                  return (
-                    <tr key={u.id} className={`hover:bg-gray-50 ${!u.activo ? 'opacity-50' : ''}`}>
-                      <td className="table-cell">
-                        <div className="flex items-center gap-2">
-                          {u.avatar_url ? (
-                            <img src={u.avatar_url} className="w-7 h-7 rounded-full" alt="" />
-                          ) : (
-                            <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center text-xs font-bold text-brand-700">
-                              {(u.nombre || u.email)[0].toUpperCase()}
-                            </div>
-                          )}
-                          <span className="text-sm font-medium">
-                            {u.nombre || '—'}
-                            {isMe && <span className="ml-1 text-xs text-gray-400">(tú)</span>}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="table-header">Usuario</th>
+                    <th className="table-header">Email</th>
+                    <th className="table-header">Rol</th>
+                    <th className="table-header">Estado</th>
+                    <th className="table-header">Registrado</th>
+                    <th className="table-header">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {usuarios.map(user => {
+                    const isMe = user.id === myProfile?.id
+                    const isBusy = saving === user.id
+                    return (
+                      <tr key={user.id} className={`hover:bg-gray-50 ${!user.activo ? 'opacity-50' : ''}`}>
+                        <td className="table-cell">
+                          <div className="flex items-center gap-2">
+                            {user.avatar_url ? (
+                              <img src={user.avatar_url} className="w-7 h-7 rounded-full" alt="" />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center text-xs font-bold text-brand-700">
+                                {(user.nombre || user.email)[0].toUpperCase()}
+                              </div>
+                            )}
+                            <span className="text-sm font-medium">
+                              {user.nombre || '-'}
+                              {isMe && <span className="ml-1 text-xs text-gray-400">(tu)</span>}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="table-cell text-sm text-gray-500">{user.email}</td>
+                        <td className="table-cell">
+                          <span className={`badge text-xs font-medium ${roleColor(user.rol_id)}`}>
+                            {getRoleName(user.rol_id)}
                           </span>
-                        </div>
-                      </td>
-                      <td className="table-cell text-sm text-gray-500">{u.email}</td>
-                      <td className="table-cell">
-                        <span className={`badge text-xs font-medium ${rolMeta.color}`}>
-                          {rolMeta.label}
-                        </span>
-                      </td>
-                      <td className="table-cell">
-                        <span className={`badge text-xs ${u.activo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                          {u.activo ? 'Activo' : 'Inactivo'}
-                        </span>
-                      </td>
-                      <td className="table-cell text-sm text-gray-400">{formatDate(u.created_at)}</td>
-                      <td className="table-cell">
-                        <div className="flex items-center gap-2">
-                          {/* Cambiar rol */}
-                          {!isMe && (
-                            <select
-                              className="input text-xs py-1 max-w-[130px]"
-                              value={u.rol_id}
-                              disabled={isBusy}
-                              onChange={e => cambiarRol(u.id, e.target.value)}
-                            >
-                              {ROLES.map(r => (
-                                <option key={r.id} value={r.id}>{r.label}</option>
-                              ))}
-                            </select>
-                          )}
+                        </td>
+                        <td className="table-cell">
+                          <span className={`badge text-xs ${user.activo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                            {user.activo ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                        <td className="table-cell text-sm text-gray-400">{formatDate(user.created_at)}</td>
+                        <td className="table-cell">
+                          <div className="flex items-center gap-2">
+                            {!isMe && (
+                              <select
+                                className="input text-xs py-1 max-w-[160px]"
+                                value={user.rol_id}
+                                disabled={isBusy || !canEditUsers}
+                                onChange={event => updateUser(user.id, { rol_id: event.target.value })}
+                              >
+                                {roles.map(role => (
+                                  <option key={role.id} value={role.id}>{role.nombre}</option>
+                                ))}
+                              </select>
+                            )}
 
-                          {/* Activar / desactivar */}
-                          {!isMe && (
-                            <button
-                              onClick={() => toggleActivo(u.id, u.activo)}
-                              disabled={isBusy}
-                              title={u.activo ? 'Desactivar usuario' : 'Activar usuario'}
-                              className={`p-1.5 rounded-lg transition-colors ${
-                                u.activo
-                                  ? 'text-red-400 hover:bg-red-50'
-                                  : 'text-green-600 hover:bg-green-50'
-                              }`}
-                            >
-                              {u.activo ? <UserX size={15} /> : <UserCheck size={15} />}
-                            </button>
-                          )}
+                            {!isMe && (
+                              <button
+                                onClick={() => updateUser(user.id, { activo: !user.activo })}
+                                disabled={isBusy || !canDeleteUsers}
+                                title={user.activo ? 'Desactivar usuario' : 'Activar usuario'}
+                                className={`p-1.5 rounded-lg transition-colors ${
+                                  user.activo
+                                    ? 'text-red-400 hover:bg-red-50'
+                                    : 'text-green-600 hover:bg-green-50'
+                                } disabled:opacity-40`}
+                              >
+                                {user.activo ? <UserX size={15} /> : <UserCheck size={15} />}
+                              </button>
+                            )}
 
-                          {isMe && (
-                            <span className="text-xs text-gray-300 italic">Tu cuenta</span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        {/* Info de roles */}
-        <div className="mt-6 grid grid-cols-3 gap-4">
-          {[
-            { rol: 'Administrador', desc: 'Acceso total. Ver, agregar, editar y borrar en todos los módulos, incluida la gestión de usuarios.' },
-            { rol: 'Contador',      desc: 'Puede ver, agregar y editar en todos los módulos operativos. No puede eliminar registros ni gestionar usuarios.' },
-            { rol: 'Solo lectura',  desc: 'Solo puede visualizar datos. Sin acceso a importar ni gestión de usuarios.' },
-          ].map(r => (
-            <div key={r.rol} className="card p-4">
-              <p className="text-sm font-semibold text-gray-700 mb-1">{r.rol}</p>
-              <p className="text-xs text-gray-500 leading-relaxed">{r.desc}</p>
+                            {isMe && (
+                              <span className="text-xs text-gray-300 italic">Tu cuenta</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-          ))}
-        </div>
+          )}
+        </section>
+
+        <section className="card p-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <Shield size={16} className="text-brand-600" />
+              <h2 className="text-sm font-semibold text-gray-800">Roles y permisos por módulo</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                className="input w-56"
+                value={selectedRoleId}
+                onChange={event => setSelectedRoleId(event.target.value)}
+              >
+                {roles.map(role => (
+                  <option key={role.id} value={role.id}>{role.nombre}</option>
+                ))}
+                <option value="__new__">Nuevo rol</option>
+              </select>
+            </div>
+          </div>
+
+          <form onSubmit={saveRole} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label>
+                <span className="label">Nombre del rol</span>
+                <input
+                  required
+                  className="input"
+                  value={roleForm.nombre}
+                  onChange={event => setRoleForm(prev => ({ ...prev, nombre: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span className="label">Descripcion</span>
+                <input
+                  className="input"
+                  value={roleForm.descripcion}
+                  onChange={event => setRoleForm(prev => ({ ...prev, descripcion: event.target.value }))}
+                />
+              </label>
+            </div>
+
+            <div className="overflow-x-auto border border-gray-200 rounded-lg">
+              <table className="w-full">
+                <thead>
+                  <tr>
+                    <th className="table-header">Modulo</th>
+                    <th className="table-header text-center">Ver</th>
+                    <th className="table-header text-center">Agregar</th>
+                    <th className="table-header text-center">Editar</th>
+                    <th className="table-header text-center">Borrar</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {MODULES.map(module => (
+                    <tr key={module.id} className="hover:bg-gray-50">
+                      <td className="table-cell font-medium">{module.label}</td>
+                      {(['puede_ver', 'puede_agregar', 'puede_editar', 'puede_borrar'] as const).map(key => (
+                        <td key={key} className="table-cell text-center">
+                          <input
+                            type="checkbox"
+                            checked={permissionDraft[module.id][key]}
+                            onChange={event => setPermission(module.id, key, event.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <button
+              type="submit"
+              disabled={!canEditUsers || savingRole}
+              className="btn-primary inline-flex items-center gap-2"
+            >
+              <Save size={16} />
+              {savingRole ? 'Guardando...' : 'Guardar rol'}
+            </button>
+          </form>
+        </section>
       </div>
+
+      {toast && <Toast {...toast} onClose={hideToast} />}
     </AppLayout>
   )
 }
