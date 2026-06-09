@@ -6,7 +6,7 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { CarteraVencida } from '@/types'
 import {
-  FileText, ShoppingCart, CreditCard, Building2, BookOpen, BarChart2, ClipboardList,
+  FileText, ShoppingCart, CreditCard, Building2, BookOpen, ClipboardList,
 } from 'lucide-react'
 import { isNC } from './reportes.utils'
 
@@ -16,9 +16,8 @@ import ComprasTab     from './components/ComprasTab'
 import NcTab          from './components/NcTab'
 import BancoTab       from './components/BancoTab'
 import LibrosTab      from './components/LibrosTab'
-import PivotTab       from './components/PivotTab'
 
-type ReporteTab = 'ventas' | 'presupuestos' | 'compras' | 'nc' | 'banco' | 'libros' | 'pivot'
+type ReporteTab = 'ventas' | 'presupuestos' | 'compras' | 'nc' | 'banco' | 'libros'
 
 export default function ReportesPage() {
   const [tab, setTab] = useState<ReporteTab>('ventas')
@@ -220,7 +219,6 @@ export default function ReportesPage() {
     { key: 'nc',           label: 'Notas de crédito',  icon: CreditCard },
     { key: 'banco',        label: 'Banco',             icon: Building2 },
     { key: 'libros',       label: 'Libros',            icon: BookOpen },
-    { key: 'pivot',        label: 'Cartera Pivot',     icon: BarChart2 },
   ]
 
   return (
@@ -251,6 +249,7 @@ export default function ReportesPage() {
         {tab === 'ventas' && (
           <VentasTab {...filtrosBarProps}
             ventasFiltradas={ventasFiltradas}
+            facturas={facturas}
             cartera={cartera}
             topClientesVentas={topClientesVentas}
             ventasPorMes={ventasPorMes}
@@ -312,13 +311,6 @@ export default function ReportesPage() {
             libroCompraFiltrado={libroCompraFiltrado}
             ventasFiltradas={ventasFiltradas}
             ncFiltradas={ncFiltradas}
-          />
-        )}
-
-        {tab === 'pivot' && (
-          <PivotTab
-            facturas={facturas}
-            cartera={cartera}
           />
         )}
       </div>

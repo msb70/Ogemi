@@ -12,18 +12,27 @@ import {
   TRAMOS, TRAMO_LABELS, TRAMO_COLORS_HEX, PIE_COLORS, exportCSV,
 } from '../reportes.utils'
 import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
+import PivotTab from './PivotTab'
 
-type VentasSubTab = 'listado' | 'cartera' | 'porcliente' | 'pormes' | 'semanal'
+type VentasSubTab =
+  | 'listado'
+  | 'cartera'
+  | 'porcliente'
+  | 'pormes'
+  | 'semanal'
+  | 'vencimiento_pivot'
+  | 'antiguedad_pivot'
 
 interface VentasTabProps extends FiltrosBarProps {
   ventasFiltradas: any[]
+  facturas: any[]
   cartera: CarteraVencida[]
   topClientesVentas: [string, number][]
   ventasPorMes: { mes: string; ventas: number; count: number }[]
 }
 
 export default function VentasTab({
-  ventasFiltradas, cartera, topClientesVentas, ventasPorMes,
+  ventasFiltradas, facturas, cartera, topClientesVentas, ventasPorMes,
   search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta,
 }: VentasTabProps) {
   const [ventasTab, setVentasTab] = useState<VentasSubTab>('listado')
@@ -37,6 +46,8 @@ export default function VentasTab({
           { key: 'porcliente', label: 'Por cliente' },
           { key: 'pormes',     label: 'Por período' },
           { key: 'semanal',    label: 'Vencimiento semanal' },
+          { key: 'vencimiento_pivot', label: 'Vencimiento x semana' },
+          { key: 'antiguedad_pivot',  label: 'Antigüedad de cartera' },
         ].map(s => (
           <button key={s.key} onClick={() => setVentasTab(s.key as VentasSubTab)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
@@ -215,6 +226,14 @@ export default function VentasTab({
             </ResponsiveContainer>
           </div>
         </div>
+      )}
+
+      {ventasTab === 'vencimiento_pivot' && (
+        <PivotTab key="ventas-vencimiento-pivot" facturas={facturas} cartera={cartera} initialTab="semanal" hideTabs />
+      )}
+
+      {ventasTab === 'antiguedad_pivot' && (
+        <PivotTab key="ventas-antiguedad-pivot" facturas={facturas} cartera={cartera} initialTab="antigüedad" hideTabs />
       )}
     </div>
   )

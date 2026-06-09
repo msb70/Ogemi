@@ -16,6 +16,10 @@ build/
 # Vercel
 .vercel
 
+# Supabase CLI local state
+supabase/.temp/
+ogemi-app/supabase/.temp/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -50,4 +54,3 @@ vencimiento-semanal.html
 
 # Snapshots de playwright
 *.yml
-

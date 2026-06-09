@@ -21,10 +21,12 @@ const WEEK_COLORS = [
 export interface PivotTabProps {
   facturas: any[]
   cartera: CarteraVencida[]
+  initialTab?: PivotSubTab
+  hideTabs?: boolean
 }
 
-export default function PivotTab({ facturas, cartera }: PivotTabProps) {
-  const [pivotTab, setPivotTab] = useState<PivotSubTab>('semanal')
+export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hideTabs = false }: PivotTabProps) {
+  const [pivotTab, setPivotTab] = useState<PivotSubTab>(initialTab)
 
   // Semanal state
   const [weekDates, setWeekDates] = useState<string[]>(() =>
@@ -61,20 +63,22 @@ export default function PivotTab({ facturas, cartera }: PivotTabProps) {
   const grandNoPaga = totNoPaga.reduce((s, t) => s + t, 0)
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex gap-2 flex-wrap">
-        {[
-          { key: 'semanal',    label: 'Vencimientos por semana' },
-          { key: 'antigüedad', label: 'Antigüedad de cartera' },
-        ].map(s => (
-          <button key={s.key} onClick={() => setPivotTab(s.key as PivotSubTab)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-              pivotTab === s.key ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'
-            }`}>
-            {s.label}
-          </button>
-        ))}
-      </div>
+    <div className={hideTabs ? 'space-y-4' : 'p-6 space-y-4'}>
+      {!hideTabs && (
+        <div className="flex gap-2 flex-wrap">
+          {[
+            { key: 'semanal',    label: 'Vencimientos por semana' },
+            { key: 'antigüedad', label: 'Antigüedad de cartera' },
+          ].map(s => (
+            <button key={s.key} onClick={() => setPivotTab(s.key as PivotSubTab)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                pivotTab === s.key ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+              }`}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {pivotTab === 'semanal' && (
         <div className="space-y-4">
