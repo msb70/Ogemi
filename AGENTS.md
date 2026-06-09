@@ -8,3 +8,21 @@ extraer cada cierto tiempo de una hoja de excel el libro de venta se guarda en u
 - Supabase: https://tnuzaaetfbbnxtbedlhs.supabase.co
 - Vercel: https://ogemi-iota.vercel.app/
 - Vercel project: `ogemi` (`prj_dTi7FaDqsPwQiM2yfN2pj0xah2Um`)
+
+## Vercel publication procedure
+
+The reliable production publication path for this project is a manual Vercel deploy from the Next.js app directory:
+
+```bash
+cd /Users/miguelspina/Documents/Claude/Projects/Ogemi/ogemi-app
+npx -y vercel@latest --prod --yes --scope team_skSZ5uPbcIfbs7LyfcHeca63
+```
+
+After deployment, verify the public alias:
+
+```bash
+npx -y vercel@latest inspect https://ogemi-iota.vercel.app --scope team_skSZ5uPbcIfbs7LyfcHeca63
+```
+
+The deploy is successful when `ogemi-iota.vercel.app` is aliased to a deployment with `status Ready`.
+Avoid relying only on failed automatic Git deployments for debugging; when Vercel logs are missing, rerun the manual command above because it streams the build output.
