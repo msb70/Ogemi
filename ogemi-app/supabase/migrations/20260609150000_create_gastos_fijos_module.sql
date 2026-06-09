@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS public.gastos_fijos_montos (
 CREATE INDEX IF NOT EXISTS idx_gastos_fijos_activo ON public.gastos_fijos(activo);
 CREATE INDEX IF NOT EXISTS idx_gastos_fijos_montos_periodo ON public.gastos_fijos_montos(periodo);
 
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.gastos_fijos TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.gastos_fijos_montos TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.set_gastos_fijos_updated_at()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -92,3 +95,5 @@ ON CONFLICT (rol_id, modulo) DO UPDATE SET
   puede_agregar = EXCLUDED.puede_agregar,
   puede_editar = EXCLUDED.puede_editar,
   puede_borrar = EXCLUDED.puede_borrar;
+
+NOTIFY pgrst, 'reload schema';
