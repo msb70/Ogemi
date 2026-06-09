@@ -2,38 +2,41 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/context/AuthContext'
+import type { Modulo } from '@/types/auth'
 import {
   LayoutDashboard, FileText, Users, Building2,
   BarChart3, Upload, ShieldCheck, LogOut, ChevronRight,
   ShoppingCart, Truck, Wallet, ClipboardList
 } from 'lucide-react'
 
-const navItems = [
-  { href: '/dashboard',     label: 'Dashboard',      icon: LayoutDashboard },
-  { href: '/facturas',      label: 'Facturas',        icon: FileText },
-  { href: '/presupuestos',  label: 'Presupuestos',    icon: ClipboardList },
-  { href: '/clientes',      label: 'Clientes',        icon: Users },
-  { href: '/anticipos',     label: 'Anticipos',       icon: Wallet },
-  { href: '/compras',       label: 'Compras',         icon: ShoppingCart },
-  { href: '/proveedores',   label: 'Proveedores',     icon: Truck },
-  { href: '/banco',         label: 'Banco',           icon: Building2 },
-  { href: '/reportes',      label: 'Reportes',        icon: BarChart3 },
-  { href: '/importar',      label: 'Importar',        icon: Upload },
-  { href: '/admin',         label: 'Administración',  icon: ShieldCheck },
+const navItems: { href: string; label: string; icon: React.ElementType; modulo: Modulo }[] = [
+  { href: '/dashboard',    label: 'Dashboard',     icon: LayoutDashboard, modulo: 'dashboard'    },
+  { href: '/facturas',     label: 'Facturas',       icon: FileText,        modulo: 'facturas'     },
+  { href: '/presupuestos', label: 'Presupuestos',   icon: ClipboardList,   modulo: 'presupuestos' },
+  { href: '/clientes',     label: 'Clientes',       icon: Users,           modulo: 'clientes'     },
+  { href: '/anticipos',    label: 'Anticipos',      icon: Wallet,          modulo: 'facturas'     },
+  { href: '/compras',      label: 'Compras',        icon: ShoppingCart,    modulo: 'compras'      },
+  { href: '/proveedores',  label: 'Proveedores',    icon: Truck,           modulo: 'proveedores'  },
+  { href: '/banco',        label: 'Banco',          icon: Building2,       modulo: 'banco'        },
+  { href: '/reportes',     label: 'Reportes',       icon: BarChart3,       modulo: 'reportes'     },
+  { href: '/importar',     label: 'Importar',       icon: Upload,          modulo: 'importar'     },
+  { href: '/usuarios',     label: 'Usuarios',       icon: ShieldCheck,     modulo: 'usuarios'     },
 ]
 
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const supabase = createClient()
+  const { profile, puedeHacer, signOut } = useAuth()
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    await signOut()
     router.push('/login')
     router.refresh()
   }
+
+  const visibleItems = navItems.filter(item => puedeHacer(item.modulo, 'ver'))
 
   return (
     <aside className="w-64 bg-brand-900 text-white flex flex-col min-h-screen">
@@ -54,7 +57,7 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-1">
-        {navItems.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon
           const active = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
@@ -76,8 +79,23 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Logout */}
-      <div className="p-3 border-t border-brand-700">
+      {/* Usuario + Logout */}
+      <div className="p-3 border-t border-brand-700 space-y-1">
+        {profile && (
+          <div className="flex items-center gap-2 px-3 py-2">
+            {profile.avatar_url ? (
+              <img src={profile.avatar_url} className="w-6 h-6 rounded-full" alt="" />
+            ) : (
+              <div className="w-6 h-6 rounded-full bg-brand-600 flex items-center justify-center text-xs font-bold">
+                {(profile.nombre || profile.email)[0].toUpperCase()}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-white truncate">{profile.nombre || profile.email}</p>
+              <p className="text-[10px] text-brand-400 capitalize">{profile.rol_id}</p>
+            </div>
+          </div>
+        )}
         <button
           onClick={handleLogout}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-brand-300 hover:bg-brand-800 hover:text-white transition-all w-full"

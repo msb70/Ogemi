@@ -26,6 +26,10 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Rutas públicas
+  if (pathname.startsWith('/auth/callback')) {
+    return supabaseResponse
+  }
+
   if (pathname.startsWith('/login')) {
     if (user) {
       return NextResponse.redirect(new URL('/dashboard', request.url))
