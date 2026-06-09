@@ -132,7 +132,7 @@ export function buildVencimientoViernes(
       const fp = f.fecha_pago ? new Date((f.fecha_pago as string) + 'T00:00:00') : null
       return fp !== null && fp <= lastFriday
     })
-    .map(f => {
+    .map((f): Record<string, unknown> & { fridayIdx: number } => {
       const fp = new Date((f.fecha_pago as string) + 'T00:00:00')
       const fridayIdx = fridays.findIndex(fri => fp <= fri)
       return { ...f, fridayIdx }
