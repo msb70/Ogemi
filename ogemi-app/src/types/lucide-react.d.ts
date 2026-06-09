@@ -21,12 +21,14 @@ declare module 'lucide-react' {
   export const CheckCircle: LucideIcon
   export const ChevronRight: LucideIcon
   export const Clock: LucideIcon
+  export const Copy: LucideIcon
   export const ClipboardList: LucideIcon
   export const CreditCard: LucideIcon
   export const Download: LucideIcon
   export const Eye: LucideIcon
   export const FileSpreadsheet: LucideIcon
   export const FileText: LucideIcon
+  export const KeyRound: LucideIcon
   export const Filter: LucideIcon
   export const LayoutDashboard: LucideIcon
   export const Link: LucideIcon
