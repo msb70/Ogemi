@@ -47,11 +47,11 @@ export function identifyNewClientNames(
   preview: ExcelRow[],
   clientesMap: Record<string, string>
 ): string[] {
-  return [...new Set(
+  return Array.from(new Set(
     preview
       .filter(r => !clientesMap[r.nombre_cliente.toUpperCase()])
       .map(r => r.nombre_cliente)
-  )]
+  ))
 }
 
 /**
