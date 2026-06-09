@@ -9,6 +9,7 @@ import { Factura, BancoCuenta } from '@/types'
 import { Search, CheckCircle, Filter, X, Plus, Trash2 } from 'lucide-react'
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
+import { withPagePermission } from '@/components/PermissionGuard'
 
 type EstadoFilter = 'todos' | 'pendiente' | 'pagada'
 
@@ -20,7 +21,7 @@ interface LineaPago {
   referencia: string
 }
 
-export default function FacturasPage() {
+function FacturasPage() {
   const [facturas, setFacturas] = useState<Factura[]>([])
   const [cuentas, setCuentas] = useState<BancoCuenta[]>([])
   const [loading, setLoading] = useState(true)
@@ -487,3 +488,5 @@ export default function FacturasPage() {
     </AppLayout>
   )
 }
+
+export default withPagePermission(FacturasPage, 'facturas', 'ver')

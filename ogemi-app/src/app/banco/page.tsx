@@ -9,10 +9,11 @@ import { BancoCuenta, BancoMovimiento } from '@/types'
 import { Plus, Building2, TrendingUp, TrendingDown, Calendar, Printer } from 'lucide-react'
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
+import { withPagePermission } from '@/components/PermissionGuard'
 
 type Tab = 'cuentas' | 'movimientos' | 'cierre'
 
-export default function BancoPage() {
+function BancoPage() {
   const [tab, setTab] = useState<Tab>('cuentas')
   const [cuentas, setCuentas] = useState<BancoCuenta[]>([])
   const [movimientos, setMovimientos] = useState<BancoMovimiento[]>([])
@@ -434,6 +435,8 @@ export default function BancoPage() {
     </AppLayout>
   )
 }
+
+export default withPagePermission(BancoPage, 'banco', 'ver')
 
 // ============================================================
 // Componente: Recibo de movimiento bancario

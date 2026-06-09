@@ -4,6 +4,7 @@ import { ReactNode } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import type { Modulo, Accion } from '@/types/auth'
 import { ShieldOff } from 'lucide-react'
+import AppLayout from './AppLayout'
 
 interface PermissionGuardProps {
   modulo: Modulo
@@ -44,7 +45,7 @@ export default function PermissionGuard({
 
 /**
  * Versión HOC para proteger una página completa.
- * Redirige a /dashboard si no tiene acceso.
+ * Mantiene el layout visible aunque no tenga acceso.
  */
 export function withPagePermission(
   Component: React.ComponentType,
@@ -56,21 +57,25 @@ export function withPagePermission(
 
     if (loading) {
       return (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-sm text-gray-400">Verificando permisos...</div>
-        </div>
+        <AppLayout>
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-sm text-gray-400">Verificando permisos...</div>
+          </div>
+        </AppLayout>
       )
     }
 
     if (!puedeHacer(modulo, accion)) {
       return (
-        <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-          <ShieldOff size={48} className="text-gray-200 mb-4" />
-          <h2 className="text-lg font-semibold text-gray-600">Acceso restringido</h2>
-          <p className="text-sm text-gray-400 mt-2">
-            Tu rol no tiene permiso para acceder a este módulo.
-          </p>
-        </div>
+        <AppLayout>
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+            <ShieldOff size={48} className="text-gray-200 mb-4" />
+            <h2 className="text-lg font-semibold text-gray-600">Acceso restringido</h2>
+            <p className="text-sm text-gray-400 mt-2">
+              Tu rol no tiene permiso para acceder a este módulo.
+            </p>
+          </div>
+        </AppLayout>
       )
     }
 

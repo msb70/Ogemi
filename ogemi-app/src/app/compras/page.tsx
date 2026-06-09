@@ -14,6 +14,7 @@ import {
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
 import QrScanner from '@/components/QrScanner'
+import { withPagePermission } from '@/components/PermissionGuard'
 
 type Tab = 'listado' | 'vencidas'
 type EstadoFilter = 'todos' | 'pendiente' | 'pagada'
@@ -33,7 +34,7 @@ const TRAMO_LABELS: Record<string, string> = {
   '31-60': '31–60 días', '61-90': '61–90 días', '91-120': '91–120 días', '+120': '+120 días',
 }
 
-export default function ComprasPage() {
+function ComprasPage() {
   const [tab, setTab] = useState<Tab>('listado')
   const [compras, setCompras] = useState<Compra[]>([])
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
@@ -851,3 +852,5 @@ export default function ComprasPage() {
     </AppLayout>
   )
 }
+
+export default withPagePermission(ComprasPage, 'compras', 'ver')

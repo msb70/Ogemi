@@ -9,8 +9,9 @@ import { formatDateObj } from '@/lib/utils'
 import { importarLibroVentas } from '@/lib/services/importar.service'
 import { ImportResult, ExcelRow } from '@/types'
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, X, Eye } from 'lucide-react'
+import { withPagePermission } from '@/components/PermissionGuard'
 
-export default function ImportarPage() {
+function ImportarPage() {
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<ExcelRow[]>([])
   const [importing, setImporting] = useState(false)
@@ -235,3 +236,5 @@ export default function ImportarPage() {
     </AppLayout>
   )
 }
+
+export default withPagePermission(ImportarPage, 'importar', 'ver')

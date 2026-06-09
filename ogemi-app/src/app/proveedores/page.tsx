@@ -7,8 +7,10 @@ import { createClient } from '@/lib/supabase'
 import { formatDate } from '@/lib/utils'
 import { Proveedor } from '@/types'
 import { Plus, Pencil, Trash2, Truck, Search, X, Check } from 'lucide-react'
+import { withPagePermission } from '@/components/PermissionGuard'
+import { useAuth } from '@/context/AuthContext'
 
-export default function ProveedoresPage() {
+function ProveedoresPage() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -17,6 +19,8 @@ export default function ProveedoresPage() {
   const [form, setForm] = useState({ nombre: '', dias_credito: '30' })
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const { puedeHacer } = useAuth()
+  const canDelete = puedeHacer('proveedores', 'borrar')
 
   const supabase = createClient()
 
@@ -72,6 +76,7 @@ export default function ProveedoresPage() {
   }
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return
     await supabase.from('proveedores').delete().eq('id', id)
     setDeleteConfirm(null)
     load()
@@ -172,7 +177,7 @@ export default function ProveedoresPage() {
                           >
                             <X size={15} />
                           </button>
-                          {deleteConfirm === p.id ? (
+                          {canDelete && deleteConfirm === p.id ? (
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => handleDelete(p.id)}
@@ -188,7 +193,7 @@ export default function ProveedoresPage() {
                                 <X size={15} />
                               </button>
                             </div>
-                          ) : (
+                          ) : canDelete ? (
                             <button
                               onClick={() => setDeleteConfirm(p.id)}
                               className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50"
@@ -196,7 +201,7 @@ export default function ProveedoresPage() {
                             >
                               <Trash2 size={15} />
                             </button>
-                          )}
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -289,3 +294,5 @@ export default function ProveedoresPage() {
     </AppLayout>
   )
 }
+
+export default withPagePermission(ProveedoresPage, 'proveedores', 'ver')

@@ -7,8 +7,9 @@ import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Anticipo, Cliente, BancoCuenta } from '@/types'
 import { Plus, Printer, Search, X, CheckCircle, AlertCircle } from 'lucide-react'
+import { withPagePermission } from '@/components/PermissionGuard'
 
-export default function AnticiposPage() {
+function AnticiposPage() {
   const [anticipos, setAnticipos] = useState<Anticipo[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [cuentas, setCuentas] = useState<BancoCuenta[]>([])
@@ -377,6 +378,8 @@ export default function AnticiposPage() {
     </AppLayout>
   )
 }
+
+export default withPagePermission(AnticiposPage, 'facturas', 'ver')
 
 // ============================================================
 // Componente: Recibo de anticipo

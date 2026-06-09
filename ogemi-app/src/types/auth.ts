@@ -31,6 +31,7 @@ export interface UserProfile {
   avatar_url: string | null
   rol_id: RolId
   activo: boolean
+  must_change_password: boolean
   created_at: string
   updated_at: string
 }

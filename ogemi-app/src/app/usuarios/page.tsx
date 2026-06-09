@@ -9,14 +9,77 @@ import { formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
 import { Toast } from '@/components/Toast'
 import {
+  Check,
+  Copy,
+  KeyRound,
+  Lock,
   Plus,
   Save,
   Shield,
+  Trash2,
   UserCheck,
   UserPlus,
   UserX,
+  X,
 } from 'lucide-react'
 import type { Modulo, RoleRecord, RolPermiso, UserProfile } from '@/types/auth'
+
+interface TempPasswordModal {
+  email: string
+  password: string
+}
+
+function TempPasswordDialog({ email, password, onClose }: TempPasswordModal & { onClose: () => void }) {
+  const [copied, setCopied] = useState(false)
+
+  function handleCopy() {
+    navigator.clipboard.writeText(password).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-2 text-brand-700">
+            <KeyRound size={18} />
+            <h2 className="font-semibold text-sm">Contraseña temporal</h2>
+          </div>
+          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100">
+            <X size={16} className="text-gray-400" />
+          </button>
+        </div>
+
+        <p className="text-sm text-gray-500 mb-4">
+          Comparte esta contraseña con <span className="font-medium text-gray-700">{email}</span>.
+          El usuario deberá cambiarla en su primer inicio de sesión.
+        </p>
+
+        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 mb-4">
+          <span className="flex-1 font-mono text-lg font-bold tracking-widest text-gray-800 select-all">
+            {password}
+          </span>
+          <button
+            onClick={handleCopy}
+            className="p-1.5 rounded hover:bg-gray-200 transition-colors"
+            title="Copiar"
+          >
+            {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} className="text-gray-500" />}
+          </button>
+        </div>
+
+        <button
+          onClick={onClose}
+          className="w-full rounded-lg bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-800 transition-colors"
+        >
+          Entendido
+        </button>
+      </div>
+    </div>
+  )
+}
 
 const MODULES: { id: Modulo; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -65,8 +128,12 @@ function UsuariosPage() {
   const [permisos, setPermisos] = useState<RolPermiso[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
+  const [deletingUser, setDeletingUser] = useState<string | null>(null)
   const [creatingUser, setCreatingUser] = useState(false)
+  const [resettingPassword, setResettingPassword] = useState<string | null>(null)
+  const [tempPasswordModal, setTempPasswordModal] = useState<TempPasswordModal | null>(null)
   const [savingRole, setSavingRole] = useState(false)
+  const [deletingRole, setDeletingRole] = useState(false)
   const [selectedRoleId, setSelectedRoleId] = useState('')
   const [roleForm, setRoleForm] = useState({ nombre: '', descripcion: '' })
   const [permissionDraft, setPermissionDraft] = useState<PermissionDraft>(emptyPermissions)
@@ -86,6 +153,12 @@ function UsuariosPage() {
     roles.forEach(role => { map[role.id] = role })
     return map
   }, [roles])
+
+  const selectedRole = roleById[selectedRoleId]
+  const selectedRoleUserCount = useMemo(
+    () => usuarios.filter(user => user.rol_id === selectedRoleId).length,
+    [usuarios, selectedRoleId]
+  )
 
   async function fetchJson(url: string, options?: RequestInit) {
     const response = await fetch(url, options)
@@ -149,18 +222,41 @@ function UsuariosPage() {
     event.preventDefault()
     setCreatingUser(true)
     try {
-      await fetchJson('/api/admin/users', {
+      const result = await fetchJson('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUser),
       })
+      const createdEmail = newUser.email
       setNewUser({ email: '', nombre: '', rol_id: 'visor', activo: true })
-      showToast('Usuario creado e invitado por correo.')
+      showToast('Usuario creado correctamente.')
+      if (result.tempPassword) {
+        setTempPasswordModal({ email: createdEmail, password: result.tempPassword })
+      }
       await loadAll()
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'No se pudo crear el usuario.', 'error')
     } finally {
       setCreatingUser(false)
+    }
+  }
+
+  async function resetPassword(user: UserProfile) {
+    setResettingPassword(user.id)
+    try {
+      const result = await fetchJson('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: user.id, reset_password: true }),
+      })
+      if (result.tempPassword) {
+        setTempPasswordModal({ email: user.email, password: result.tempPassword })
+      }
+      showToast('Contraseña reseteada.')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'No se pudo resetear la contraseña.', 'error')
+    } finally {
+      setResettingPassword(null)
     }
   }
 
@@ -178,6 +274,25 @@ function UsuariosPage() {
       showToast(error instanceof Error ? error.message : 'No se pudo actualizar el usuario.', 'error')
     } finally {
       setSaving(null)
+    }
+  }
+
+  async function deleteUser(user: UserProfile) {
+    if (user.id === myProfile?.id) return
+    const ok = window.confirm(`¿Borrar definitivamente el usuario ${user.email}?`)
+    if (!ok) return
+
+    setDeletingUser(user.id)
+    try {
+      await fetchJson(`/api/admin/users?id=${encodeURIComponent(user.id)}`, {
+        method: 'DELETE',
+      })
+      showToast('Usuario borrado.')
+      await loadAll()
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'No se pudo borrar el usuario.', 'error')
+    } finally {
+      setDeletingUser(null)
     }
   }
 
@@ -205,6 +320,31 @@ function UsuariosPage() {
       showToast(error instanceof Error ? error.message : 'No se pudo guardar el rol.', 'error')
     } finally {
       setSavingRole(false)
+    }
+  }
+
+  async function deleteRole() {
+    if (!selectedRole || selectedRole.es_sistema) return
+    if (selectedRoleUserCount > 0) {
+      showToast('No se puede borrar un rol asignado a usuarios.', 'error')
+      return
+    }
+
+    const ok = window.confirm(`¿Borrar el rol "${selectedRole.nombre}"?`)
+    if (!ok) return
+
+    setDeletingRole(true)
+    try {
+      await fetchJson(`/api/admin/roles?id=${encodeURIComponent(selectedRole.id)}`, {
+        method: 'DELETE',
+      })
+      showToast('Rol borrado.')
+      setSelectedRoleId('')
+      await loadAll()
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'No se pudo borrar el rol.', 'error')
+    } finally {
+      setDeletingRole(false)
     }
   }
 
@@ -313,7 +453,7 @@ function UsuariosPage() {
                 <tbody className="divide-y divide-gray-100">
                   {usuarios.map(user => {
                     const isMe = user.id === myProfile?.id
-                    const isBusy = saving === user.id
+                    const isBusy = saving === user.id || deletingUser === user.id || resettingPassword === user.id
                     return (
                       <tr key={user.id} className={`hover:bg-gray-50 ${!user.activo ? 'opacity-50' : ''}`}>
                         <td className="table-cell">
@@ -373,8 +513,36 @@ function UsuariosPage() {
                               </button>
                             )}
 
+                            {!isMe && (
+                              <button
+                                onClick={() => deleteUser(user)}
+                                disabled={isBusy || !canDeleteUsers}
+                                title="Borrar usuario"
+                                className="p-1.5 rounded-lg text-red-600 transition-colors hover:bg-red-50 disabled:opacity-40"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            )}
+
+                            {!isMe && (
+                              <button
+                                onClick={() => resetPassword(user)}
+                                disabled={isBusy || !canEditUsers}
+                                title="Resetear contraseña"
+                                className="p-1.5 rounded-lg text-amber-600 transition-colors hover:bg-amber-50 disabled:opacity-40"
+                              >
+                                <KeyRound size={15} />
+                              </button>
+                            )}
+
                             {isMe && (
-                              <span className="text-xs text-gray-300 italic">Tu cuenta</span>
+                              <a
+                                href="/auth/cambiar-password"
+                                title="Cambiar mi contraseña"
+                                className="p-1.5 rounded-lg text-brand-600 transition-colors hover:bg-brand-50"
+                              >
+                                <Lock size={15} />
+                              </a>
                             )}
                           </div>
                         </td>
@@ -459,19 +627,42 @@ function UsuariosPage() {
               </table>
             </div>
 
-            <button
-              type="submit"
-              disabled={!canEditUsers || savingRole}
-              className="btn-primary inline-flex items-center gap-2"
-            >
-              <Save size={16} />
-              {savingRole ? 'Guardando...' : 'Guardar rol'}
-            </button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                type="submit"
+                disabled={!canEditUsers || savingRole || deletingRole}
+                className="btn-primary inline-flex items-center justify-center gap-2"
+              >
+                <Save size={16} />
+                {savingRole ? 'Guardando...' : 'Guardar rol'}
+              </button>
+
+              {selectedRole && !selectedRole.es_sistema && (
+                <button
+                  type="button"
+                  onClick={deleteRole}
+                  disabled={!canDeleteUsers || deletingRole || selectedRoleUserCount > 0}
+                  title={selectedRoleUserCount > 0 ? 'No se puede borrar un rol asignado a usuarios' : 'Borrar rol'}
+                  className="btn-danger inline-flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={16} />
+                  {deletingRole ? 'Borrando...' : 'Borrar rol'}
+                </button>
+              )}
+            </div>
           </form>
         </section>
       </div>
 
       {toast && <Toast {...toast} onClose={hideToast} />}
+
+      {tempPasswordModal && (
+        <TempPasswordDialog
+          email={tempPasswordModal.email}
+          password={tempPasswordModal.password}
+          onClose={() => setTempPasswordModal(null)}
+        />
+      )}
     </AppLayout>
   )
 }

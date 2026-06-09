@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate, tramoColor } from '@/lib/utils'
 import { BancoCuenta, Cliente } from '@/types'
 import { Search, CheckCircle, Filter, X, Plus, Trash2, FileText, Download } from 'lucide-react'
+import { withPagePermission } from '@/components/PermissionGuard'
 
 type EstadoFilter = 'todos' | 'pendiente' | 'pagada'
 
@@ -30,7 +31,7 @@ interface Presupuesto {
   banco_cuentas?: BancoCuenta
 }
 
-export default function PresupuestosPage() {
+function PresupuestosPage() {
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [cuentas, setCuentas] = useState<BancoCuenta[]>([])
@@ -460,3 +461,5 @@ export default function PresupuestosPage() {
     </AppLayout>
   )
 }
+
+export default withPagePermission(PresupuestosPage, 'presupuestos', 'ver')

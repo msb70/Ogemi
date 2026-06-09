@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState, type FormEvent } from 'react'
+import { Suspense, useEffect, useState, type FormEvent } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Lock, Mail } from 'lucide-react'
@@ -9,13 +9,35 @@ function LoginContent() {
   const [loading, setLoading] = useState(false)
   const [emailLoading, setEmailLoading] = useState(false)
   const [error, setError] = useState('')
+  const [authLinkError, setAuthLinkError] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
 
+  async function getDefaultRoute() {
+    const response = await fetch('/api/auth/default-route')
+    const payload = await response.json().catch(() => ({}))
+    return typeof payload.route === 'string' ? payload.route : '/inicio'
+  }
+
   const oauthError = searchParams.get('error')
+  const queryMessage = searchParams.get('message')
+
+  useEffect(() => {
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+    const errorCode = hashParams.get('error_code')
+    const errorDescription = hashParams.get('error_description')
+
+    if (errorCode === 'otp_expired') {
+      setAuthLinkError('El enlace de invitación expiró o ya fue usado. Pide al administrador reenviar la invitación.')
+    } else if (errorDescription) {
+      setAuthLinkError(errorDescription.replace(/\+/g, ' '))
+    } else if (oauthError === 'unauthorized') {
+      setAuthLinkError(queryMessage || 'Este correo no está inscrito como usuario del sistema.')
+    }
+  }, [oauthError, queryMessage])
 
   const handleGoogleLogin = async () => {
     setLoading(true)
@@ -50,7 +72,7 @@ function LoginContent() {
       return
     }
 
-    router.push('/dashboard')
+    router.push(await getDefaultRoute())
     router.refresh()
   }
 
@@ -71,9 +93,9 @@ function LoginContent() {
         </div>
 
         <div className="space-y-4">
-          {(error || oauthError) && (
+          {(error || authLinkError || oauthError) && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
-              {error || 'Error al autenticar. Intenta de nuevo.'}
+              {error || authLinkError || 'Error al autenticar. Intenta de nuevo.'}
             </div>
           )}
 

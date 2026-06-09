@@ -8,6 +8,7 @@ import { CarteraVencida } from '@/types'
 import {
   FileText, ShoppingCart, CreditCard, Building2, BookOpen, ClipboardList,
 } from 'lucide-react'
+import { withPagePermission } from '@/components/PermissionGuard'
 import { isNC } from './reportes.utils'
 
 import VentasTab      from './components/VentasTab'
@@ -19,7 +20,7 @@ import LibrosTab      from './components/LibrosTab'
 
 type ReporteTab = 'ventas' | 'presupuestos' | 'compras' | 'nc' | 'banco' | 'libros'
 
-export default function ReportesPage() {
+function ReportesPage() {
   const [tab, setTab] = useState<ReporteTab>('ventas')
   const [loading, setLoading] = useState(false)
 
@@ -317,3 +318,5 @@ export default function ReportesPage() {
     </AppLayout>
   )
 }
+
+export default withPagePermission(ReportesPage, 'reportes', 'ver')

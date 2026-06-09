@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
+import { withPagePermission } from '@/components/PermissionGuard'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency } from '@/lib/utils'
 import {
@@ -110,7 +111,7 @@ function getBarKey(type: PeriodType, dateStr: string): string {
   return MONTHS_ES[d.getMonth()]
 }
 
-export default function DashboardPage() {
+function DashboardPage() {
   const supabase = createClient()
   const now = new Date()
   const [periodType, setPeriodType] = useState<PeriodType>('monthly')
@@ -506,3 +507,5 @@ export default function DashboardPage() {
     </AppLayout>
   )
 }
+
+export default withPagePermission(DashboardPage, 'dashboard', 'ver')

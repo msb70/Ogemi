@@ -1,9 +1,9 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useCallback, useEffect, useMemo, useState, ReactNode } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User } from '@supabase/supabase-js'
-import type { UserProfile, RolPermiso, Modulo, Accion, RolId } from '@/types/auth'
+import type { UserProfile, RolPermiso, Modulo, Accion } from '@/types/auth'
 
 interface AuthContextValue {
   user: User | null
@@ -16,110 +16,65 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-type LegacyRole = {
-  role: 'admin' | 'operador' | 'lectura'
-  puede_ver: boolean
-  puede_editar: boolean
-  puede_borrar: boolean
-}
-
-function mapLegacyRole(role?: LegacyRole['role'] | null): RolId | null {
-  if (role === 'admin') return 'admin'
-  if (role === 'operador') return 'contador'
-  if (role === 'lectura') return 'visor'
-  return null
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [permisos, setPermisos] = useState<Record<string, RolPermiso>>({})
   const [loading, setLoading] = useState(true)
 
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
-  async function loadProfile(authUser: User) {
-    const { data: prof, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('id', authUser.id)
-      .maybeSingle()
-
-    const { data: legacyRole } = await supabase
-      .from('user_roles')
-      .select('role, puede_ver, puede_editar, puede_borrar')
-      .eq('user_id', authUser.id)
-      .maybeSingle()
-
-    const legacyRolId = mapLegacyRole((legacyRole as LegacyRole | null)?.role)
-    const metadata = authUser.user_metadata || {}
-    const fallbackProfile: UserProfile = {
-      id: authUser.id,
-      email: authUser.email || '',
-      nombre: (metadata.full_name as string | undefined) || authUser.email?.split('@')[0] || null,
-      avatar_url: (metadata.avatar_url as string | undefined) || null,
-      rol_id: legacyRolId || 'visor',
-      activo: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+  const rejectUnauthorizedSession = useCallback(async (message = 'Este correo no está inscrito como usuario del sistema.') => {
+    setUser(null)
+    setProfile(null)
+    setPermisos({})
+    await supabase.auth.signOut()
+    if (typeof window !== 'undefined') {
+      window.location.replace(`/login?error=unauthorized&message=${encodeURIComponent(message)}`)
     }
-    const storedProfile = profileError ? null : (prof as UserProfile | null)
+  }, [supabase])
 
-    const normalizedProfile: UserProfile = {
-      ...fallbackProfile,
-      ...storedProfile,
-      rol_id: legacyRolId === 'admin' ? 'admin' : (storedProfile?.rol_id || fallbackProfile.rol_id),
+  const loadProfile = useCallback(async () => {
+    const response = await fetch('/api/auth/me', { cache: 'no-store' })
+    const payload = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      await rejectUnauthorizedSession(payload.error || 'Tu correo no tiene un usuario activo en Ogemi.')
+      return
     }
 
-    if (!storedProfile && !profileError) {
-      await supabase.from('user_profiles').insert({
-        id: normalizedProfile.id,
-        email: normalizedProfile.email,
-        nombre: normalizedProfile.nombre,
-        avatar_url: normalizedProfile.avatar_url,
-        rol_id: normalizedProfile.rol_id,
-        activo: normalizedProfile.activo,
-      })
-    }
-
-    setProfile(normalizedProfile)
-
-    const { data: perms } = await supabase
-      .from('rol_permisos')
-      .select('*')
-      .eq('rol_id', normalizedProfile.rol_id)
-
-    if (perms) {
-      const map: Record<string, RolPermiso> = {}
-      perms.forEach((p: RolPermiso) => { map[p.modulo] = p })
-      setPermisos(map)
-    } else {
-      setPermisos({})
-    }
-  }
+    setUser(payload.user as User)
+    setProfile(payload.profile as UserProfile)
+    setPermisos((payload.permisos || {}) as Record<string, RolPermiso>)
+  }, [rejectUnauthorizedSession])
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
-        loadProfile(session.user).finally(() => setLoading(false))
+        await loadProfile()
       } else {
+        setUser(null)
+        setProfile(null)
+        setPermisos({})
+      }
+      setLoading(false)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        setLoading(true)
+        await loadProfile()
+        setLoading(false)
+      } else {
+        setUser(null)
+        setProfile(null)
+        setPermisos({})
         setLoading(false)
       }
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        loadProfile(session.user)
-      } else {
-        setProfile(null)
-        setPermisos({})
-      }
-    })
-
     return () => subscription.unsubscribe()
-  }, [])
+  }, [loadProfile, supabase.auth])
 
   function puedeHacer(modulo: Modulo, accion: Accion): boolean {
     if (!profile) return false
@@ -135,7 +90,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    setUser(null)
+    setProfile(null)
+    setPermisos({})
     await supabase.auth.signOut()
+    await fetch('/api/auth/signout', { method: 'POST' }).catch(() => null)
+    if (typeof window !== 'undefined') {
+      window.location.replace('/login')
+    }
   }
 
   return (

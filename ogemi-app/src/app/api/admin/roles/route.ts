@@ -143,3 +143,60 @@ export async function PATCH(request: NextRequest) {
 
   return NextResponse.json({ ok: true })
 }
+
+export async function DELETE(request: NextRequest) {
+  const { error, admin } = await requireAdmin()
+  if (error) return error
+  if (!admin) return NextResponse.json({ error: 'No tienes permiso de administrador.' }, { status: 403 })
+
+  const id = request.nextUrl.searchParams.get('id')?.trim() || ''
+
+  if (!id) {
+    return NextResponse.json({ error: 'ID de rol obligatorio.' }, { status: 400 })
+  }
+
+  const { data: role, error: roleError } = await admin
+    .from('roles')
+    .select('id, es_sistema')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (roleError) {
+    return NextResponse.json({ error: roleError.message }, { status: 500 })
+  }
+
+  if (!role) {
+    return NextResponse.json({ error: 'El rol no existe.' }, { status: 404 })
+  }
+
+  if (role.es_sistema) {
+    return NextResponse.json({ error: 'No se pueden borrar roles del sistema.' }, { status: 400 })
+  }
+
+  const { count, error: usersError } = await admin
+    .from('user_profiles')
+    .select('id', { count: 'exact', head: true })
+    .eq('rol_id', id)
+
+  if (usersError) {
+    return NextResponse.json({ error: usersError.message }, { status: 500 })
+  }
+
+  if ((count || 0) > 0) {
+    return NextResponse.json(
+      { error: 'No se puede borrar un rol asignado a usuarios.' },
+      { status: 400 }
+    )
+  }
+
+  const { error: deleteError } = await admin
+    .from('roles')
+    .delete()
+    .eq('id', id)
+
+  if (deleteError) {
+    return NextResponse.json({ error: deleteError.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true })
+}

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
 import type { Modulo } from '@/types/auth'
@@ -28,13 +28,10 @@ const navItems: { href: string; label: string; icon: React.ElementType; modulo: 
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const router = useRouter()
   const { profile, puedeHacer, signOut } = useAuth()
 
   const handleLogout = async () => {
     await signOut()
-    router.push('/login')
-    router.refresh()
   }
 
   const visibleItems = navItems.filter(item => puedeHacer(item.modulo, 'ver'))

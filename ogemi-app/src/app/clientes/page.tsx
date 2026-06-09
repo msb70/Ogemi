@@ -6,8 +6,9 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { Cliente } from '@/types'
 import { Plus, Pencil, Search, X, Check } from 'lucide-react'
+import { withPagePermission } from '@/components/PermissionGuard'
 
-export default function ClientesPage() {
+function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -224,3 +225,5 @@ export default function ClientesPage() {
     </AppLayout>
   )
 }
+
+export default withPagePermission(ClientesPage, 'clientes', 'ver')
