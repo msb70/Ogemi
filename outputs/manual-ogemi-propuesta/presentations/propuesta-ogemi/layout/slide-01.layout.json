@@ -1,0 +1,850 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/xhqpky",
+    "id": "xhqpky",
+    "slide": 1,
+    "layoutId": "521c33de-7fd8-41ae-a8d5-4e855212633b",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "bc58cf51-0225-4d4e-9f0c-2b27bcbbc1f7",
+    "masterLayoutName": "Master",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Aptos",
+      "Aptos Display"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "521c33de-7fd8-41ae-a8d5-4e855212633b",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "bc58cf51-0225-4d4e-9f0c-2b27bcbbc1f7",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "bc58cf51-0225-4d4e-9f0c-2b27bcbbc1f7",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/tgfmlkjm",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "#0D242D",
+      "lineColor": "#0D242D",
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mp0bi9s3",
+      "id": "2",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "#0D242D",
+      "lineColor": "#0D242D",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bat47y1k",
+      "id": "3",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "#10313B",
+      "lineColor": "#10313B",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/47y1kre1",
+      "id": "4",
+      "bbox": [
+        56,
+        54,
+        5,
+        88
+      ],
+      "geometry": "rect",
+      "fillColor": "#18A999",
+      "lineColor": "#18A999",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/0bi9s36h",
+      "id": "5",
+      "bbox": [
+        1050,
+        48,
+        104,
+        104
+      ],
+      "alt": "Logo Ogemi",
+      "contentType": "image/jpeg",
+      "asset": {
+        "assetId": "48a04ca3-9fe8-490c-9ce2-721e7c691fc9",
+        "contentType": "image/jpeg",
+        "byteLength": 28914
+      }
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/m1cfa9w3",
+      "id": "6",
+      "bbox": [
+        78,
+        58,
+        380,
+        18
+      ],
+      "geometry": "rect",
+      "text": "OGEMI IMPRESORA",
+      "textPreview": "OGEMI IMPRESORA",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "fontSize": 10,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "OGEMI IMPRESORA"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "OGEMI IMPRESORA",
+          "runs": [
+            {
+              "index": 1,
+              "text": "OGEMI IMPRESORA",
+              "fontSize": 10,
+              "typeface": "Aptos",
+              "color": "#A8DADC",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bm58z25k",
+      "id": "7",
+      "bbox": [
+        78,
+        88,
+        500,
+        18
+      ],
+      "geometry": "rect",
+      "text": "Propuesta económica / Sistema de gestión de cartera",
+      "textPreview": "Propuesta económica / Sistema de gestión de cartera",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Propuesta económica / Sistema de gestión de cartera"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Propuesta económica / Sistema de gestión de cartera",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Propuesta económica / Sistema de gestión de cartera",
+              "fontSize": 11,
+              "typeface": "Aptos",
+              "color": "#C9DDE3"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/4byhgn29",
+      "id": "8",
+      "bbox": [
+        74,
+        196,
+        780,
+        185
+      ],
+      "geometry": "rect",
+      "text": "Sistema financiero\npara cartera, banco\ny reportes gerenciales",
+      "textPreview": "Sistema financiero | para cartera, banco | y reportes gerenciales",
+      "resolvedFontSize": 50,
+      "resolvedTextStyle": {
+        "fontSize": 50,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Sistema financiero"
+          },
+          {
+            "index": 2,
+            "text": "para cartera, banco"
+          },
+          {
+            "index": 3,
+            "text": "y reportes gerenciales"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Sistema financiero",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Sistema financiero",
+              "fontSize": 50,
+              "typeface": "Aptos Display",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "text": "para cartera, banco",
+          "runs": [
+            {
+              "index": 1,
+              "text": "para cartera, banco",
+              "fontSize": 50,
+              "typeface": "Aptos Display",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        },
+        {
+          "index": 3,
+          "text": "y reportes gerenciales",
+          "runs": [
+            {
+              "index": 1,
+              "text": "y reportes gerenciales",
+              "fontSize": 50,
+              "typeface": "Aptos Display",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/twra5gbq",
+      "id": "9",
+      "bbox": [
+        78,
+        405,
+        610,
+        56
+      ],
+      "geometry": "rect",
+      "text": "Alcance cerrado para una empresa, 5 usuarios, importación manual de Excel y cierre bancario mensual por comparación de saldos.",
+      "textPreview": "Alcance cerrado para una empresa, 5 usuarios, importación manual de Excel y cierre bancario mensual por comparación de saldos.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "fontSize": 16,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Alcance cerrado para una empresa, 5 usuarios, importación manual de Excel y cierre"
+          },
+          {
+            "index": 2,
+            "text": "bancario mensual por comparación de saldos."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Alcance cerrado para una empresa, 5 usuarios, importación manual de Excel y cierre bancario mensual por comparación de saldos.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Alcance cerrado para una empresa, 5 usuarios, importación manual de Excel y cierre bancario mensual por comparación de saldos.",
+              "fontSize": 16,
+              "typeface": "Aptos",
+              "color": "#C9DDE3"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1cfa9w3m",
+      "id": "10",
+      "bbox": [
+        78,
+        525,
+        260,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/crmhk3q5",
+      "id": "11",
+      "bbox": [
+        78,
+        525,
+        5,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#18A999",
+      "lineColor": "#18A999",
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/j6tovaho",
+      "id": "12",
+      "bbox": [
+        98,
+        544,
+        224,
+        36
+      ],
+      "geometry": "rect",
+      "text": "$9,700",
+      "textPreview": "$9,700",
+      "resolvedFontSize": 29,
+      "resolvedTextStyle": {
+        "fontSize": 29,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "$9,700"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "$9,700",
+          "runs": [
+            {
+              "index": 1,
+              "text": "$9,700",
+              "fontSize": 29,
+              "typeface": "Aptos Display",
+              "color": "#18A999",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ulwval87",
+      "id": "13",
+      "bbox": [
+        98,
+        585,
+        224,
+        30
+      ],
+      "geometry": "rect",
+      "text": "Inversión de desarrollo cerrada",
+      "textPreview": "Inversión de desarrollo cerrada",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Inversión de desarrollo cerrada"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Inversión de desarrollo cerrada",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Inversión de desarrollo cerrada",
+              "fontSize": 11,
+              "typeface": "Aptos",
+              "color": "#58707A",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1kre1w7m",
+      "id": "14",
+      "bbox": [
+        368,
+        525,
+        260,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/c3ylc7u5",
+      "id": "15",
+      "bbox": [
+        368,
+        525,
+        5,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#D9902F",
+      "lineColor": "#D9902F",
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ji5snelo",
+      "id": "16",
+      "bbox": [
+        388,
+        544,
+        224,
+        36
+      ],
+      "geometry": "rect",
+      "text": "6 semanas",
+      "textPreview": "6 semanas",
+      "resolvedFontSize": 29,
+      "resolvedTextStyle": {
+        "fontSize": 29,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "6 semanas"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "6 semanas",
+          "runs": [
+            {
+              "index": 1,
+              "text": "6 semanas",
+              "fontSize": 29,
+              "typeface": "Aptos Display",
+              "color": "#D9902F",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/uxc3ylc7",
+      "id": "17",
+      "bbox": [
+        388,
+        585,
+        224,
+        30
+      ],
+      "geometry": "rect",
+      "text": "Cronograma de implementación",
+      "textPreview": "Cronograma de implementación",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Cronograma de implementación"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Cronograma de implementación",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Cronograma de implementación",
+              "fontSize": 11,
+              "typeface": "Aptos",
+              "color": "#58707A",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1w7mp0bi",
+      "id": "18",
+      "bbox": [
+        658,
+        525,
+        260,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8bat47y1",
+      "id": "19",
+      "bbox": [
+        658,
+        525,
+        5,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#0E7490",
+      "lineColor": "#0E7490",
+      "lineWidth": 0
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/o7qpg3ex",
+      "id": "20",
+      "bbox": [
+        678,
+        544,
+        224,
+        36
+      ],
+      "geometry": "rect",
+      "text": "$45/mes",
+      "textPreview": "$45/mes",
+      "resolvedFontSize": 29,
+      "resolvedTextStyle": {
+        "fontSize": 29,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "$45/mes"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "$45/mes",
+          "runs": [
+            {
+              "index": 1,
+              "text": "$45/mes",
+              "fontSize": 29,
+              "typeface": "Aptos Display",
+              "color": "#0E7490",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/dsji5sne",
+      "id": "21",
+      "bbox": [
+        678,
+        585,
+        224,
+        30
+      ],
+      "geometry": "rect",
+      "text": "Infraestructura base estimada",
+      "textPreview": "Infraestructura base estimada",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Infraestructura base estimada"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Infraestructura base estimada",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Infraestructura base estimada",
+              "fontSize": 11,
+              "typeface": "Aptos",
+              "color": "#58707A",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/61032lsz",
+      "id": "22",
+      "bbox": [
+        1018,
+        668,
+        200,
+        16
+      ],
+      "geometry": "rect",
+      "text": "Preparado para Impresos Comerciales SA",
+      "textPreview": "Preparado para Impresos Comerciales SA",
+      "resolvedFontSize": 8.51,
+      "resolvedTextStyle": {
+        "fontSize": 8.51,
+        "typeface": "Aptos",
+        "alignment": "right"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Preparado para Impresos Comerciales SA"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Preparado para Impresos Comerciales SA",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Preparado para Impresos Comerciales SA",
+              "fontSize": 8.51,
+              "typeface": "Aptos",
+              "color": "#A8DADC"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

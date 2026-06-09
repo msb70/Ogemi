@@ -29,7 +29,16 @@ function extractBetween(html: string, before: string, after: string): string | n
 export async function POST(req: NextRequest) {
   try {
     const { url } = await req.json()
-    if (!url || !url.includes('dgi-fep.mef.gob.pa')) {
+
+    // SEC-01: Validar hostname exacto para prevenir SSRF
+    // .includes() es bypasseable con: dgi-fep.mef.gob.pa.evil.com
+    let parsedUrl: URL
+    try {
+      parsedUrl = new URL(url)
+    } catch {
+      return NextResponse.json({ error: 'URL inválida' }, { status: 400 })
+    }
+    if (!url || parsedUrl.hostname !== 'dgi-fep.mef.gob.pa') {
       return NextResponse.json({ error: 'URL inválida' }, { status: 400 })
     }
 
@@ -121,9 +130,13 @@ export async function POST(req: NextRequest) {
     const monto = Math.round((total - itbms) * 100) / 100  // base sin ITBMS
 
     if (!numero_factura || !emisor_nombre || total === 0) {
+      // SEC-03: No exponer datos de parseo en producción
+      const debugInfo = process.env.NODE_ENV === 'development'
+        ? { debug: { numero_factura, fecha, emisor_nombre, emisor_ruc, total, itbms } }
+        : {}
       return NextResponse.json({
         error: 'No se pudieron extraer los datos de la factura. Verifica que la URL del QR sea correcta.',
-        debug: { numero_factura, fecha, emisor_nombre, emisor_ruc, total, itbms }
+        ...debugInfo
       }, { status: 422 })
     }
 

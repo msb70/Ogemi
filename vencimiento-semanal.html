@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vencimiento Semanal — Ogemi</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #f0f4f8;
+    color: #1a202c;
+    font-size: 13px;
+  }
+
+  /* ── Header ── */
+  .page-header {
+    background: linear-gradient(135deg, #1F4E79 0%, #2E75B6 100%);
+    color: #fff;
+    padding: 16px 20px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-header h1 { font-size: 17px; font-weight: 700; letter-spacing: .3px; }
+  .page-header .meta { font-size: 11px; opacity: .8; margin-top: 2px; }
+  .reload-btn {
+    background: rgba(255,255,255,.18);
+    border: 1px solid rgba(255,255,255,.4);
+    color: #fff;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    white-space: nowrap;
+    transition: background .15s;
+  }
+  .reload-btn:hover { background: rgba(255,255,255,.3); }
+
+  /* ── KPI Cards ── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    padding: 12px 16px;
+  }
+  .kpi {
+    background: #fff;
+    border-radius: 10px;
+    padding: 12px 14px;
+    border-top: 4px solid #2E75B6;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  }
+  .kpi.v1 { border-color: #C00000; }
+  .kpi.v2 { border-color: #ED7D31; }
+  .kpi.v3 { border-color: #c88f00; }
+  .kpi.v4 { border-color: #375623; }
+  .kpi-label { font-size: 10px; font-weight: 600; color: #718096; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
+  .kpi-date-input {
+    width: 100%;
+    border: 1px solid #CBD5E0;
+    border-radius: 5px;
+    padding: 4px 6px;
+    font-size: 11px;
+    color: #2D3748;
+    margin-bottom: 7px;
+    outline: none;
+    cursor: pointer;
+    background: #f7fafc;
+  }
+  .kpi-date-input:hover { border-color: #a0aec0; }
+  .kpi.v1 .kpi-date-input:focus { border-color: #C00000; background: #fff5f5; }
+  .kpi.v2 .kpi-date-input:focus { border-color: #ED7D31; background: #fff8f3; }
+  .kpi.v3 .kpi-date-input:focus { border-color: #c88f00; background: #fffbf0; }
+  .kpi.v4 .kpi-date-input:focus { border-color: #375623; background: #f0fff4; }
+  .kpi-amount { font-size: 18px; font-weight: 700; }
+  .kpi.v1 .kpi-amount { color: #C00000; }
+  .kpi.v2 .kpi-amount { color: #ED7D31; }
+  .kpi.v3 .kpi-amount { color: #c88f00; }
+  .kpi.v4 .kpi-amount { color: #375623; }
+  .kpi-count { font-size: 10px; color: #718096; margin-top: 3px; }
+  .kpi-hint { font-size: 9px; color: #a0aec0; margin-top: 4px; font-style: italic; }
+
+  /* ── Table wrapper ── */
+  .table-wrap {
+    margin: 0 16px 16px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    overflow: hidden;
+  }
+  .table-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #e2e8f0;
+    flex-wrap: wrap;
+  }
+  .table-toolbar input[type="text"] {
+    flex: 1;
+    min-width: 160px;
+    border: 1px solid #CBD5E0;
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 12px;
+    outline: none;
+  }
+  .table-toolbar input[type="text"]:focus { border-color: #2E75B6; }
+  .toolbar-sep { width: 1px; height: 20px; background: #e2e8f0; }
+  .toolbar-label { font-size: 11px; color: #718096; white-space: nowrap; }
+  .week-filter {
+    border: 1px solid #CBD5E0;
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 12px;
+    outline: none;
+    cursor: pointer;
+    background: #fff;
+    color: #1a202c;
+    min-width: 110px;
+  }
+  .week-filter:focus { border-color: #2E75B6; }
+  .tbl-count { font-size: 11px; color: #718096; white-space: nowrap; }
+
+  /* ── Table ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  thead th {
+    background: #1F4E79;
+    color: #fff;
+    padding: 9px 10px;
+    text-align: center;
+    font-weight: 600;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  thead th.col-cliente { text-align: left; }
+  thead th.col-v1 { background: #C00000; }
+  thead th.col-v2 { background: #ED7D31; }
+  thead th.col-v3 { background: #c88f00; }
+  thead th.col-v4 { background: #375623; }
+  thead th.col-nopaga { background: #4A5568; font-size: 10px; }
+
+  tbody tr { border-bottom: 1px solid #EDF2F7; transition: background .1s; }
+  tbody tr:nth-child(even) { background: #F7FAFC; }
+  tbody tr:hover { background: #EBF8FF; }
+  tbody tr.row-nopaga td:not(.col-nopaga) { opacity: 0.45; }
+  tbody tr.row-nopaga { background: #fff5f5 !important; }
+
+  td { padding: 7px 10px; vertical-align: middle; }
+  td.col-cliente { max-width: 220px; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.center { text-align: center; }
+  td.col-nopaga { text-align: center; }
+
+  .vencida { color: #C00000; font-weight: 600; }
+  .amount-v1 { color: #C00000; font-weight: 600; }
+  .amount-neg { color: #718096; font-style: italic; }
+  .amount-pos { color: #2D3748; }
+
+  .nopaga-cb {
+    width: 15px; height: 15px;
+    cursor: pointer;
+    accent-color: #C00000;
+    transform: scale(1.2);
+  }
+
+  /* ── Footer ── */
+  tfoot td {
+    font-weight: 700;
+    padding: 7px 10px;
+    font-size: 11px;
+    border: none;
+  }
+  tfoot td.lbl { text-align: right; padding-right: 16px; }
+  tfoot td.num { text-align: right; }
+
+  /* Divisor visual entre secciones del footer */
+  tfoot tr.foot-divider td { height: 3px; padding: 0; background: #e2e8f0; }
+
+  /* Total Vencido por semana */
+  .tfoot-vencido td {
+    background: #1F4E79; color: #fff;
+    border-top: 3px solid #e2e8f0;
+    font-size: 11.5px;
+  }
+  .tfoot-vencido td.col-v1 { background: #9B0000; }
+  .tfoot-vencido td.col-v2 { background: #c46020; }
+  .tfoot-vencido td.col-v3 { background: #a07200; }
+  .tfoot-vencido td.col-v4 { background: #254016; }
+  .tfoot-vencido td.col-nopaga { background: #2D3748; }
+
+  /* Probable Pago por semana */
+  .tfoot-probable td {
+    background: #1a3a5c; color: #9ae6b4;
+    font-size: 11px;
+  }
+  .tfoot-probable td.col-v1 { background: #7a0000; color: #9ae6b4; }
+  .tfoot-probable td.col-v2 { background: #9e4d18; color: #9ae6b4; }
+  .tfoot-probable td.col-v3 { background: #7d5800; color: #9ae6b4; }
+  .tfoot-probable td.col-v4 { background: #1a3010; color: #9ae6b4; }
+  .tfoot-probable td.col-nopaga { background: #1a2535; }
+
+  /* No Pagará por semana */
+  .tfoot-nopaga td {
+    background: #1a3a5c; color: #feb2b2;
+    font-size: 11px;
+  }
+  .tfoot-nopaga td.col-v1 { background: #7a0000; color: #feb2b2; }
+  .tfoot-nopaga td.col-v2 { background: #9e4d18; color: #feb2b2; }
+  .tfoot-nopaga td.col-v3 { background: #7d5800; color: #feb2b2; }
+  .tfoot-nopaga td.col-v4 { background: #1a3010; color: #feb2b2; }
+  .tfoot-nopaga td.col-nopaga { background: #1a2535; }
+
+  /* Grand totals */
+  .tfoot-grand-vencido td {
+    background: #0a2540; color: #fff;
+    border-top: 3px solid #fff;
+    font-size: 13px;
+  }
+  .tfoot-grand-probable td {
+    background: #071c30; color: #9ae6b4;
+    font-size: 12px;
+  }
+  .tfoot-grand-nopaga td {
+    background: #071c30; color: #feb2b2;
+    font-size: 12px;
+  }
+
+  /* ── Estado / loading ── */
+  .state-box {
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 10px;
+    padding: 60px 20px;
+    color: #718096;
+  }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid #e2e8f0;
+    border-top-color: #2E75B6;
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-box { color: #C00000; text-align: center; padding: 40px; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div>
+    <h1>📋 Reporte de Vencimiento Semanal</h1>
+    <div class="meta" id="meta-line">Cargando datos…</div>
+  </div>
+  <button class="reload-btn" onclick="loadData()">↻ Actualizar</button>
+</div>
+
+<!-- KPI Cards — fechas editables -->
+<div class="kpi-row">
+  <div class="kpi v1">
+    <div class="kpi-label">Semana 1</div>
+    <input type="date" class="kpi-date-input" id="k1-date-input" onchange="onDateChange(0, this.value)">
+    <div class="kpi-amount" id="k1-amt">—</div>
+    <div class="kpi-count" id="k1-cnt"></div>
+    <div class="kpi-hint">Cambia la fecha para reclasificar</div>
+  </div>
+  <div class="kpi v2">
+    <div class="kpi-label">Semana 2</div>
+    <input type="date" class="kpi-date-input" id="k2-date-input" onchange="onDateChange(1, this.value)">
+    <div class="kpi-amount" id="k2-amt">—</div>
+    <div class="kpi-count" id="k2-cnt"></div>
+    <div class="kpi-hint">Cambia la fecha para reclasificar</div>
+  </div>
+  <div class="kpi v3">
+    <div class="kpi-label">Semana 3</div>
+    <input type="date" class="kpi-date-input" id="k3-date-input" onchange="onDateChange(2, this.value)">
+    <div class="kpi-amount" id="k3-amt">—</div>
+    <div class="kpi-count" id="k3-cnt"></div>
+    <div class="kpi-hint">Cambia la fecha para reclasificar</div>
+  </div>
+  <div class="kpi v4">
+    <div class="kpi-label">Semana 4</div>
+    <input type="date" class="kpi-date-input" id="k4-date-input" onchange="onDateChange(3, this.value)">
+    <div class="kpi-amount" id="k4-amt">—</div>
+    <div class="kpi-count" id="k4-cnt"></div>
+    <div class="kpi-hint">Cambia la fecha para reclasificar</div>
+  </div>
+</div>
+
+<div class="table-wrap">
+  <div class="table-toolbar">
+    <input type="text" id="search" placeholder="🔍  Buscar cliente o factura…" oninput="applyFilters()">
+    <div class="toolbar-sep"></div>
+    <span class="toolbar-label">🗓 Filtrar semana:</span>
+    <select class="week-filter" id="week-filter" onchange="applyFilters()">
+      <option value="all">Todas las semanas</option>
+      <option value="0">Semana 1</option>
+      <option value="1">Semana 2</option>
+      <option value="2">Semana 3</option>
+      <option value="3">Semana 4</option>
+    </select>
+    <span class="tbl-count" id="tbl-count"></span>
+  </div>
+  <div id="table-area">
+    <div class="state-box"><div class="spinner"></div><span>Consultando Supabase…</span></div>
+  </div>
+</div>
+
+<script>
+const PROJECT_ID = "arillcotwkqrfptqhbed";
+
+// ── Estado global ──────────────────────────────────────────────────────────────
+const noPagara = new Set();   // Set de numero_factura marcados como "No Pagará"
+let allRows   = [];
+let weekDates = [];           // Array de 4 Date (límite superior de cada semana)
+
+// ── Helpers de fecha ───────────────────────────────────────────────────────────
+function nextFridays() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(today);
+  const dow = d.getDay();
+  // Si hoy es viernes (5), saltar al siguiente; si ya pasó el viernes esta semana, saltar al próximo
+  const daysToFri = (dow <= 5) ? ((5 - dow) || 7) : (7 - dow + 5);
+  d.setDate(d.getDate() + daysToFri);
+  const fridays = [];
+  for (let i = 0; i < 4; i++) {
+    fridays.push(new Date(d));
+    d.setDate(d.getDate() + 7);
+  }
+  return fridays;
+}
+
+function toInputDate(d) {
+  return d.toISOString().split('T')[0];
+}
+
+function toDateObj(isoStr) {
+  return new Date(isoStr + 'T00:00:00');
+}
+
+function fmtMoney(n) {
+  if (n === null || n === undefined || n === '') return '';
+  const v = parseFloat(n);
+  if (isNaN(v) || v === 0) return '';
+  return (v < 0 ? '-' : '') + '$ ' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtMoneyFull(n) {
+  const v = parseFloat(n) || 0;
+  return (v < 0 ? '-' : '') + '$ ' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── Asignar semana ─────────────────────────────────────────────────────────────
+// Retorna el índice (0–3) de la semana a la que pertenece la factura,
+// o -1 si está fuera del rango de las 4 semanas configuradas.
+function assignWeek(fechaPago, dates) {
+  const due = toDateObj(fechaPago);
+  for (let i = 0; i < dates.length; i++) {
+    if (due <= dates[i]) return i;
+  }
+  return -1;
+}
+
+// ── Cambio de fecha en KPI ─────────────────────────────────────────────────────
+function onDateChange(weekIndex, newVal) {
+  if (!newVal) return;
+  weekDates[weekIndex] = toDateObj(newVal);
+  // Re-renderizar tabla con nuevas fechas (sin re-consultar BD)
+  renderTable(allRows);
+}
+
+// ── Carga de datos desde Supabase ─────────────────────────────────────────────
+async function loadData() {
+  document.getElementById('table-area').innerHTML =
+    '<div class="state-box"><div class="spinner"></div><span>Consultando Supabase…</span></div>';
+
+  // Reset: limpiar checkboxes al recargar datos frescos
+  noPagara.clear();
+
+  // Inicializar fechas como próximos 4 viernes
+  weekDates = nextFridays();
+  ['k1', 'k2', 'k3', 'k4'].forEach((id, i) => {
+    document.getElementById(id + '-date-input').value = toInputDate(weekDates[i]);
+    document.getElementById(id + '-amt').textContent = '—';
+    document.getElementById(id + '-cnt').textContent = '';
+  });
+
+  const lastFriday = weekDates[3].toISOString().split('T')[0];
+
+  try {
+    const result = await window.cowork.callMcpTool(
+      "mcp__ac053a3d-9ffa-4693-bdb4-60cc01acf387__execute_sql",
+      {
+        project_id: PROJECT_ID,
+        query: `
+          SELECT
+            c.nombre AS cliente,
+            f.numero_factura,
+            f.fecha::text   AS fecha,
+            f.fecha_pago::text AS fecha_pago,
+            f.total
+          FROM facturas f
+          JOIN clientes c ON f.cliente_id = c.id
+          WHERE f.estado = 'pendiente'
+            AND f.fecha_pago <= '${lastFriday}'
+          ORDER BY f.fecha_pago, c.nombre
+        `
+      }
+    );
+
+    let rows = [];
+    if (Array.isArray(result)) {
+      rows = result;
+    } else if (result && result.result) {
+      const match = result.result.match(/\[[\s\S]*\]/);
+      if (match) rows = JSON.parse(match[0]);
+    } else if (result && typeof result === 'object') {
+      rows = [result];
+    }
+
+    allRows = rows;
+    renderTable(rows);
+    updateMeta(rows.length);
+
+  } catch (e) {
+    document.getElementById('table-area').innerHTML =
+      `<div class="error-box">⚠️ Error al cargar datos:<br><small>${e.message || e}</small></div>`;
+  }
+}
+
+// ── Renderizar tabla completa ──────────────────────────────────────────────────
+function renderTable(rows) {
+  if (!rows.length) {
+    document.getElementById('table-area').innerHTML =
+      '<div class="state-box">✅ Sin facturas pendientes en este período</div>';
+    updateKPIs([], weekDates);
+    return;
+  }
+
+  // Pre-asignar semana a cada fila
+  const rowsWithWeek = rows.map(r => ({
+    ...r,
+    weekIdx: assignWeek(r.fecha_pago, weekDates)
+  }));
+
+  updateKPIs(rowsWithWeek, weekDates);
+
+  // Calcular totales: vencido / probable / no pagará por semana
+  const totVencido  = [0, 0, 0, 0];
+  const totProbable = [0, 0, 0, 0];
+  const totNoPaga   = [0, 0, 0, 0];
+
+  rowsWithWeek.forEach(r => {
+    const fi  = r.weekIdx;
+    if (fi < 0 || fi > 3) return;
+    const val = parseFloat(r.total) || 0;
+    totVencido[fi] += val;
+    if (noPagara.has(String(r.numero_factura))) {
+      totNoPaga[fi]   += val;
+    } else {
+      totProbable[fi] += val;
+    }
+  });
+
+  const grandVencido  = totVencido.reduce((a, b)  => a + b, 0);
+  const grandProbable = totProbable.reduce((a, b) => a + b, 0);
+  const grandNoPaga   = totNoPaga.reduce((a, b)   => a + b, 0);
+
+  // Cabeceras de semanas
+  const semHdrs = weekDates.map((f, i) => {
+    const d = f.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return `<th class="col-v${i + 1}">Sem ${i + 1}<br><small>${d}</small></th>`;
+  }).join('');
+
+  // Filas del cuerpo
+  const bodyRows = rowsWithWeek.map(r => {
+    const fi        = r.weekIdx;
+    const val       = parseFloat(r.total) || 0;
+    const isChecked = noPagara.has(String(r.numero_factura));
+    const cols      = ['', '', '', ''];
+    if (fi >= 0 && fi < 4) cols[fi] = val;
+
+    const isNeg  = val < 0;
+    const vclass = fi === 0 ? 'amount-v1' : (isNeg ? 'amount-neg' : 'amount-pos');
+    const rowCls = isChecked ? 'row-nopaga' : '';
+
+    return `<tr class="${rowCls}" data-week="${fi}" data-factura="${esc(String(r.numero_factura))}">
+      <td class="col-cliente">${esc(r.cliente)}</td>
+      <td class="center">${esc(String(r.numero_factura))}</td>
+      <td class="center">${r.fecha ? r.fecha.split('-').reverse().join('/') : ''}</td>
+      <td class="center vencida">${r.fecha_pago ? r.fecha_pago.split('-').reverse().join('/') : ''}</td>
+      ${cols.map((v, i) => `<td class="num col-v${i + 1} ${v !== '' ? vclass : ''}">${v !== '' ? fmtMoney(v) : ''}</td>`).join('')}
+      <td class="col-nopaga">
+        <input type="checkbox" class="nopaga-cb"
+               data-factura="${esc(String(r.numero_factura))}"
+               ${isChecked ? 'checked' : ''}
+               title="Marcar como No Pagará">
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Filas del footer — semanas
+  const mkWeekCells = (totArr, idPfx) =>
+    totArr.map((t, i) => `<td class="num col-v${i + 1}" id="${idPfx}-${i}">${fmtMoneyFull(t)}</td>`).join('') +
+    `<td class="col-nopaga"></td>`;
+
+  document.getElementById('table-area').innerHTML = `
+    <div style="overflow-x:auto; max-height:calc(100vh - 270px); overflow-y:auto;">
+    <table>
+      <thead>
+        <tr>
+          <th class="col-cliente" style="min-width:200px">Cliente</th>
+          <th style="min-width:80px">Nº Factura</th>
+          <th style="min-width:96px">F. Factura</th>
+          <th style="min-width:96px">F. Vencimiento</th>
+          ${semHdrs}
+          <th class="col-nopaga" style="min-width:56px">No<br>Pagará</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">${bodyRows}</tbody>
+      <tfoot>
+        <!-- Totales por semana: Vencido -->
+        <tr class="tfoot-vencido">
+          <td colspan="4" class="lbl">TOTAL VENCIDO</td>
+          ${mkWeekCells(totVencido, 'ft-vencido')}
+        </tr>
+        <!-- Totales por semana: Probable Pago -->
+        <tr class="tfoot-probable">
+          <td colspan="4" class="lbl">↳ Probable Pago</td>
+          ${mkWeekCells(totProbable, 'ft-probable')}
+        </tr>
+        <!-- Totales por semana: No Pagará -->
+        <tr class="tfoot-nopaga">
+          <td colspan="4" class="lbl">↳ No Pagará</td>
+          ${mkWeekCells(totNoPaga, 'ft-nopaga')}
+        </tr>
+        <!-- Grand total -->
+        <tr class="tfoot-grand-vencido">
+          <td colspan="4" class="lbl">TOTAL GENERAL VENCIDO</td>
+          <td colspan="4" class="num" id="ft-grand-vencido" style="font-size:14px">${fmtMoneyFull(grandVencido)}</td>
+          <td class="col-nopaga"></td>
+        </tr>
+        <tr class="tfoot-grand-probable">
+          <td colspan="4" class="lbl">↳ Probable Pago Total</td>
+          <td colspan="4" class="num" id="ft-grand-probable">${fmtMoneyFull(grandProbable)}</td>
+          <td class="col-nopaga"></td>
+        </tr>
+        <tr class="tfoot-grand-nopaga">
+          <td colspan="4" class="lbl">↳ No Pagará Total</td>
+          <td colspan="4" class="num" id="ft-grand-nopaga">${fmtMoneyFull(grandNoPaga)}</td>
+          <td class="col-nopaga"></td>
+        </tr>
+      </tfoot>
+    </table>
+    </div>`;
+
+  // Adjuntar handlers a los checkboxes
+  document.querySelectorAll('.nopaga-cb').forEach(cb => {
+    cb.addEventListener('change', function () {
+      const factura = this.dataset.factura;
+      const tr = this.closest('tr');
+      if (this.checked) {
+        noPagara.add(factura);
+        tr.classList.add('row-nopaga');
+      } else {
+        noPagara.delete(factura);
+        tr.classList.remove('row-nopaga');
+      }
+      updateFooterTotals();
+    });
+  });
+
+  document.getElementById('tbl-count').textContent = `${rows.length} facturas`;
+  applyFilters();
+}
+
+// ── Actualizar solo los totales del footer (sin re-renderizar tabla) ───────────
+function updateFooterTotals() {
+  const rowsWithWeek = allRows.map(r => ({
+    ...r,
+    weekIdx: assignWeek(r.fecha_pago, weekDates)
+  }));
+
+  const totVencido  = [0, 0, 0, 0];
+  const totProbable = [0, 0, 0, 0];
+  const totNoPaga   = [0, 0, 0, 0];
+
+  rowsWithWeek.forEach(r => {
+    const fi  = r.weekIdx;
+    if (fi < 0 || fi > 3) return;
+    const val = parseFloat(r.total) || 0;
+    totVencido[fi] += val;
+    if (noPagara.has(String(r.numero_factura))) {
+      totNoPaga[fi]   += val;
+    } else {
+      totProbable[fi] += val;
+    }
+  });
+
+  const grandVencido  = totVencido.reduce((a, b)  => a + b, 0);
+  const grandProbable = totProbable.reduce((a, b) => a + b, 0);
+  const grandNoPaga   = totNoPaga.reduce((a, b)   => a + b, 0);
+
+  for (let i = 0; i < 4; i++) {
+    const v = document.getElementById(`ft-vencido-${i}`);
+    const p = document.getElementById(`ft-probable-${i}`);
+    const n = document.getElementById(`ft-nopaga-${i}`);
+    if (v) v.textContent = fmtMoneyFull(totVencido[i]);
+    if (p) p.textContent = fmtMoneyFull(totProbable[i]);
+    if (n) n.textContent = fmtMoneyFull(totNoPaga[i]);
+  }
+
+  const gv = document.getElementById('ft-grand-vencido');
+  const gp = document.getElementById('ft-grand-probable');
+  const gn = document.getElementById('ft-grand-nopaga');
+  if (gv) gv.textContent = fmtMoneyFull(grandVencido);
+  if (gp) gp.textContent = fmtMoneyFull(grandProbable);
+  if (gn) gn.textContent = fmtMoneyFull(grandNoPaga);
+
+  // También actualizar KPIs con totales vencidos
+  updateKPIs(rowsWithWeek, weekDates);
+}
+
+// ── Actualizar KPI cards ───────────────────────────────────────────────────────
+function updateKPIs(rowsWithWeek, dates) {
+  const totals = [0, 0, 0, 0];
+  const counts = [0, 0, 0, 0];
+  rowsWithWeek.forEach(r => {
+    const fi = (r.weekIdx !== undefined) ? r.weekIdx : assignWeek(r.fecha_pago, dates);
+    if (fi >= 0 && fi < 4) {
+      totals[fi] += parseFloat(r.total) || 0;
+      counts[fi]++;
+    }
+  });
+  ['k1', 'k2', 'k3', 'k4'].forEach((id, i) => {
+    document.getElementById(id + '-amt').textContent = fmtMoneyFull(totals[i]);
+    document.getElementById(id + '-cnt').textContent = counts[i]
+      ? `${counts[i]} factura${counts[i] > 1 ? 's' : ''}`
+      : '—';
+  });
+}
+
+// ── Actualizar meta-línea ──────────────────────────────────────────────────────
+function updateMeta(count) {
+  const now = new Date().toLocaleString('es-PA', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+  document.getElementById('meta-line').textContent =
+    `Actualizado: ${now}   ·   ${count} facturas pendientes`;
+}
+
+// ── Filtros: texto + semana ────────────────────────────────────────────────────
+function applyFilters() {
+  const q          = document.getElementById('search').value.toLowerCase().trim();
+  const weekFilter = document.getElementById('week-filter').value;
+  const tbody      = document.getElementById('tbody');
+  if (!tbody) return;
+
+  let visible = 0;
+  Array.from(tbody.rows).forEach(tr => {
+    const text      = tr.textContent.toLowerCase();
+    const week      = tr.dataset.week;
+    const matchText = !q || text.includes(q);
+    const matchWeek = weekFilter === 'all' || week === weekFilter;
+    const show      = matchText && matchWeek;
+    tr.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+
+  const total = allRows.length;
+  document.getElementById('tbl-count').textContent =
+    (q || weekFilter !== 'all')
+      ? `${visible} de ${total} facturas`
+      : `${total} facturas`;
+}
+
+// ── Arrancar ───────────────────────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>

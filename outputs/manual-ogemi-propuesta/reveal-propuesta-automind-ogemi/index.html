@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Propuesta Automind para OGEMI</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css" />
+    <style>
+      :root {
+        --ink: #11222b;
+        --muted: #58707a;
+        --paper: #f7fafb;
+        --white: #ffffff;
+        --blue: #0e7490;
+        --teal: #18a999;
+        --green: #1b8a5a;
+        --amber: #d9902f;
+        --red: #c44949;
+        --navy: #173b4b;
+        --dark: #0d242d;
+        --line: #dce7eb;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        background: var(--paper);
+        font-family: Inter, Aptos, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      .reveal {
+        color: var(--ink);
+        font-family: Inter, Aptos, system-ui, sans-serif;
+      }
+
+      .reveal .slides section {
+        width: 1280px;
+        height: 720px;
+        padding: 0;
+        text-align: left;
+        background: var(--paper);
+        overflow: hidden;
+      }
+
+      .slide {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        padding: 44px 58px;
+      }
+
+      .dark {
+        background: #10313b;
+        color: var(--white);
+      }
+
+      .brand-rail {
+        position: absolute;
+        left: 58px;
+        top: 54px;
+        width: 5px;
+        height: 88px;
+        background: var(--teal);
+      }
+
+      .kicker {
+        display: inline-flex;
+        min-width: 170px;
+        height: 28px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--blue);
+        background: #e9f6f7;
+        color: var(--blue);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .reveal .slides section .slide h1,
+      .reveal .slides section .slide h2,
+      .reveal .slides section .slide h3,
+      .reveal .slides section .slide p {
+        margin: 0;
+        letter-spacing: 0;
+        text-transform: none;
+        text-shadow: none;
+      }
+
+      .reveal .slides section .slide h1 {
+        color: inherit;
+        font-size: 58px;
+        line-height: 1.14;
+        font-weight: 850;
+      }
+
+      .reveal .slides section .slide h2 {
+        color: var(--ink);
+        margin-top: 22px;
+        max-width: 870px;
+        font-size: 36px;
+        line-height: 1.14;
+        font-weight: 820;
+      }
+
+      .reveal .slides section .slide h3 {
+        color: var(--ink);
+        letter-spacing: 0;
+        text-transform: none;
+      }
+
+      .reveal .slides section .slide.dark h1,
+      .reveal .slides section .slide.dark h2,
+      .reveal .slides section .slide.dark h3 {
+        color: var(--white);
+      }
+
+      .sub {
+        margin-top: 12px;
+        max-width: 820px;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.35;
+      }
+
+      .dark .sub,
+      .dark .fine,
+      .dark .label {
+        color: #c9dde3;
+      }
+
+      .fine {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.35;
+      }
+
+      .metric-row {
+        display: flex;
+        gap: 28px;
+        position: absolute;
+        left: 78px;
+        bottom: 88px;
+      }
+
+      .metric {
+        width: 260px;
+        min-height: 104px;
+        padding: 20px 18px 18px 26px;
+        border: 1px solid var(--line);
+        border-left: 6px solid var(--blue);
+        background: var(--white);
+      }
+
+      .metric .value {
+        color: var(--blue);
+        font-size: 30px;
+        font-weight: 850;
+        line-height: 1;
+      }
+
+      .metric .label {
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 750;
+        line-height: 1.22;
+      }
+
+      .metric.green { border-left-color: var(--green); }
+      .metric.green .value { color: var(--green); }
+      .metric.teal { border-left-color: var(--teal); }
+      .metric.teal .value { color: var(--teal); }
+      .metric.amber { border-left-color: var(--amber); }
+      .metric.amber .value { color: var(--amber); }
+      .metric.navy { border-left-color: var(--navy); }
+      .metric.navy .value { color: var(--navy); }
+
+      .footer {
+        position: absolute;
+        left: 58px;
+        right: 58px;
+        bottom: 24px;
+        padding-top: 12px;
+        border-top: 1px solid #d7e2e6;
+        color: var(--muted);
+        font-size: 10px;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .dark .footer {
+        border-top: 0;
+        color: #a8dadc;
+      }
+
+      .logo-automind {
+        position: absolute;
+        right: 110px;
+        top: 38px;
+        width: 150px;
+        height: 112px;
+        object-fit: contain;
+        background: var(--white);
+      }
+
+      .logo-ogemi {
+        position: absolute;
+        right: 130px;
+        bottom: 138px;
+        width: 90px;
+        height: 58px;
+        object-fit: contain;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 36px;
+        margin-top: 78px;
+      }
+
+      .wide-note {
+        position: absolute;
+        left: 70px;
+        right: 70px;
+        bottom: 162px;
+        min-height: 86px;
+        border: 1px solid var(--line);
+        background: var(--white);
+        display: grid;
+        grid-template-columns: 230px 1fr;
+        align-items: center;
+        padding: 22px 26px;
+        gap: 26px;
+      }
+
+      .wide-note strong {
+        font-size: 16px;
+      }
+
+      .module-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 34px;
+        margin-top: 72px;
+      }
+
+      .module {
+        min-height: 112px;
+        padding: 18px 18px 16px 24px;
+        border: 1px solid var(--line);
+        border-left: 6px solid var(--blue);
+        background: var(--white);
+      }
+
+      .module h3 {
+        font-size: 16px;
+        line-height: 1.1;
+        font-weight: 800;
+      }
+
+      .module p {
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .flow-strip {
+        position: absolute;
+        left: 250px;
+        right: 250px;
+        bottom: 122px;
+        height: 38px;
+        border: 1px solid var(--teal);
+        background: #e9f6f7;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--blue);
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .process {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 34px;
+        margin-top: 92px;
+      }
+
+      .step {
+        position: relative;
+        min-height: 122px;
+        padding: 34px 14px 18px;
+        border: 1px solid var(--line);
+        background: var(--white);
+        text-align: center;
+      }
+
+      .step .num {
+        position: absolute;
+        left: 50%;
+        top: -42px;
+        transform: translateX(-50%);
+        width: 46px;
+        height: 46px;
+        display: grid;
+        place-items: center;
+        background: var(--blue);
+        color: var(--white);
+        font-size: 20px;
+        font-weight: 850;
+      }
+
+      .step h3 {
+        font-size: 14px;
+        line-height: 1.2;
+        font-weight: 850;
+      }
+
+      .step p {
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 10px;
+        line-height: 1.25;
+      }
+
+      .table {
+        margin-top: 78px;
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      .table th {
+        background: var(--dark);
+        color: var(--white);
+        padding: 14px 18px;
+        text-align: left;
+        font-size: 12px;
+      }
+
+      .table td {
+        padding: 18px;
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        vertical-align: top;
+      }
+
+      .table td:first-child,
+      .table td:last-child {
+        color: var(--ink);
+        font-weight: 750;
+      }
+
+      .bars {
+        position: absolute;
+        left: 96px;
+        top: 236px;
+        width: 760px;
+      }
+
+      .bar-row {
+        display: grid;
+        grid-template-columns: 180px 1fr 96px;
+        align-items: center;
+        gap: 18px;
+        margin-bottom: 18px;
+      }
+
+      .bar-label {
+        font-size: 12px;
+        line-height: 1.2;
+        font-weight: 800;
+      }
+
+      .bar-track {
+        height: 12px;
+        background: #dfe9ed;
+      }
+
+      .bar-fill {
+        height: 12px;
+        background: var(--blue);
+      }
+
+      .bar-value {
+        font-size: 12px;
+        font-weight: 800;
+        text-align: right;
+      }
+
+      .total-panel {
+        position: absolute;
+        top: 238px;
+        right: 110px;
+        width: 240px;
+        height: 252px;
+        background: var(--dark);
+        color: var(--white);
+        text-align: center;
+        padding: 46px 22px 24px;
+      }
+
+      .total-panel .total {
+        font-size: 38px;
+        line-height: 1;
+        font-weight: 900;
+      }
+
+      .total-panel .caption {
+        margin-top: 24px;
+        color: #a8dadc;
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .total-panel .note {
+        margin-top: 22px;
+        color: #d8e7eb;
+        font-size: 9.5px;
+        line-height: 1.25;
+      }
+
+      .infra-note {
+        position: absolute;
+        left: 160px;
+        right: 160px;
+        bottom: 154px;
+        min-height: 82px;
+        border: 1px solid var(--line);
+        background: var(--white);
+        display: grid;
+        grid-template-columns: 280px 1fr 260px;
+        align-items: center;
+        gap: 28px;
+        padding: 18px 34px;
+      }
+
+      .infra-note .big {
+        color: var(--green);
+        font-size: 30px;
+        font-weight: 900;
+        text-align: right;
+      }
+
+      .timeline {
+        display: grid;
+        grid-template-columns: repeat(4, 170px);
+        justify-content: center;
+        gap: 64px;
+        margin-top: 94px;
+      }
+
+      .week {
+        height: 220px;
+        border: 1px solid var(--line);
+        background: var(--white);
+        text-align: center;
+      }
+
+      .week .top {
+        height: 42px;
+        display: grid;
+        place-items: center;
+        color: var(--white);
+        font-size: 11px;
+        font-weight: 850;
+      }
+
+      .week h3 {
+        margin-top: 34px;
+        font-size: 18px;
+        font-weight: 850;
+      }
+
+      .week p {
+        margin: 28px 16px 0;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.3;
+      }
+
+      .role-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 34px;
+        margin-top: 100px;
+      }
+
+      .client-role {
+        position: absolute;
+        left: 250px;
+        right: 250px;
+        bottom: 150px;
+        border: 1px solid var(--teal);
+        background: #e9f6f7;
+        padding: 22px 30px;
+        display: grid;
+        grid-template-columns: 160px 1fr;
+        gap: 32px;
+        align-items: center;
+      }
+
+      .reveal .controls {
+        color: var(--blue);
+      }
+
+      .reveal .progress {
+        color: var(--teal);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+        <section>
+          <div class="slide dark">
+            <div class="brand-rail"></div>
+            <img class="logo-automind" src="assets/automind.png" alt="Automind Group" />
+            <img class="logo-ogemi" src="assets/logo.jpeg" alt="OGEMI" />
+            <p style="position:absolute;left:86px;top:72px;font-size:11px;font-weight:850;color:#a8dadc;">AUTOMIND GROUP</p>
+            <p style="position:absolute;left:86px;top:102px;font-size:13px;color:#c9dde3;">Propuesta económica para OGEMI / Sistema de gestión de cartera</p>
+            <h1 style="position:absolute;left:78px;top:198px;width:780px;">Sistema financiero<br />para cartera, banco<br />y reportes gerenciales</h1>
+            <p class="sub" style="position:absolute;left:78px;top:405px;width:610px;">Alcance cerrado para una empresa, 5 usuarios, importación manual de Excel y cierre bancario mensual por comparación de saldos.</p>
+            <div class="metric-row">
+              <div class="metric teal"><div class="value">2.000 USD</div><div class="label">Inversión de desarrollo cerrada</div></div>
+              <div class="metric amber"><div class="value">4 semanas</div><div class="label">Cronograma de implementación</div></div>
+              <div class="metric"><div class="value">0 USD/mes</div><div class="label">Infraestructura base posible</div></div>
+            </div>
+            <p style="position:absolute;right:58px;bottom:50px;font-size:10px;color:#a8dadc;">Preparado por Automind Group</p>
+          </div>
+        </section>
+
+        <section>
+          <div class="slide">
+            <span class="kicker">Resumen</span>
+            <h2>Automind propone llevar la base funcional a una versión operativa en 4 semanas.</h2>
+            <p class="sub">La revisión detectó una app avanzada en Next.js + Supabase. El proyecto propuesto se concentra en estabilizar, cerrar reglas operativas, desplegar y capacitar.</p>
+            <div class="summary-grid">
+              <div class="metric green" style="width:100%;"><div class="value">Base existente</div><div class="label">Dashboard, facturas, clientes, banco, compras, reportes y admin ya tienen estructura</div></div>
+              <div class="metric" style="width:100%;"><div class="value">Alcance cerrado</div><div class="label">Importación manual, 5 usuarios, una empresa y cierre mensual simple</div></div>
+              <div class="metric amber" style="width:100%;"><div class="value">4 semanas</div><div class="label">Corrección técnica, QA, despliegue, documentación y capacitación</div></div>
+            </div>
+            <div class="wide-note">
+              <strong>Decisión económica</strong>
+              <p class="fine">No se cotiza como desarrollo desde cero. Automind cotiza una terminación controlada: reglas de negocio, seguridad, cierres, reportes, despliegue y pruebas para que el sistema pueda usarse de forma confiable.</p>
+            </div>
+            <div class="footer"><span>Automind Group / Propuesta económica para OGEMI - Impresos Comerciales SA</span><span>02</span></div>
+          </div>
+        </section>
+
+        <section>
+          <div class="slide">
+            <span class="kicker">Mapa</span>
+            <h2>Mapa general de módulos incluidos en el sistema.</h2>
+            <p class="sub">Cada módulo responde a un flujo financiero concreto: importar, cobrar, pagar, conciliar y reportar.</p>
+            <div class="module-grid">
+              <div class="module"><h3>Importar Excel</h3><p>Carga manual del libro de ventas, vista previa, clientes automáticos y control de duplicados.</p></div>
+              <div class="module" style="border-left-color:var(--teal);"><h3>Clientes</h3><p>Días de crédito, estado activo y saldos por cliente.</p></div>
+              <div class="module" style="border-left-color:var(--green);"><h3>Facturas / CxC</h3><p>Fecha de pago, estado pendiente/pagada, pagos parciales y saldo pendiente.</p></div>
+              <div class="module" style="border-left-color:var(--amber);"><h3>Anticipos</h3><p>Depósitos anticipados, estado, cuenta bancaria y recibo imprimible.</p></div>
+              <div class="module" style="border-left-color:var(--navy);"><h3>Banco</h3><p>Cuentas, ingresos, egresos, movimientos automáticos y cierre mensual.</p></div>
+              <div class="module" style="border-left-color:var(--red);"><h3>Compras / CxP</h3><p>Proveedores, vencimientos, pagos y egresos bancarios.</p></div>
+              <div class="module" style="border-left-color:#7c3aed;"><h3>Reportes</h3><p>Cartera, CxP, libros, flujo de caja, CSV y pivots por antigüedad.</p></div>
+              <div class="module" style="border-left-color:#475569;"><h3>Administración</h3><p>Usuarios, roles, permisos de ver/editar/borrar y seguridad Supabase.</p></div>
+            </div>
+            <div class="flow-strip">Flujo operativo: Excel -> facturas/clientes -> cobros/pagos -> banco -> cierre mensual -> reportes</div>
+            <div class="footer"><span>Automind Group / Propuesta económica para OGEMI - Impresos Comerciales SA</span><span>03</span></div>
+          </div>
+        </section>
+
+        <section>
+          <div class="slide">
+            <span class="kicker">Flujo</span>
+            <h2>El proceso mensual queda controlado de punta a punta.</h2>
+            <p class="sub">La operación se organiza alrededor del libro de ventas, la gestión de cobros, el banco y los reportes de cierre.</p>
+            <div class="process">
+              <div class="step"><div class="num">1</div><h3>Importar libro de ventas</h3><p>Carga manual del Excel y validación previa.</p></div>
+              <div class="step"><div class="num" style="background:var(--teal);">2</div><h3>Crear clientes y facturas</h3><p>Clientes nuevos se crean con 30 días de crédito.</p></div>
+              <div class="step"><div class="num" style="background:var(--green);">3</div><h3>Registrar pagos</h3><p>Pagos parciales o completos contra facturas.</p></div>
+              <div class="step"><div class="num" style="background:var(--navy);">4</div><h3>Mover a banco</h3><p>Cobros y pagos generan movimientos bancarios.</p></div>
+              <div class="step"><div class="num" style="background:var(--amber);">5</div><h3>Cerrar el mes</h3><p>Comparación entre saldo sistema y saldo banco.</p></div>
+              <div class="step"><div class="num" style="background:var(--red);">6</div><h3>Reportar</h3><p>Cartera por cliente, antigüedad, CxP y libros.</p></div>
+            </div>
+            <h3 style="position:absolute;left:200px;right:200px;bottom:172px;text-align:center;font-size:22px;">Resultado: saldos confiables, trazabilidad de pagos y reportes exportables para la gestión mensual.</h3>
+            <div class="footer"><span>Automind Group / Propuesta económica para OGEMI - Impresos Comerciales SA</span><span>04</span></div>
+          </div>
+        </section>
+
+        <section>
+          <div class="slide">
+            <span class="kicker">Alcance</span>
+            <h2>Alcance funcional confirmado.</h2>
+            <p class="sub">Con las respuestas recibidas, el alcance queda cerrado y reduce incertidumbre en tiempo y costo.</p>
+            <table class="table">
+              <thead><tr><th>Decisión</th><th>Confirmado</th><th>Implicación</th><th>Impacto</th></tr></thead>
+              <tbody>
+                <tr><td>Importación</td><td>Manual desde Excel</td><td>No requiere automatización con Drive, correo o SFTP</td><td>Menor costo</td></tr>
+                <tr><td>Usuarios</td><td>5 usuarios iniciales</td><td>Permisos por rol y operación controlada</td><td>Suficiente</td></tr>
+                <tr><td>Cierre banco</td><td>Comparación mensual</td><td>No incluye conciliación movimiento por movimiento</td><td>Simple</td></tr>
+                <tr><td>Documentos</td><td>Recibo de anticipo</td><td>No incluye factura PDF ni facturación electrónica</td><td>Acotado</td></tr>
+                <tr><td>Empresa</td><td>Una sola empresa</td><td>No se requiere multiempresa ni sucursales</td><td>Directo</td></tr>
+              </tbody>
+            </table>
+            <p class="fine" style="position:absolute;left:92px;bottom:98px;">Fuera de alcance inicial: conciliación bancaria detallada, multiempresa, facturación fiscal/PDF, importaciones automáticas y workflows de aprobación.</p>
+            <div class="footer"><span>Automind Group / Propuesta económica para OGEMI - Impresos Comerciales SA</span><span>05</span></div>
+          </div>
+        </section>
+
+        <section>
+          <div class="slide">
+            <span class="kicker">Inversión</span>
+            <h2>Inversión de desarrollo: 2.000 USD.</h2>
+            <p class="sub">El desglose refleja estabilización técnica, cierre de reglas de negocio, reportes, QA, despliegue y capacitación.</p>
+            <div class="bars">
+              <div class="bar-row"><div class="bar-label">Estabilización, build y despliegue</div><div class="bar-track"><div class="bar-fill" style="width:83%;"></div></div><div class="bar-value">250 USD</div></div>
+              <div class="bar-row"><div class="bar-label">Supabase, migraciones, seguridad y usuarios</div><div class="bar-track"><div class="bar-fill" style="width:83%;background:var(--teal);"></div></div><div class="bar-value">250 USD</div></div>
+              <div class="bar-row"><div class="bar-label">Importación manual Excel y validaciones</div><div class="bar-track"><div class="bar-fill" style="width:66%;background:var(--green);"></div></div><div class="bar-value">200 USD</div></div>
+              <div class="bar-row"><div class="bar-label">Clientes, facturas, pagos y cartera</div><div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--amber);"></div></div><div class="bar-value">300 USD</div></div>
+              <div class="bar-row"><div class="bar-label">Anticipos con recibo imprimible</div><div class="bar-track"><div class="bar-fill" style="width:50%;background:#7c3aed;"></div></div><div class="bar-value">150 USD</div></div>
+              <div class="bar-row"><div class="bar-label">Banco, movimientos y cierre mensual</div><div class="bar-track"><div class="bar-fill" style="width:83%;background:var(--navy);"></div></div><div class="bar-value">250 USD</div></div>
+              <div class="bar-row"><div class="bar-label">Compras, proveedores y CxP</div><div class="bar-track"><div class="bar-fill" style="width:66%;background:var(--red);"></div></div><div class="bar-value">200 USD</div></div>
+              <div class="bar-row"><div class="bar-label">Reportes, exportaciones y dashboard</div><div class="bar-track"><div class="bar-fill" style="width:83%;background:#0f766e;"></div></div><div class="bar-value">250 USD</div></div>
+              <div class="bar-row"><div class="bar-label">QA, documentación y capacitación</div><div class="bar-track"><div class="bar-fill" style="width:50%;background:#475569;"></div></div><div class="bar-value">150 USD</div></div>
+            </div>
+            <div class="total-panel">
+              <div class="total">2.000 USD</div>
+              <div class="caption">TOTAL DESARROLLO</div>
+              <div class="note">Propuesta cerrada para el alcance confirmado. Cambios como multiempresa, conciliación detallada o importación automática se cotizan aparte.</div>
+            </div>
+            <div class="footer"><span>Automind Group / Propuesta económica para OGEMI - Impresos Comerciales SA</span><span>06</span></div>
+          </div>
+        </section>
+
+        <section>
+          <div class="slide">
+            <span class="kicker">Infraestructura</span>
+            <h2>Infraestructura inicial sin costo mensual obligatorio.</h2>
+            <p class="sub">Para el alcance confirmado, la aplicación puede iniciar en las versiones gratis de Vercel y Supabase, sin dominio propio.</p>
+            <div class="summary-grid" style="margin-top:86px;">
+              <div class="metric navy" style="width:100%;"><div class="value">0 USD/mes</div><div class="label">Vercel Free: hosting, HTTPS y despliegue web</div></div>
+              <div class="metric" style="width:100%;"><div class="value">0 USD/mes</div><div class="label">Supabase Free: base de datos, Auth y API para arranque</div></div>
+              <div class="metric amber" style="width:100%;"><div class="value">Sin dominio</div><div class="label">Uso de URL temporal y correo de OGEMI</div></div>
+            </div>
+            <div class="infra-note">
+              <strong>Nota de infraestructura</strong>
+              <p class="fine">Se puede operar inicialmente con Vercel Free y Supabase Free, sin dominio propio, usando una URL de Vercel y un correo de OGEMI para la cuenta/administración.</p>
+              <div class="big">0 USD / mes</div>
+            </div>
+            <div class="footer"><span>Automind Group / Propuesta económica para OGEMI - Impresos Comerciales SA</span><span>07</span></div>
+          </div>
+        </section>
+
+        <section>
+          <div class="slide">
+            <span class="kicker">Cronograma</span>
+            <h2>Cronograma de trabajo: 4 semanas.</h2>
+            <p class="sub">La secuencia prioriza primero estabilidad y datos, luego operación financiera, reportes y entrega.</p>
+            <div class="timeline">
+              <div class="week"><div class="top" style="background:var(--blue);">SEMANA 1</div><h3>Base y datos</h3><p>Corrección de build, Supabase, seguridad e importación Excel.</p></div>
+              <div class="week"><div class="top" style="background:var(--teal);">SEMANA 2</div><h3>Operación</h3><p>Clientes, facturas, pagos, anticipos y banco.</p></div>
+              <div class="week"><div class="top" style="background:var(--green);">SEMANA 3</div><h3>Compras y reportes</h3><p>Proveedores, CxP, dashboard, cartera, libros y cierre mensual.</p></div>
+              <div class="week"><div class="top" style="background:var(--amber);">SEMANA 4</div><h3>Entrega</h3><p>QA, ajustes, despliegue, documentación y capacitación.</p></div>
+            </div>
+            <p class="fine" style="position:absolute;left:170px;right:170px;bottom:150px;text-align:center;">Hitos de validación: revisión funcional al final de semana 2 y revisión completa del sistema al final de semana 3.</p>
+            <div class="footer"><span>Automind Group / Propuesta económica para OGEMI - Impresos Comerciales SA</span><span>08</span></div>
+          </div>
+        </section>
+
+        <section>
+          <div class="slide">
+            <span class="kicker">Equipo</span>
+            <h2>Roles implicados y responsabilidades.</h2>
+            <p class="sub">El proyecto requiere perfiles funcionales y técnicos, con validación activa del usuario clave del cliente.</p>
+            <div class="role-grid">
+              <div class="module"><h3>Analista funcional</h3><p>Confirma reglas contables, alcance, criterios de aceptación y prioridades del negocio.</p></div>
+              <div class="module" style="border-left-color:var(--teal);"><h3>Full-stack developer</h3><p>Implementa pantallas, lógica de negocio, flujos de pagos, reportes y experiencia de usuario.</p></div>
+              <div class="module" style="border-left-color:var(--green);"><h3>Supabase / PostgreSQL</h3><p>Asegura migraciones, RLS, funciones, triggers, respaldo y consistencia de datos.</p></div>
+              <div class="module" style="border-left-color:var(--amber);"><h3>QA / DevOps</h3><p>Prueba escenarios críticos, despliega en producción y documenta operación básica.</p></div>
+            </div>
+            <div class="client-role">
+              <strong style="color:var(--blue);">Rol del cliente</strong>
+              <p class="fine">Validar el Excel real, revisar reportes, confirmar cierres mensuales y aprobar la operación antes de producción.</p>
+            </div>
+            <div class="footer"><span>Automind Group / Propuesta económica para OGEMI - Impresos Comerciales SA</span><span>09</span></div>
+          </div>
+        </section>
+
+        <section>
+          <div class="slide dark">
+            <img src="assets/automind.png" alt="Automind Group" style="position:absolute;left:62px;top:44px;width:120px;height:90px;object-fit:contain;background:#fff;" />
+            <p style="position:absolute;left:170px;top:72px;font-size:11px;font-weight:850;color:#a8dadc;">CIERRE DE PROPUESTA</p>
+            <h1 style="position:absolute;left:70px;top:190px;width:740px;font-size:50px;">Una implementación acotada,<br />con costo cerrado y salida<br />a producción en 4 semanas.</h1>
+            <p class="sub" style="position:absolute;left:74px;top:386px;width:630px;font-size:18px;">Condición sugerida de pago: 50% al inicio y 50% contra entrega.</p>
+            <div style="position:absolute;right:226px;top:210px;display:grid;gap:30px;">
+              <div class="metric teal"><div class="value">2.000 USD</div><div class="label">Desarrollo cerrado</div></div>
+              <div class="metric amber"><div class="value">0 USD/mes</div><div class="label">Infraestructura inicial posible</div></div>
+              <div class="metric"><div class="value">4 semanas</div><div class="label">Implementación</div></div>
+            </div>
+            <p style="position:absolute;left:70px;bottom:84px;width:980px;font-size:13px;color:#a8dadc;">Propuesta emitida por Automind Group. Alcance confirmado: importación manual, 5 usuarios, una empresa, cierre mensual simple y recibo de anticipo.</p>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+    <script>
+      Reveal.initialize({
+        hash: true,
+        controls: true,
+        progress: true,
+        center: false,
+        slideNumber: "c/t",
+        width: 1280,
+        height: 720,
+        margin: 0.02,
+        transition: "none",
+        backgroundTransition: "none"
+      });
+    </script>
+  </body>
+</html>

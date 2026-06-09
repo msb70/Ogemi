@@ -6,6 +6,7 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { parseLibroVentas } from '@/lib/excel-parser'
 import { formatDateObj } from '@/lib/utils'
+import { importarLibroVentas } from '@/lib/services/importar.service'
 import { ImportResult, ExcelRow } from '@/types'
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, X, Eye } from 'lucide-react'
 
@@ -49,90 +50,18 @@ export default function ImportarPage() {
     setImporting(true)
     setError('')
 
-    const res: ImportResult = {
-      total: preview.length,
-      importadas: 0,
-      duplicadas: 0,
-      errores: [],
-      clientes_creados: 0,
-    }
-
     try {
-      // 1. Obtener clientes existentes
-      const { data: clientesDB } = await supabase.from('clientes').select('id, nombre')
-      const clientesMap: Record<string, string> = {}
-      clientesDB?.forEach(c => { clientesMap[c.nombre.toUpperCase()] = c.id })
-
-      // 2. Obtener facturas existentes (para evitar duplicados)
-      const { data: facturasDB } = await supabase.from('facturas').select('numero_factura, tipo_documento')
-      const existentes = new Set(facturasDB?.map(f => `${f.numero_factura}-${f.tipo_documento}`) || [])
-
-      // 3. Procesar cada fila
-      for (const row of preview) {
-        const key = `${row.numero_factura}-${row.tipo_documento}`
-
-        if (existentes.has(key)) {
-          res.duplicadas++
-          continue
-        }
-
-        // Crear cliente si no existe
-        const nombreUpper = row.nombre_cliente.toUpperCase()
-        let clienteId = clientesMap[nombreUpper]
-
-        if (!clienteId) {
-          const { data: nuevoCliente, error: eCliente } = await supabase
-            .from('clientes')
-            .insert({ nombre: row.nombre_cliente, dias_credito: 30 })
-            .select('id')
-            .single()
-
-          if (eCliente || !nuevoCliente) {
-            // Cliente puede ya existir con distinta capitalización
-            const { data: existing } = await supabase
-              .from('clientes')
-              .select('id')
-              .ilike('nombre', row.nombre_cliente)
-              .single()
-            clienteId = existing?.id || ''
-          } else {
-            clienteId = nuevoCliente.id
-            clientesMap[nombreUpper] = clienteId
-            res.clientes_creados++
-          }
-        }
-
-        if (!clienteId) {
-          res.errores.push(`Sin cliente para: ${row.nombre_cliente}`)
-          continue
-        }
-
-        // Insertar factura
-        const fechaStr = row.fecha.toISOString().split('T')[0]
-        const { error: eFact } = await supabase.from('facturas').insert({
-          numero_factura: row.numero_factura,
-          fecha: fechaStr,
-          cliente_id: clienteId,
-          tipo_documento: row.tipo_documento,
-          documento_afectado: row.documento_afectado,
-          monto: row.neto,
-          itbms: row.impuesto,
-          total: row.total,
-          estado: 'pendiente',
-        })
-
-        if (eFact) {
-          res.errores.push(`Error factura #${row.numero_factura}: ${eFact.message}`)
-        } else {
-          res.importadas++
-          existentes.add(key)
-        }
+      const { result: res, dbError } = await importarLibroVentas(supabase, preview)
+      if (dbError) {
+        setError(dbError)
+        setImporting(false)
+        return
       }
+      setResult(res)
     } catch (e: any) {
       setError('Error durante la importación: ' + e.message)
     }
 
-    setResult(res)
     setImporting(false)
   }
 

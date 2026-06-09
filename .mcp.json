@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "supabase_ogemi": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=tnuzaaetfbbnxtbedlhs&read_only=true",
+      "headers": {
+        "Authorization": "Bearer ${SUPABASE_OGEMI_ACCESS_TOKEN}"
+      }
+    }
+  }
+}

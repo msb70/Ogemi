@@ -7,6 +7,8 @@ import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate, formatDateObj } from '@/lib/utils'
 import { BancoCuenta, BancoMovimiento } from '@/types'
 import { Plus, Building2, TrendingUp, TrendingDown, Calendar, Printer } from 'lucide-react'
+import { Toast } from '@/components/Toast'
+import { useToast } from '@/hooks/useToast'
 
 type Tab = 'cuentas' | 'movimientos' | 'cierre'
 
@@ -40,6 +42,7 @@ export default function BancoPage() {
   const [reciboMovimiento, setReciboMovimiento] = useState<any | null>(null)
 
   const supabase = createClient()
+  const { toast, showToast, hideToast } = useToast()
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -50,17 +53,16 @@ export default function BancoPage() {
       setCuentaSelected(cuentasData[0].id)
     }
 
-    // Calcular saldos via función de DB o manualmente
+    // Calcular saldos en paralelo usando la función saldo_cuenta de la DB
+    // Promise.all dispara todas las queries simultáneamente en vez de secuencialmente (N+1 → N paralelas)
+    const cuentasArr = cuentasData || []
+    const saldoResults = await Promise.all(
+      cuentasArr.map(c => supabase.rpc('saldo_cuenta', { p_cuenta_id: c.id }))
+    )
     const saldosMap: Record<string, number> = {}
-    for (const c of (cuentasData || [])) {
-      const { data: movs } = await supabase
-        .from('banco_movimientos')
-        .select('tipo, monto')
-        .eq('cuenta_id', c.id)
-      const ingresos = movs?.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + m.monto, 0) || 0
-      const egresos = movs?.filter(m => m.tipo === 'egreso').reduce((s, m) => s + m.monto, 0) || 0
-      saldosMap[c.id] = (c.saldo_inicial || 0) + ingresos - egresos
-    }
+    cuentasArr.forEach((c, i) => {
+      saldosMap[c.id] = saldoResults[i].data ?? 0
+    })
     setSaldos(saldosMap)
     setLoading(false)
   }, [cuentaSelected])
@@ -92,33 +94,38 @@ export default function BancoPage() {
       referencia: nuevoForm.referencia || null,
     }).select('*, banco_cuentas(nombre, banco, numero_cuenta)').single()
 
+    if (error) {
+      showToast(`Error al guardar movimiento: ${error.message}`, 'error')
+      return
+    }
     setShowNuevo(false)
-    const payload = nuevoForm
     setNuevoForm({ tipo: 'ingreso', concepto: '', monto: '', fecha: new Date().toISOString().split('T')[0], referencia: '', cuenta_id: '' })
+    showToast('Movimiento registrado', 'success')
     loadData()
     loadMovimientos()
-
-    // Mostrar recibo
-    if (!error && data) {
-      setReciboMovimiento(data)
-    }
+    if (data) setReciboMovimiento(data)
   }
 
   const handleCrearCuenta = async () => {
     if (!nuevaCuenta.nombre || !nuevaCuenta.banco) return
-    await supabase.from('banco_cuentas').insert({
+    const { error } = await supabase.from('banco_cuentas').insert({
       ...nuevaCuenta,
       saldo_inicial: parseFloat(nuevaCuenta.saldo_inicial) || 0,
     })
-    setShowNuevaCuenta(false)
-    setNuevaCuenta({ nombre: '', banco: '', numero_cuenta: '', saldo_inicial: '0' })
-    loadData()
+    if (error) {
+      showToast(`Error al crear cuenta: ${error.message}`, 'error')
+    } else {
+      setShowNuevaCuenta(false)
+      setNuevaCuenta({ nombre: '', banco: '', numero_cuenta: '', saldo_inicial: '0' })
+      showToast('Cuenta creada', 'success')
+      loadData()
+    }
   }
 
   const handleCierreMes = async () => {
     if (!cuentaSelected || !saldoBanco) return
     const saldoSistema = saldos[cuentaSelected] || 0
-    await supabase.from('cierre_mes').upsert({
+    const { error } = await supabase.from('cierre_mes').upsert({
       cuenta_id: cuentaSelected,
       periodo: periodoMes,
       saldo_sistema: saldoSistema,
@@ -126,7 +133,11 @@ export default function BancoPage() {
       notas: notasCierre || null,
       cerrado: true,
     }, { onConflict: 'cuenta_id,periodo' })
-    alert(`Cierre guardado. Diferencia: ${formatCurrency(parseFloat(saldoBanco) - saldoSistema)}`)
+    if (error) {
+      showToast(`Error al guardar cierre: ${error.message}`, 'error')
+    } else {
+      showToast(`Cierre guardado. Diferencia: ${formatCurrency(parseFloat(saldoBanco) - saldoSistema)}`, 'success')
+    }
   }
 
   const tabs: { key: Tab; label: string }[] = [
@@ -137,6 +148,7 @@ export default function BancoPage() {
 
   return (
     <AppLayout>
+      {toast && <Toast {...toast} onClose={hideToast} />}
       <Header
         title="Banco"
         subtitle="Gestión de cuentas bancarias"

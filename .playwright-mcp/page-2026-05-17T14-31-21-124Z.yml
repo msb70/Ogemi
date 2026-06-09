@@ -1,0 +1,172 @@
+- application [ref=e2]:
+  - generic:
+    - generic:
+      - generic:
+        - generic: Flujo
+        - heading [level=2]: El proceso mensual queda controlado de punta a punta.
+        - paragraph: La operación se organiza alrededor del libro de ventas, la gestión de cobros, el banco y los reportes de cierre.
+        - generic:
+          - generic:
+            - generic: "1"
+            - heading [level=3]: Importar libro de ventas
+            - paragraph: Carga manual del Excel y validación previa.
+          - generic:
+            - generic: "2"
+            - heading [level=3]: Crear clientes y facturas
+            - paragraph: Clientes nuevos se crean con 30 días de crédito.
+          - generic:
+            - generic: "3"
+            - heading [level=3]: Registrar pagos
+            - paragraph: Pagos parciales o completos contra facturas.
+          - generic:
+            - generic: "4"
+            - heading [level=3]: Mover a banco
+            - paragraph: Cobros y pagos generan movimientos bancarios.
+          - generic:
+            - generic: "5"
+            - heading [level=3]: Cerrar el mes
+            - paragraph: Comparación entre saldo sistema y saldo banco.
+          - generic:
+            - generic: "6"
+            - heading [level=3]: Reportar
+            - paragraph: Cartera por cliente, antigüedad, CxP y libros.
+        - heading [level=3]: "Resultado: saldos confiables, trazabilidad de pagos y reportes exportables para la gestión mensual."
+        - generic:
+          - generic: Automind Group / Propuesta económica para OGEMI - Impresos Comerciales SA
+          - generic: "04"
+    - generic:
+      - generic:
+        - generic: Alcance
+        - heading [level=2]: Alcance funcional confirmado.
+        - paragraph: Con las respuestas recibidas, el alcance queda cerrado y reduce incertidumbre en tiempo y costo.
+        - table:
+          - rowgroup:
+            - row:
+              - columnheader: Decisión
+              - columnheader: Confirmado
+              - columnheader: Implicación
+              - columnheader: Impacto
+          - rowgroup:
+            - row:
+              - cell: Importación
+              - cell: Manual desde Excel
+              - cell: No requiere automatización con Drive, correo o SFTP
+              - cell: Menor costo
+            - row:
+              - cell: Usuarios
+              - cell: 5 usuarios iniciales
+              - cell: Permisos por rol y operación controlada
+              - cell: Suficiente
+            - row:
+              - cell: Cierre banco
+              - cell: Comparación mensual
+              - cell: No incluye conciliación movimiento por movimiento
+              - cell: Simple
+            - row:
+              - cell: Documentos
+              - cell: Recibo de anticipo
+              - cell: No incluye factura PDF ni facturación electrónica
+              - cell: Acotado
+            - row:
+              - cell: Empresa
+              - cell: Una sola empresa
+              - cell: No se requiere multiempresa ni sucursales
+              - cell: Directo
+        - paragraph: "Fuera de alcance inicial: conciliación bancaria detallada, multiempresa, facturación fiscal/PDF, importaciones automáticas y workflows de aprobación."
+        - generic:
+          - generic: Automind Group / Propuesta económica para OGEMI - Impresos Comerciales SA
+          - generic: "05"
+    - generic [ref=e4]:
+      - generic [ref=e5]: Inversión
+      - 'heading "Inversión de desarrollo: 2.000 USD." [level=2] [ref=e6]'
+      - paragraph [ref=e7]: El desglose refleja estabilización técnica, cierre de reglas de negocio, reportes, QA, despliegue y capacitación.
+      - generic [ref=e8]:
+        - generic [ref=e9]:
+          - generic [ref=e10]: Estabilización, build y despliegue
+          - generic [ref=e13]: 250 USD
+        - generic [ref=e14]:
+          - generic [ref=e15]: Supabase, migraciones, seguridad y usuarios
+          - generic [ref=e18]: 250 USD
+        - generic [ref=e19]:
+          - generic [ref=e20]: Importación manual Excel y validaciones
+          - generic [ref=e23]: 200 USD
+        - generic [ref=e24]:
+          - generic [ref=e25]: Clientes, facturas, pagos y cartera
+          - generic [ref=e28]: 300 USD
+        - generic [ref=e29]:
+          - generic [ref=e30]: Anticipos con recibo imprimible
+          - generic [ref=e33]: 150 USD
+        - generic [ref=e34]:
+          - generic [ref=e35]: Banco, movimientos y cierre mensual
+          - generic [ref=e38]: 250 USD
+        - generic [ref=e39]:
+          - generic [ref=e40]: Compras, proveedores y CxP
+          - generic [ref=e43]: 200 USD
+        - generic [ref=e44]:
+          - generic [ref=e45]: Reportes, exportaciones y dashboard
+          - generic [ref=e48]: 250 USD
+        - generic [ref=e49]:
+          - generic [ref=e50]: QA, documentación y capacitación
+          - generic [ref=e53]: 150 USD
+      - generic [ref=e54]:
+        - generic [ref=e55]: 2.000 USD
+        - generic [ref=e56]: TOTAL DESARROLLO
+        - generic [ref=e57]: Propuesta cerrada para el alcance confirmado. Cambios como multiempresa, conciliación detallada o importación automática se cotizan aparte.
+      - generic [ref=e58]:
+        - generic [ref=e59]: Automind Group / Propuesta económica para OGEMI - Impresos Comerciales SA
+        - generic [ref=e60]: "06"
+    - generic:
+      - generic:
+        - generic: Infraestructura
+        - heading [level=2]: Infraestructura inicial sin costo mensual obligatorio.
+        - paragraph: Para el alcance confirmado, la aplicación puede iniciar en las versiones gratis de Vercel y Supabase, sin dominio propio.
+        - generic:
+          - generic:
+            - generic: 0 USD/mes
+            - generic: "Vercel Free: hosting, HTTPS y despliegue web"
+          - generic:
+            - generic: 0 USD/mes
+            - generic: "Supabase Free: base de datos, Auth y API para arranque"
+          - generic:
+            - generic: Sin dominio
+            - generic: Uso de URL temporal y correo de OGEMI
+        - generic:
+          - strong: Nota de infraestructura
+          - paragraph: Se puede operar inicialmente con Vercel Free y Supabase Free, sin dominio propio, usando una URL de Vercel y un correo de OGEMI para la cuenta/administración.
+          - generic: 0 USD / mes
+        - generic:
+          - generic: Automind Group / Propuesta económica para OGEMI - Impresos Comerciales SA
+          - generic: "07"
+    - generic:
+      - generic:
+        - generic: Cronograma
+        - heading [level=2]: "Cronograma de trabajo: 4 semanas."
+        - paragraph: La secuencia prioriza primero estabilidad y datos, luego operación financiera, reportes y entrega.
+        - generic:
+          - generic:
+            - generic: SEMANA 1
+            - heading [level=3]: Base y datos
+            - paragraph: Corrección de build, Supabase, seguridad e importación Excel.
+          - generic:
+            - generic: SEMANA 2
+            - heading [level=3]: Operación
+            - paragraph: Clientes, facturas, pagos, anticipos y banco.
+          - generic:
+            - generic: SEMANA 3
+            - heading [level=3]: Compras y reportes
+            - paragraph: Proveedores, CxP, dashboard, cartera, libros y cierre mensual.
+          - generic:
+            - generic: SEMANA 4
+            - heading [level=3]: Entrega
+            - paragraph: QA, ajustes, despliegue, documentación y capacitación.
+        - paragraph: "Hitos de validación: revisión funcional al final de semana 2 y revisión completa del sistema al final de semana 3."
+        - generic:
+          - generic: Automind Group / Propuesta económica para OGEMI - Impresos Comerciales SA
+          - generic: "08"
+  - link "6 / 10" [ref=e65] [cursor=pointer]:
+    - /url: "#/5"
+  - complementary:
+    - button "previous slide" [ref=e66] [cursor=pointer]
+    - button "next slide" [ref=e68] [cursor=pointer]
+  - text: Speaker notes
+  - generic [ref=e72]: "Inversión Inversión de desarrollo: 2.000 USD. El desglose refleja estabilización técnica, cierre de reglas de negocio, reportes, QA, despliegue y capacitación. Estabilización, build y despliegue 250 USD Supabase, migraciones, seguridad y usuarios 250 USD Importación manual Excel y validaciones 200 USD Clientes, facturas, pagos y cartera 300 USD Anticipos con recibo imprimible 150 USD Banco, movimientos y cierre mensual 250 USD Compras, proveedores y CxP 200 USD Reportes, exportaciones y dashboard 250 USD QA, documentación y capacitación 150 USD 2.000 USD TOTAL DESARROLLO Propuesta cerrada para el alcance confirmado. Cambios como multiempresa, conciliación detallada o importación automática se cotizan aparte. Automind Group / Propuesta económica para OGEMI - Impresos Comerciales SA 06"

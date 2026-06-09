@@ -1,0 +1,1653 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/o0vhqq",
+    "id": "o0vhqq",
+    "slide": 4,
+    "layoutId": "521c33de-7fd8-41ae-a8d5-4e855212633b",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "bc58cf51-0225-4d4e-9f0c-2b27bcbbc1f7",
+    "masterLayoutName": "Master",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Aptos",
+      "Aptos Display"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "521c33de-7fd8-41ae-a8d5-4e855212633b",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "bc58cf51-0225-4d4e-9f0c-2b27bcbbc1f7",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "bc58cf51-0225-4d4e-9f0c-2b27bcbbc1f7",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/zidonyd0",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "#F7FAFB",
+      "lineColor": "#F7FAFB",
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/s36hcrmh",
+      "id": "2",
+      "bbox": [
+        58,
+        44,
+        170,
+        28
+      ],
+      "geometry": "rect",
+      "fillColor": "#E9F6F7",
+      "lineColor": "#0E7490",
+      "lineWidth": 1
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/hoza1gvy",
+      "id": "3",
+      "bbox": [
+        70,
+        51,
+        146,
+        14
+      ],
+      "geometry": "rect",
+      "text": "FLUJO",
+      "textPreview": "FLUJO",
+      "resolvedFontSize": 8.51,
+      "resolvedTextStyle": {
+        "fontSize": 8.51,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "FLUJO"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "FLUJO",
+          "runs": [
+            {
+              "index": 1,
+              "text": "FLUJO",
+              "fontSize": 8.51,
+              "typeface": "Aptos",
+              "color": "#0E7490",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ap4r65wj",
+      "id": "4",
+      "bbox": [
+        58,
+        88,
+        780,
+        74
+      ],
+      "geometry": "rect",
+      "text": "El proceso mensual queda controlado de punta a punta.",
+      "textPreview": "El proceso mensual queda controlado de punta a punta.",
+      "resolvedFontSize": 32,
+      "resolvedTextStyle": {
+        "fontSize": 32,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "El proceso mensual queda controlado de punta a"
+          },
+          {
+            "index": 2,
+            "text": "punta."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "El proceso mensual queda controlado de punta a punta.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "El proceso mensual queda controlado de punta a punta.",
+              "fontSize": 32,
+              "typeface": "Aptos Display",
+              "color": "#11222B",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/za1gvy90",
+      "id": "5",
+      "bbox": [
+        58,
+        164,
+        740,
+        42
+      ],
+      "geometry": "rect",
+      "text": "La operación se organiza alrededor del libro de ventas, la gestión de cobros, el banco y los reportes de cierre.",
+      "textPreview": "La operación se organiza alrededor del libro de ventas, la gestión de cobros, el banco y los reportes de cierre.",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "fontSize": 13,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "La operación se organiza alrededor del libro de ventas, la gestión de cobros, el banco y los reportes de cierre."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "La operación se organiza alrededor del libro de ventas, la gestión de cobros, el banco y los reportes de cierre.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "La operación se organiza alrededor del libro de ventas, la gestión de cobros, el banco y los reportes de cierre.",
+              "fontSize": 13,
+              "typeface": "Aptos",
+              "color": "#58707A"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/svu9knih",
+      "id": "6",
+      "bbox": [
+        58,
+        665,
+        1164,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#D7E2E6",
+      "lineColor": "#D7E2E6",
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/hgn29gr2",
+      "id": "7",
+      "bbox": [
+        58,
+        681,
+        520,
+        16
+      ],
+      "geometry": "rect",
+      "text": "OGEMI / Impresos Comerciales SA / Propuesta económica",
+      "textPreview": "OGEMI / Impresos Comerciales SA / Propuesta económica",
+      "resolvedFontSize": 8.51,
+      "resolvedTextStyle": {
+        "fontSize": 8.51,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "OGEMI / Impresos Comerciales SA / Propuesta económica"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "OGEMI / Impresos Comerciales SA / Propuesta económica",
+          "runs": [
+            {
+              "index": 1,
+              "text": "OGEMI / Impresos Comerciales SA / Propuesta económica",
+              "fontSize": 8.51,
+              "typeface": "Aptos",
+              "color": "#58707A"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/adsji5sn",
+      "id": "8",
+      "bbox": [
+        1182,
+        681,
+        40,
+        16
+      ],
+      "geometry": "rect",
+      "text": "04",
+      "textPreview": "04",
+      "resolvedFontSize": 8.51,
+      "resolvedTextStyle": {
+        "fontSize": 8.51,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "right"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "04"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "04",
+          "runs": [
+            {
+              "index": 1,
+              "text": "04",
+              "fontSize": 8.51,
+              "typeface": "Aptos",
+              "color": "#58707A",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3ylc7u54",
+      "id": "9",
+      "bbox": [
+        82,
+        285,
+        122,
+        122
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bat47y1k",
+      "id": "10",
+      "bbox": [
+        121,
+        244,
+        44,
+        44
+      ],
+      "geometry": "rect",
+      "fillColor": "#0E7490",
+      "lineColor": "#0E7490",
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mp0bi9s3",
+      "id": "11",
+      "bbox": [
+        130,
+        254,
+        26,
+        20
+      ],
+      "geometry": "rect",
+      "text": "1",
+      "textPreview": "1",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "fontSize": 17,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "1"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "1",
+          "runs": [
+            {
+              "index": 1,
+              "text": "1",
+              "fontSize": 17,
+              "typeface": "Aptos",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/tgfmlkjm",
+      "id": "12",
+      "bbox": [
+        96,
+        314,
+        94,
+        34
+      ],
+      "geometry": "rect",
+      "text": "Importar libro de ventas",
+      "textPreview": "Importar libro de ventas",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "fontSize": 12,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Importar libro"
+          },
+          {
+            "index": 2,
+            "text": "de ventas"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Importar libro de ventas",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Importar libro de ventas",
+              "fontSize": 12,
+              "typeface": "Aptos",
+              "color": "#11222B",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/4vmtwra5",
+      "id": "13",
+      "bbox": [
+        95,
+        357,
+        96,
+        32
+      ],
+      "geometry": "rect",
+      "text": "Carga manual del Excel y validación previa.",
+      "textPreview": "Carga manual del Excel y validación previa.",
+      "resolvedFontSize": 8.51,
+      "resolvedTextStyle": {
+        "fontSize": 8.51,
+        "typeface": "Aptos",
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Carga manual del Excel"
+          },
+          {
+            "index": 2,
+            "text": "y validación previa."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Carga manual del Excel y validación previa.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Carga manual del Excel y validación previa.",
+              "fontSize": 8.51,
+              "typeface": "Aptos",
+              "color": "#58707A"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bm58z25k",
+      "id": "14",
+      "bbox": [
+        212,
+        344,
+        42,
+        3
+      ],
+      "geometry": "rect",
+      "fillColor": "#B8C9CF",
+      "lineColor": "#B8C9CF",
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/m1cfa9w3",
+      "id": "15",
+      "bbox": [
+        268,
+        285,
+        122,
+        122
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/tsvu9kni",
+      "id": "16",
+      "bbox": [
+        307,
+        244,
+        44,
+        44
+      ],
+      "geometry": "rect",
+      "fillColor": "#18A999",
+      "lineColor": "#18A999",
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/47y1kre1",
+      "id": "17",
+      "bbox": [
+        316,
+        254,
+        26,
+        20
+      ],
+      "geometry": "rect",
+      "text": "2",
+      "textPreview": "2",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "fontSize": 17,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "2"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "2",
+          "runs": [
+            {
+              "index": 1,
+              "text": "2",
+              "fontSize": 17,
+              "typeface": "Aptos",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bq1oryts",
+      "id": "18",
+      "bbox": [
+        282,
+        314,
+        94,
+        34
+      ],
+      "geometry": "rect",
+      "text": "Crear clientes y facturas",
+      "textPreview": "Crear clientes y facturas",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "fontSize": 12,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Crear clientes y"
+          },
+          {
+            "index": 2,
+            "text": "facturas"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Crear clientes y facturas",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Crear clientes y facturas",
+              "fontSize": 12,
+              "typeface": "Aptos",
+              "color": "#11222B",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/m58z25kb",
+      "id": "19",
+      "bbox": [
+        281,
+        357,
+        96,
+        32
+      ],
+      "geometry": "rect",
+      "text": "Clientes nuevos se crean con 30 días de crédito.",
+      "textPreview": "Clientes nuevos se crean con 30 días de crédito.",
+      "resolvedFontSize": 8.51,
+      "resolvedTextStyle": {
+        "fontSize": 8.51,
+        "typeface": "Aptos",
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Clientes nuevos se crean"
+          },
+          {
+            "index": 2,
+            "text": "con 30 días de crédito."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Clientes nuevos se crean con 30 días de crédito.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Clientes nuevos se crean con 30 días de crédito.",
+              "fontSize": 8.51,
+              "typeface": "Aptos",
+              "color": "#58707A"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/qh0fepkz",
+      "id": "20",
+      "bbox": [
+        398,
+        344,
+        42,
+        3
+      ],
+      "geometry": "rect",
+      "fillColor": "#B8C9CF",
+      "lineColor": "#B8C9CF",
+      "lineWidth": 0
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/j2t83itg",
+      "id": "21",
+      "bbox": [
+        454,
+        285,
+        122,
+        122
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8nqxs72x",
+      "id": "22",
+      "bbox": [
+        493,
+        244,
+        44,
+        44
+      ],
+      "geometry": "rect",
+      "fillColor": "#1B8A5A",
+      "lineColor": "#1B8A5A",
+      "lineWidth": 0
+    },
+    {
+      "order": 23,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/18jqh0fe",
+      "id": "23",
+      "bbox": [
+        502,
+        254,
+        26,
+        20
+      ],
+      "geometry": "rect",
+      "text": "3",
+      "textPreview": "3",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "fontSize": 17,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "3"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "3",
+          "runs": [
+            {
+              "index": 1,
+              "text": "3",
+              "fontSize": 17,
+              "typeface": "Aptos",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 24,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/q5o7qpg3",
+      "id": "24",
+      "bbox": [
+        468,
+        314,
+        94,
+        34
+      ],
+      "geometry": "rect",
+      "text": "Registrar pagos",
+      "textPreview": "Registrar pagos",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "fontSize": 12,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Registrar pagos"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Registrar pagos",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Registrar pagos",
+              "fontSize": 12,
+              "typeface": "Aptos",
+              "color": "#11222B",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 25,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/jqh0fepk",
+      "id": "25",
+      "bbox": [
+        467,
+        357,
+        96,
+        32
+      ],
+      "geometry": "rect",
+      "text": "Pagos parciales o completos contra facturas.",
+      "textPreview": "Pagos parciales o completos contra facturas.",
+      "resolvedFontSize": 8.51,
+      "resolvedTextStyle": {
+        "fontSize": 8.51,
+        "typeface": "Aptos",
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Pagos parciales o"
+          },
+          {
+            "index": 2,
+            "text": "completos contra"
+          },
+          {
+            "index": 3,
+            "text": "facturas."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Pagos parciales o completos contra facturas.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Pagos parciales o completos contra facturas.",
+              "fontSize": 8.51,
+              "typeface": "Aptos",
+              "color": "#58707A"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 26,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8bat47y1",
+      "id": "26",
+      "bbox": [
+        584,
+        344,
+        42,
+        3
+      ],
+      "geometry": "rect",
+      "fillColor": "#B8C9CF",
+      "lineColor": "#B8C9CF",
+      "lineWidth": 0
+    },
+    {
+      "order": 27,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1w7mp0bi",
+      "id": "27",
+      "bbox": [
+        640,
+        285,
+        122,
+        122
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 28,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/uxc3ylc7",
+      "id": "28",
+      "bbox": [
+        679,
+        244,
+        44,
+        44
+      ],
+      "geometry": "rect",
+      "fillColor": "#173B4B",
+      "lineColor": "#173B4B",
+      "lineWidth": 0
+    },
+    {
+      "order": 29,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ji5snelo",
+      "id": "29",
+      "bbox": [
+        688,
+        254,
+        26,
+        20
+      ],
+      "geometry": "rect",
+      "text": "4",
+      "textPreview": "4",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "fontSize": 17,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "4"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "4",
+          "runs": [
+            {
+              "index": 1,
+              "text": "4",
+              "fontSize": 17,
+              "typeface": "Aptos",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 30,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/p4r65wju",
+      "id": "30",
+      "bbox": [
+        654,
+        314,
+        94,
+        34
+      ],
+      "geometry": "rect",
+      "text": "Mover a banco",
+      "textPreview": "Mover a banco",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "fontSize": 12,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Mover a banco"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Mover a banco",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Mover a banco",
+              "fontSize": 12,
+              "typeface": "Aptos",
+              "color": "#11222B",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 31,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wjudg7ad",
+      "id": "31",
+      "bbox": [
+        653,
+        357,
+        96,
+        32
+      ],
+      "geometry": "rect",
+      "text": "Cobros y pagos generan movimientos bancarios.",
+      "textPreview": "Cobros y pagos generan movimientos bancarios.",
+      "resolvedFontSize": 8.51,
+      "resolvedTextStyle": {
+        "fontSize": 8.51,
+        "typeface": "Aptos",
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Cobros y pagos generan"
+          },
+          {
+            "index": 2,
+            "text": "movimientos bancarios."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Cobros y pagos generan movimientos bancarios.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Cobros y pagos generan movimientos bancarios.",
+              "fontSize": 8.51,
+              "typeface": "Aptos",
+              "color": "#58707A"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 32,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7y1kre1w",
+      "id": "32",
+      "bbox": [
+        770,
+        344,
+        42,
+        3
+      ],
+      "geometry": "rect",
+      "fillColor": "#B8C9CF",
+      "lineColor": "#B8C9CF",
+      "lineWidth": 0
+    },
+    {
+      "order": 33,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ed8v6psf",
+      "id": "33",
+      "bbox": [
+        826,
+        285,
+        122,
+        122
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 34,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/pwb2hwfy",
+      "id": "34",
+      "bbox": [
+        865,
+        244,
+        44,
+        44
+      ],
+      "geometry": "rect",
+      "fillColor": "#D9902F",
+      "lineColor": "#D9902F",
+      "lineWidth": 0
+    },
+    {
+      "order": 35,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0bi9s36h",
+      "id": "35",
+      "bbox": [
+        874,
+        254,
+        26,
+        20
+      ],
+      "geometry": "rect",
+      "text": "5",
+      "textPreview": "5",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "fontSize": 17,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "5"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "5",
+          "runs": [
+            {
+              "index": 1,
+              "text": "5",
+              "fontSize": 17,
+              "typeface": "Aptos",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 36,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7qpg3ex0",
+      "id": "36",
+      "bbox": [
+        840,
+        314,
+        94,
+        34
+      ],
+      "geometry": "rect",
+      "text": "Cerrar el mes",
+      "textPreview": "Cerrar el mes",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "fontSize": 12,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Cerrar el mes"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Cerrar el mes",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Cerrar el mes",
+              "fontSize": 12,
+              "typeface": "Aptos",
+              "color": "#11222B",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 37,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/i5sneloj",
+      "id": "37",
+      "bbox": [
+        839,
+        357,
+        96,
+        32
+      ],
+      "geometry": "rect",
+      "text": "Comparación entre saldo sistema y saldo banco.",
+      "textPreview": "Comparación entre saldo sistema y saldo banco.",
+      "resolvedFontSize": 8.51,
+      "resolvedTextStyle": {
+        "fontSize": 8.51,
+        "typeface": "Aptos",
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Comparación entre saldo"
+          },
+          {
+            "index": 2,
+            "text": "sistema y saldo banco."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Comparación entre saldo sistema y saldo banco.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Comparación entre saldo sistema y saldo banco.",
+              "fontSize": 8.51,
+              "typeface": "Aptos",
+              "color": "#58707A"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 38,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/pkzupwb2",
+      "id": "38",
+      "bbox": [
+        956,
+        344,
+        42,
+        3
+      ],
+      "geometry": "rect",
+      "fillColor": "#B8C9CF",
+      "lineColor": "#B8C9CF",
+      "lineWidth": 0
+    },
+    {
+      "order": 39,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0z61032l",
+      "id": "39",
+      "bbox": [
+        1012,
+        285,
+        122,
+        122
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 40,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/kf6dcbul",
+      "id": "40",
+      "bbox": [
+        1051,
+        244,
+        44,
+        44
+      ],
+      "geometry": "rect",
+      "fillColor": "#C44949",
+      "lineColor": "#C44949",
+      "lineWidth": 0
+    },
+    {
+      "order": 41,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/d0z61032",
+      "id": "41",
+      "bbox": [
+        1060,
+        254,
+        26,
+        20
+      ],
+      "geometry": "rect",
+      "text": "6",
+      "textPreview": "6",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "fontSize": 17,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "6"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "6",
+          "runs": [
+            {
+              "index": 1,
+              "text": "6",
+              "fontSize": 17,
+              "typeface": "Aptos",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 42,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/29gr2p8n",
+      "id": "42",
+      "bbox": [
+        1026,
+        314,
+        94,
+        34
+      ],
+      "geometry": "rect",
+      "text": "Reportar",
+      "textPreview": "Reportar",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "fontSize": 12,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Reportar"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Reportar",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Reportar",
+              "fontSize": 12,
+              "typeface": "Aptos",
+              "color": "#11222B",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 43,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/vu9knih4",
+      "id": "43",
+      "bbox": [
+        1025,
+        357,
+        96,
+        32
+      ],
+      "geometry": "rect",
+      "text": "Cartera por cliente, antigüedad, CxP y libros.",
+      "textPreview": "Cartera por cliente, antigüedad, CxP y libros.",
+      "resolvedFontSize": 8.51,
+      "resolvedTextStyle": {
+        "fontSize": 8.51,
+        "typeface": "Aptos",
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Cartera por cliente,"
+          },
+          {
+            "index": 2,
+            "text": "antigüedad, CxP y libros."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Cartera por cliente, antigüedad, CxP y libros.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Cartera por cliente, antigüedad, CxP y libros.",
+              "fontSize": 8.51,
+              "typeface": "Aptos",
+              "color": "#58707A"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 44,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/knih4byh",
+      "id": "44",
+      "bbox": [
+        190,
+        505,
+        900,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Resultado: saldos confiables, trazabilidad de pagos y reportes exportables para la gestión mensual.",
+      "textPreview": "Resultado: saldos confiables, trazabilidad de pagos y reportes exportables para la gestión mensual.",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "fontSize": 18,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Resultado: saldos confiables, trazabilidad de pagos y reportes exportables para la gestión mensual."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Resultado: saldos confiables, trazabilidad de pagos y reportes exportables para la gestión mensual.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Resultado: saldos confiables, trazabilidad de pagos y reportes exportables para la gestión mensual.",
+              "fontSize": 18,
+              "typeface": "Aptos",
+              "color": "#11222B",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

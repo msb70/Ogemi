@@ -1,0 +1,916 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/rjjn8e",
+    "id": "rjjn8e",
+    "slide": 2,
+    "layoutId": "521c33de-7fd8-41ae-a8d5-4e855212633b",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "bc58cf51-0225-4d4e-9f0c-2b27bcbbc1f7",
+    "masterLayoutName": "Master",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Aptos",
+      "Aptos Display"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "521c33de-7fd8-41ae-a8d5-4e855212633b",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "bc58cf51-0225-4d4e-9f0c-2b27bcbbc1f7",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "bc58cf51-0225-4d4e-9f0c-2b27bcbbc1f7",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/b6xkf6dc",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "#F7FAFB",
+      "lineColor": "#F7FAFB",
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0rqd4vmt",
+      "id": "2",
+      "bbox": [
+        58,
+        44,
+        170,
+        28
+      ],
+      "geometry": "rect",
+      "fillColor": "#E9F6F7",
+      "lineColor": "#0E7490",
+      "lineWidth": 1
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/tcj6tova",
+      "id": "3",
+      "bbox": [
+        70,
+        51,
+        146,
+        14
+      ],
+      "geometry": "rect",
+      "text": "RESUMEN",
+      "textPreview": "RESUMEN",
+      "resolvedFontSize": 8.51,
+      "resolvedTextStyle": {
+        "fontSize": 8.51,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "RESUMEN"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "RESUMEN",
+          "runs": [
+            {
+              "index": 1,
+              "text": "RESUMEN",
+              "fontSize": 8.51,
+              "typeface": "Aptos",
+              "color": "#0E7490",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/idonyd0z",
+      "id": "4",
+      "bbox": [
+        58,
+        88,
+        780,
+        74
+      ],
+      "geometry": "rect",
+      "text": "La propuesta convierte una base funcional en una aplicación lista para operar.",
+      "textPreview": "La propuesta convierte una base funcional en una aplicación lista para operar.",
+      "resolvedFontSize": 32,
+      "resolvedTextStyle": {
+        "fontSize": 32,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "La propuesta convierte una base funcional en una"
+          },
+          {
+            "index": 2,
+            "text": "aplicación lista para operar."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "La propuesta convierte una base funcional en una aplicación lista para operar.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "La propuesta convierte una base funcional en una aplicación lista para operar.",
+              "fontSize": 32,
+              "typeface": "Aptos Display",
+              "color": "#11222B",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/byhgn29g",
+      "id": "5",
+      "bbox": [
+        58,
+        164,
+        740,
+        42
+      ],
+      "geometry": "rect",
+      "text": "La revisión detectó una app avanzada en Next.js + Supabase. El proyecto propuesto se concentra en estabilizar, cerrar reglas operativas, desplegar y capacitar.",
+      "textPreview": "La revisión detectó una app avanzada en Next.js + Supabase. El proyecto propuesto se concentra en estabilizar, cerrar reglas operativas, ...",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "fontSize": 13,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "La revisión detectó una app avanzada en Next.js + Supabase. El proyecto propuesto se concentra en estabilizar, cerrar reglas"
+          },
+          {
+            "index": 2,
+            "text": "operativas, desplegar y capacitar."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "La revisión detectó una app avanzada en Next.js + Supabase. El proyecto propuesto se concentra en estabilizar, cerrar reglas operativas, desplegar y capacitar.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "La revisión detectó una app avanzada en Next.js + Supabase. El proyecto propuesto se concentra en estabilizar, cerrar reglas operativas, desplegar y capacitar.",
+              "fontSize": 13,
+              "typeface": "Aptos",
+              "color": "#58707A"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0je9cvix",
+      "id": "6",
+      "bbox": [
+        58,
+        665,
+        1164,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#D7E2E6",
+      "lineColor": "#D7E2E6",
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/t47y1kre",
+      "id": "7",
+      "bbox": [
+        58,
+        681,
+        520,
+        16
+      ],
+      "geometry": "rect",
+      "text": "OGEMI / Impresos Comerciales SA / Propuesta económica",
+      "textPreview": "OGEMI / Impresos Comerciales SA / Propuesta económica",
+      "resolvedFontSize": 8.51,
+      "resolvedTextStyle": {
+        "fontSize": 8.51,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "OGEMI / Impresos Comerciales SA / Propuesta económica"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "OGEMI / Impresos Comerciales SA / Propuesta económica",
+          "runs": [
+            {
+              "index": 1,
+              "text": "OGEMI / Impresos Comerciales SA / Propuesta económica",
+              "fontSize": 8.51,
+              "typeface": "Aptos",
+              "color": "#58707A"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/i9s36hcr",
+      "id": "8",
+      "bbox": [
+        1182,
+        681,
+        40,
+        16
+      ],
+      "geometry": "rect",
+      "text": "02",
+      "textPreview": "02",
+      "resolvedFontSize": 8.51,
+      "resolvedTextStyle": {
+        "fontSize": 8.51,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "right"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "02"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "02",
+          "runs": [
+            {
+              "index": 1,
+              "text": "02",
+              "fontSize": 8.51,
+              "typeface": "Aptos",
+              "color": "#58707A",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bulwval8",
+      "id": "9",
+      "bbox": [
+        70,
+        270,
+        330,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/j6tovaho",
+      "id": "10",
+      "bbox": [
+        70,
+        270,
+        5,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#1B8A5A",
+      "lineColor": "#1B8A5A",
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ulwval87",
+      "id": "11",
+      "bbox": [
+        90,
+        289,
+        294,
+        36
+      ],
+      "geometry": "rect",
+      "text": "Base existente",
+      "textPreview": "Base existente",
+      "resolvedFontSize": 29,
+      "resolvedTextStyle": {
+        "fontSize": 29,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Base existente"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Base existente",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Base existente",
+              "fontSize": 29,
+              "typeface": "Aptos Display",
+              "color": "#1B8A5A",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1cfa9w3m",
+      "id": "12",
+      "bbox": [
+        90,
+        330,
+        294,
+        30
+      ],
+      "geometry": "rect",
+      "text": "Dashboard, facturas, clientes, banco, compras, reportes y admin ya tienen estructura",
+      "textPreview": "Dashboard, facturas, clientes, banco, compras, reportes y admin ya tienen estructura",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Dashboard, facturas, clientes, banco, compras,"
+          },
+          {
+            "index": 2,
+            "text": "reportes y admin ya tienen estructura"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Dashboard, facturas, clientes, banco, compras, reportes y admin ya tienen estructura",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Dashboard, facturas, clientes, banco, compras, reportes y admin ya tienen estructura",
+              "fontSize": 11,
+              "typeface": "Aptos",
+              "color": "#58707A",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/crmhk3q5",
+      "id": "13",
+      "bbox": [
+        475,
+        270,
+        330,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ji5snelo",
+      "id": "14",
+      "bbox": [
+        475,
+        270,
+        5,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#0E7490",
+      "lineColor": "#0E7490",
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/uxc3ylc7",
+      "id": "15",
+      "bbox": [
+        495,
+        289,
+        294,
+        36
+      ],
+      "geometry": "rect",
+      "text": "Alcance cerrado",
+      "textPreview": "Alcance cerrado",
+      "resolvedFontSize": 29,
+      "resolvedTextStyle": {
+        "fontSize": 29,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Alcance cerrado"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Alcance cerrado",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Alcance cerrado",
+              "fontSize": 29,
+              "typeface": "Aptos Display",
+              "color": "#0E7490",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1kre1w7m",
+      "id": "16",
+      "bbox": [
+        495,
+        330,
+        294,
+        30
+      ],
+      "geometry": "rect",
+      "text": "Importación manual, 5 usuarios, una empresa y cierre mensual simple",
+      "textPreview": "Importación manual, 5 usuarios, una empresa y cierre mensual simple",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Importación manual, 5 usuarios, una empresa y cierre"
+          },
+          {
+            "index": 2,
+            "text": "mensual simple"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Importación manual, 5 usuarios, una empresa y cierre mensual simple",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Importación manual, 5 usuarios, una empresa y cierre mensual simple",
+              "fontSize": 11,
+              "typeface": "Aptos",
+              "color": "#58707A",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/c3ylc7u5",
+      "id": "17",
+      "bbox": [
+        880,
+        270,
+        330,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/jqh0fepk",
+      "id": "18",
+      "bbox": [
+        880,
+        270,
+        5,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#D9902F",
+      "lineColor": "#D9902F",
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/q5o7qpg3",
+      "id": "19",
+      "bbox": [
+        900,
+        289,
+        294,
+        36
+      ],
+      "geometry": "rect",
+      "text": "Entrega productiva",
+      "textPreview": "Entrega productiva",
+      "resolvedFontSize": 29,
+      "resolvedTextStyle": {
+        "fontSize": 29,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Entrega productiva"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Entrega productiva",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Entrega productiva",
+              "fontSize": 29,
+              "typeface": "Aptos Display",
+              "color": "#D9902F",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/itgfmlkj",
+      "id": "20",
+      "bbox": [
+        900,
+        330,
+        294,
+        30
+      ],
+      "geometry": "rect",
+      "text": "Corrección técnica, QA, despliegue, documentación y capacitación",
+      "textPreview": "Corrección técnica, QA, despliegue, documentación y capacitación",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Corrección técnica, QA, despliegue, documentación y"
+          },
+          {
+            "index": 2,
+            "text": "capacitación"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Corrección técnica, QA, despliegue, documentación y capacitación",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Corrección técnica, QA, despliegue, documentación y capacitación",
+              "fontSize": 11,
+              "typeface": "Aptos",
+              "color": "#58707A",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7ed8bat4",
+      "id": "21",
+      "bbox": [
+        70,
+        455,
+        1140,
+        86
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0z61032l",
+      "id": "22",
+      "bbox": [
+        94,
+        477,
+        220,
+        22
+      ],
+      "geometry": "rect",
+      "text": "Decisión económica",
+      "textPreview": "Decisión económica",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "fontSize": 14,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Decisión económica"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Decisión económica",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Decisión económica",
+              "fontSize": 14,
+              "typeface": "Aptos",
+              "color": "#11222B",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 23,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/pkzupwb2",
+      "id": "23",
+      "bbox": [
+        330,
+        470,
+        805,
+        38
+      ],
+      "geometry": "rect",
+      "text": "No se cotiza como desarrollo desde cero. Se cotiza como terminación empresarial: reglas de negocio, seguridad, cierres, reportes, despliegue y pruebas para que el sistema pueda usarse de forma confiable.",
+      "textPreview": "No se cotiza como desarrollo desde cero. Se cotiza como terminación empresarial: reglas de negocio, seguridad, cierres, reportes, desplie...",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "fontSize": 15,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "No se cotiza como desarrollo desde cero. Se cotiza como terminación empresarial: reglas de negocio, seguridad,"
+          },
+          {
+            "index": 2,
+            "text": "cierres, reportes, despliegue y pruebas para que el sistema pueda usarse de forma confiable."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "No se cotiza como desarrollo desde cero. Se cotiza como terminación empresarial: reglas de negocio, seguridad, cierres, reportes, despliegue y pruebas para que el sistema pueda usarse de forma confiable.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "No se cotiza como desarrollo desde cero. Se cotiza como terminación empresarial: reglas de negocio, seguridad, cierres, reportes, despliegue y pruebas para que el sistema pueda usarse de forma confiable.",
+              "fontSize": 15,
+              "typeface": "Aptos",
+              "color": "#58707A"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

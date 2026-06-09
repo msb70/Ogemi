@@ -1,14 +1,18 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
-import { formatCurrency, formatDate, tramoColor } from '@/lib/utils'
+import { formatCurrency, formatDate, tramoColor, classifyTramo } from '@/lib/utils'
 import { Factura, BancoCuenta } from '@/types'
 import { Search, CheckCircle, Filter, X, Plus, Trash2 } from 'lucide-react'
+import { Toast } from '@/components/Toast'
+import { useToast } from '@/hooks/useToast'
 
 type EstadoFilter = 'todos' | 'pendiente' | 'pagada'
+
+const PAGE_SIZE = 50
 
 interface LineaPago {
   cuenta_id: string
@@ -20,8 +24,13 @@ export default function FacturasPage() {
   const [facturas, setFacturas] = useState<Factura[]>([])
   const [cuentas, setCuentas] = useState<BancoCuenta[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
+  const [searchInput, setSearchInput] = useState('')   // valor del input (sin debounce)
+  const [search, setSearch] = useState('')             // valor comprometido que va al server
   const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('todos')
+  const [page, setPage] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cuentasCargadasRef = useRef(false)
 
   // Modal de abonos
   const [selectedFactura, setSelectedFactura] = useState<Factura | null>(null)
@@ -30,41 +39,81 @@ export default function FacturasPage() {
   const [lineas, setLineas] = useState<LineaPago[]>([{ cuenta_id: '', monto: '', referencia: '' }])
   const [saving, setSaving] = useState(false)
   const [pagosExistentes, setPagosExistentes] = useState<any[]>([])
+  const { toast, showToast, hideToast } = useToast()
 
   const supabase = createClient()
 
   const loadData = useCallback(async () => {
     setLoading(true)
+
+    // Búsqueda server-side:
+    //   - Si es número → filtrar por numero_factura exacto
+    //   - Si es texto  → pre-cargar IDs de clientes que coincidan y filtrar por IN
+    let clienteIdsFilter: string[] | null = null
+    if (search && !/^\d+$/.test(search.trim())) {
+      const { data: clientesMatch } = await supabase
+        .from('clientes')
+        .select('id')
+        .ilike('nombre', `%${search.trim()}%`)
+      clienteIdsFilter = clientesMatch?.map(c => c.id) || []
+
+      // Ningún cliente coincide → retorno inmediato sin consultar facturas
+      if (clienteIdsFilter.length === 0) {
+        setFacturas([])
+        setTotalCount(0)
+        setLoading(false)
+        return
+      }
+    }
+
     let query = supabase
       .from('facturas')
-      .select('*, clientes(nombre, dias_credito), banco_cuentas(nombre, banco)')
+      .select('*, clientes(nombre, dias_credito), banco_cuentas(nombre, banco)', { count: 'exact' })
       .order('fecha', { ascending: false })
       .order('numero_factura', { ascending: false })
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
 
     if (estadoFilter !== 'todos') {
       query = query.eq('estado', estadoFilter)
     }
 
-    const { data } = await query
-    setFacturas(data || [])
+    if (search.trim()) {
+      if (/^\d+$/.test(search.trim())) {
+        query = query.eq('numero_factura', parseInt(search.trim()))
+      } else if (clienteIdsFilter && clienteIdsFilter.length > 0) {
+        query = query.in('cliente_id', clienteIdsFilter)
+      }
+    }
 
-    const { data: cuentasData } = await supabase
-      .from('banco_cuentas').select('*').eq('activo', true).order('nombre')
-    setCuentas(cuentasData || [])
+    const { data, count } = await query
+    setFacturas(data || [])
+    setTotalCount(count || 0)
+
+    // Cuentas bancarias: cargar sólo una vez por sesión (ref evita stale closure)
+    if (!cuentasCargadasRef.current) {
+      cuentasCargadasRef.current = true
+      const { data: cuentasData } = await supabase
+        .from('banco_cuentas').select('*').eq('activo', true).order('nombre')
+      setCuentas(cuentasData || [])
+    }
+
     setLoading(false)
-  }, [estadoFilter])
+  }, [estadoFilter, search, page])
+
+  // Debounce: espera 400ms después de que el usuario deja de escribir para enviar al server
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setPage(0)
+      setSearch(searchInput)
+    }, 400)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [searchInput])
+
+  // Resetear página cuando cambia el filtro de estado
+  useEffect(() => { setPage(0) }, [estadoFilter])
 
   useEffect(() => { loadData() }, [loadData])
-
-  const filteredFacturas = facturas.filter(f => {
-    if (!search) return true
-    const q = search.toLowerCase()
-    return (
-      f.numero_factura?.toString().includes(q) ||
-      f.clientes?.nombre?.toLowerCase().includes(q) ||
-      f.tipo_documento?.toLowerCase().includes(q)
-    )
-  })
 
   const openPagoModal = async (f: Factura) => {
     setSelectedFactura(f)
@@ -118,8 +167,11 @@ export default function FacturasPage() {
     const { error } = await supabase.from('pagos').insert(pagosInsert)
 
     setSaving(false)
-    if (!error) {
+    if (error) {
+      showToast(`Error al registrar el pago: ${error.message}`, 'error')
+    } else {
       setShowModal(false)
+      showToast('Pago registrado correctamente', 'success')
       loadData()
     }
   }
@@ -131,19 +183,15 @@ export default function FacturasPage() {
     return Math.floor((hoy.getTime() - vence.getTime()) / 86400000)
   }
 
-  const getTramo = (dias: number): string => {
-    if (dias <= 0) return 'corriente'
-    if (dias <= 30) return '1-30'
-    if (dias <= 60) return '31-60'
-    if (dias <= 90) return '61-90'
-    return '+120'
-  }
+  // Usar classifyTramo de utils para mantener única fuente de verdad
+  const getTramo = (dias: number): string => classifyTramo(dias)
 
   return (
     <AppLayout>
+      {toast && <Toast {...toast} onClose={hideToast} />}
       <Header
         title="Facturas"
-        subtitle={`${filteredFacturas.length} registros`}
+        subtitle={`${totalCount.toLocaleString('es-PA')} registros`}
       />
 
       {/* Filters */}
@@ -153,11 +201,11 @@ export default function FacturasPage() {
           <input
             className="input pl-9"
             placeholder="Buscar por #factura, cliente..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+          {searchInput && (
+            <button onClick={() => { setSearchInput(''); setSearch('') }} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
               <X size={14} />
             </button>
           )}
@@ -201,10 +249,10 @@ export default function FacturasPage() {
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr><td colSpan={10} className="text-center py-12 text-gray-400">Cargando...</td></tr>
-              ) : filteredFacturas.length === 0 ? (
+              ) : facturas.length === 0 ? (
                 <tr><td colSpan={10} className="text-center py-12 text-gray-400">Sin resultados</td></tr>
               ) : (
-                filteredFacturas.map(f => {
+                facturas.map(f => {
                   const dias = f.estado === 'pendiente' ? getDiasVencida(f) : 0
                   const tramo = f.estado === 'pendiente' ? getTramo(dias) : null
                   const tipoCorto = f.tipo_documento.includes('CREDITO') ? 'N. CRÉDITO' : 'FACTURA'
@@ -263,6 +311,31 @@ export default function FacturasPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Paginación */}
+        {totalCount > PAGE_SIZE && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
+            <p className="text-sm text-gray-500">
+              Página {page + 1} de {Math.ceil(totalCount / PAGE_SIZE)} · {totalCount.toLocaleString('es-PA')} registros
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition-colors"
+              >
+                ← Anterior
+              </button>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={(page + 1) * PAGE_SIZE >= totalCount}
+                className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition-colors"
+              >
+                Siguiente →
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal: Registrar Abono/Cobro */}

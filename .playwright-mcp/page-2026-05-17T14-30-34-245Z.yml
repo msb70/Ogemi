@@ -1,0 +1,84 @@
+- application [ref=e2]:
+  - generic:
+    - generic [ref=e4]:
+      - img "Automind Group" [ref=e6]
+      - img "OGEMI" [ref=e7]
+      - paragraph [ref=e8]: AUTOMIND GROUP
+      - paragraph [ref=e9]: Propuesta económica para OGEMI / Sistema de gestión de cartera
+      - heading "Sistema financiero para cartera, banco y reportes gerenciales" [level=1] [ref=e10]:
+        - text: Sistema financiero
+        - text: para cartera, banco
+        - text: y reportes gerenciales
+      - paragraph [ref=e11]: Alcance cerrado para una empresa, 5 usuarios, importación manual de Excel y cierre bancario mensual por comparación de saldos.
+      - generic [ref=e12]:
+        - generic [ref=e13]:
+          - generic [ref=e14]: 2.000 USD
+          - generic [ref=e15]: Inversión de desarrollo cerrada
+        - generic [ref=e16]:
+          - generic [ref=e17]: 4 semanas
+          - generic [ref=e18]: Cronograma de implementación
+        - generic [ref=e19]:
+          - generic [ref=e20]: 0 USD/mes
+          - generic [ref=e21]: Infraestructura base posible
+      - paragraph [ref=e22]: Preparado por Automind Group
+    - generic:
+      - generic:
+        - generic: Resumen
+        - heading [level=2]: Automind propone llevar la base funcional a una versión operativa en 4 semanas.
+        - paragraph: La revisión detectó una app avanzada en Next.js + Supabase. El proyecto propuesto se concentra en estabilizar, cerrar reglas operativas, desplegar y capacitar.
+        - generic:
+          - generic:
+            - generic: Base existente
+            - generic: Dashboard, facturas, clientes, banco, compras, reportes y admin ya tienen estructura
+          - generic:
+            - generic: Alcance cerrado
+            - generic: Importación manual, 5 usuarios, una empresa y cierre mensual simple
+          - generic:
+            - generic: 4 semanas
+            - generic: Corrección técnica, QA, despliegue, documentación y capacitación
+        - generic:
+          - strong: Decisión económica
+          - paragraph: "No se cotiza como desarrollo desde cero. Automind cotiza una terminación controlada: reglas de negocio, seguridad, cierres, reportes, despliegue y pruebas para que el sistema pueda usarse de forma confiable."
+        - generic:
+          - generic: Automind Group / Propuesta económica para OGEMI - Impresos Comerciales SA
+          - generic: "02"
+    - generic:
+      - generic:
+        - generic: Mapa
+        - heading [level=2]: Mapa general de módulos incluidos en el sistema.
+        - paragraph: "Cada módulo responde a un flujo financiero concreto: importar, cobrar, pagar, conciliar y reportar."
+        - generic:
+          - generic:
+            - heading [level=3]: Importar Excel
+            - paragraph: Carga manual del libro de ventas, vista previa, clientes automáticos y control de duplicados.
+          - generic:
+            - heading [level=3]: Clientes
+            - paragraph: Días de crédito, estado activo y saldos por cliente.
+          - generic:
+            - heading [level=3]: Facturas / CxC
+            - paragraph: Fecha de pago, estado pendiente/pagada, pagos parciales y saldo pendiente.
+          - generic:
+            - heading [level=3]: Anticipos
+            - paragraph: Depósitos anticipados, estado, cuenta bancaria y recibo imprimible.
+          - generic:
+            - heading [level=3]: Banco
+            - paragraph: Cuentas, ingresos, egresos, movimientos automáticos y cierre mensual.
+          - generic:
+            - heading [level=3]: Compras / CxP
+            - paragraph: Proveedores, vencimientos, pagos y egresos bancarios.
+          - generic:
+            - heading [level=3]: Reportes
+            - paragraph: Cartera, CxP, libros, flujo de caja, CSV y pivots por antigüedad.
+          - generic:
+            - heading [level=3]: Administración
+            - paragraph: Usuarios, roles, permisos de ver/editar/borrar y seguridad Supabase.
+        - generic: "Flujo operativo: Excel -> facturas/clientes -> cobros/pagos -> banco -> cierre mensual -> reportes"
+        - generic:
+          - generic: Automind Group / Propuesta económica para OGEMI - Impresos Comerciales SA
+          - generic: "03"
+  - link "1 / 10" [ref=e27] [cursor=pointer]:
+    - /url: "#/"
+  - complementary:
+    - button "next slide" [ref=e28] [cursor=pointer]
+  - text: Speaker notes
+  - generic [ref=e31]: AUTOMIND GROUP Propuesta económica para OGEMI / Sistema de gestión de cartera Sistema financiero para cartera, banco y reportes gerenciales Alcance cerrado para una empresa, 5 usuarios, importación manual de Excel y cierre bancario mensual por comparación de saldos. 2.000 USD Inversión de desarrollo cerrada 4 semanas Cronograma de implementación 0 USD/mes Infraestructura base posible Preparado por Automind Group

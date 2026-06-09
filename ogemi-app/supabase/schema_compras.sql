@@ -123,6 +123,7 @@ SELECT
     WHEN CURRENT_DATE - c.vencimiento BETWEEN 1 AND 30 THEN '1-30'
     WHEN CURRENT_DATE - c.vencimiento BETWEEN 31 AND 60 THEN '31-60'
     WHEN CURRENT_DATE - c.vencimiento BETWEEN 61 AND 90 THEN '61-90'
+    WHEN CURRENT_DATE - c.vencimiento BETWEEN 91 AND 120 THEN '91-120'
     ELSE '+120'
   END AS tramo
 FROM compras c

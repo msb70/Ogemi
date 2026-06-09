@@ -1,0 +1,763 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/xu7l1z",
+    "id": "xu7l1z",
+    "slide": 10,
+    "layoutId": "f056fa7b-f967-42ed-a0d9-3c8d3f51e685",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "9d1da1ae-f0ec-492d-97d9-cae58a85d9cb",
+    "masterLayoutName": "Master",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Aptos",
+      "Aptos Display"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "f056fa7b-f967-42ed-a0d9-3c8d3f51e685",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "9d1da1ae-f0ec-492d-97d9-cae58a85d9cb",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "9d1da1ae-f0ec-492d-97d9-cae58a85d9cb",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/r65wjudg",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "#0D242D",
+      "lineColor": "#0D242D",
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/gr2p8nqx",
+      "id": "2",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "#0D242D",
+      "lineColor": "#0D242D",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/oj2t83it",
+      "id": "3",
+      "bbox": [
+        62,
+        44,
+        120,
+        90
+      ],
+      "alt": "Logo Automind",
+      "contentType": "image/png",
+      "asset": {
+        "assetId": "c35d18d5-3e81-40e1-8cfd-5eb5e7af4308",
+        "contentType": "image/png",
+        "byteLength": 971882
+      }
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/yxobm58z",
+      "id": "4",
+      "bbox": [
+        170,
+        72,
+        260,
+        18
+      ],
+      "geometry": "rect",
+      "text": "CIERRE DE PROPUESTA",
+      "textPreview": "CIERRE DE PROPUESTA",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "fontSize": 10,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "CIERRE DE PROPUESTA"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "CIERRE DE PROPUESTA",
+          "runs": [
+            {
+              "index": 1,
+              "text": "CIERRE DE PROPUESTA",
+              "fontSize": 10,
+              "typeface": "Aptos",
+              "color": "#A8DADC",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nih4byhg",
+      "id": "5",
+      "bbox": [
+        70,
+        190,
+        740,
+        160
+      ],
+      "geometry": "rect",
+      "text": "Una implementación acotada,\ncon costo cerrado y salida\na producción en 4 semanas.",
+      "textPreview": "Una implementación acotada, | con costo cerrado y salida | a producción en 4 semanas.",
+      "resolvedFontSize": 43,
+      "resolvedTextStyle": {
+        "fontSize": 43,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Una implementación acotada,"
+          },
+          {
+            "index": 2,
+            "text": "con costo cerrado y salida"
+          },
+          {
+            "index": 3,
+            "text": "a producción en 4 semanas."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Una implementación acotada,",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Una implementación acotada,",
+              "fontSize": 43,
+              "typeface": "Aptos Display",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "text": "con costo cerrado y salida",
+          "runs": [
+            {
+              "index": 1,
+              "text": "con costo cerrado y salida",
+              "fontSize": 43,
+              "typeface": "Aptos Display",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        },
+        {
+          "index": 3,
+          "text": "a producción en 4 semanas.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "a producción en 4 semanas.",
+              "fontSize": 43,
+              "typeface": "Aptos Display",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/g3ex0nux",
+      "id": "6",
+      "bbox": [
+        74,
+        386,
+        630,
+        42
+      ],
+      "geometry": "rect",
+      "text": "Condición sugerida de pago: 50% al inicio y 50% contra entrega.",
+      "textPreview": "Condición sugerida de pago: 50% al inicio y 50% contra entrega.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "fontSize": 16,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Condición sugerida de pago: 50% al inicio y 50% contra entrega."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Condición sugerida de pago: 50% al inicio y 50% contra entrega.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Condición sugerida de pago: 50% al inicio y 50% contra entrega.",
+              "fontSize": 16,
+              "typeface": "Aptos",
+              "color": "#C9DDE3"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5o7qpg3e",
+      "id": "7",
+      "bbox": [
+        760,
+        210,
+        290,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/y1kre1w7",
+      "id": "8",
+      "bbox": [
+        760,
+        210,
+        5,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#18A999",
+      "lineColor": "#18A999",
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/rmhk3q5o",
+      "id": "9",
+      "bbox": [
+        780,
+        229,
+        254,
+        36
+      ],
+      "geometry": "rect",
+      "text": "2.000 EUR",
+      "textPreview": "2.000 EUR",
+      "resolvedFontSize": 29,
+      "resolvedTextStyle": {
+        "fontSize": 29,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "2.000 EUR"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "2.000 EUR",
+          "runs": [
+            {
+              "index": 1,
+              "text": "2.000 EUR",
+              "fontSize": 29,
+              "typeface": "Aptos Display",
+              "color": "#18A999",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/fa9w3m94",
+      "id": "10",
+      "bbox": [
+        780,
+        270,
+        254,
+        30
+      ],
+      "geometry": "rect",
+      "text": "Desarrollo cerrado",
+      "textPreview": "Desarrollo cerrado",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Desarrollo cerrado"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Desarrollo cerrado",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Desarrollo cerrado",
+              "fontSize": 11,
+              "typeface": "Aptos",
+              "color": "#58707A",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/qpg3ex0n",
+      "id": "11",
+      "bbox": [
+        760,
+        345,
+        290,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/xczed8v6",
+      "id": "12",
+      "bbox": [
+        760,
+        345,
+        5,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#D9902F",
+      "lineColor": "#D9902F",
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8v6psfil",
+      "id": "13",
+      "bbox": [
+        780,
+        364,
+        254,
+        36
+      ],
+      "geometry": "rect",
+      "text": "0 EUR/mes",
+      "textPreview": "0 EUR/mes",
+      "resolvedFontSize": 29,
+      "resolvedTextStyle": {
+        "fontSize": 29,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "0 EUR/mes"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "0 EUR/mes",
+          "runs": [
+            {
+              "index": 1,
+              "text": "0 EUR/mes",
+              "fontSize": 29,
+              "typeface": "Aptos Display",
+              "color": "#D9902F",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/fyxobm58",
+      "id": "14",
+      "bbox": [
+        780,
+        405,
+        254,
+        30
+      ],
+      "geometry": "rect",
+      "text": "Infraestructura inicial posible",
+      "textPreview": "Infraestructura inicial posible",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Infraestructura inicial posible"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Infraestructura inicial posible",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Infraestructura inicial posible",
+              "fontSize": 11,
+              "typeface": "Aptos",
+              "color": "#58707A",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/qd4vmtwr",
+      "id": "15",
+      "bbox": [
+        760,
+        480,
+        290,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/x4nap4r6",
+      "id": "16",
+      "bbox": [
+        760,
+        480,
+        5,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#0E7490",
+      "lineColor": "#0E7490",
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8jqh0fep",
+      "id": "17",
+      "bbox": [
+        780,
+        499,
+        254,
+        36
+      ],
+      "geometry": "rect",
+      "text": "4 semanas",
+      "textPreview": "4 semanas",
+      "resolvedFontSize": 29,
+      "resolvedTextStyle": {
+        "fontSize": 29,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "4 semanas"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "4 semanas",
+          "runs": [
+            {
+              "index": 1,
+              "text": "4 semanas",
+              "fontSize": 29,
+              "typeface": "Aptos Display",
+              "color": "#0E7490",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/fmlkjm1c",
+      "id": "18",
+      "bbox": [
+        780,
+        540,
+        254,
+        30
+      ],
+      "geometry": "rect",
+      "text": "Implementación",
+      "textPreview": "Implementación",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Implementación"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Implementación",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Implementación",
+              "fontSize": 11,
+              "typeface": "Aptos",
+              "color": "#58707A",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/q1orytsv",
+      "id": "19",
+      "bbox": [
+        70,
+        620,
+        980,
+        22
+      ],
+      "geometry": "rect",
+      "text": "Propuesta emitida por Automind Group. Alcance confirmado: importación manual, 5 usuarios, una empresa, cierre mensual simple y recibo de anticipo.",
+      "textPreview": "Propuesta emitida por Automind Group. Alcance confirmado: importación manual, 5 usuarios, una empresa, cierre mensual simple y recibo de ...",
+      "resolvedFontSize": 12.51,
+      "resolvedTextStyle": {
+        "fontSize": 12.51,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Propuesta emitida por Automind Group. Alcance confirmado: importación manual, 5 usuarios, una empresa, cierre mensual simple y recibo de anticipo."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Propuesta emitida por Automind Group. Alcance confirmado: importación manual, 5 usuarios, una empresa, cierre mensual simple y recibo de anticipo.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Propuesta emitida por Automind Group. Alcance confirmado: importación manual, 5 usuarios, una empresa, cierre mensual simple y recibo de anticipo.",
+              "fontSize": 12.51,
+              "typeface": "Aptos",
+              "color": "#A8DADC"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

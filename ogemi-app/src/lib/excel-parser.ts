@@ -46,6 +46,25 @@ import { ExcelRow } from '@/types'
  *   3. Números × 100: SheetJS lee "373,10" (decimal europeo con coma) como el
  *      entero 37310. Todos los campos monetarios se dividen entre 100.
  */
+/**
+ * Parsea un número con formato europeo (punto=miles, coma=decimal) desde una celda SheetJS.
+ *
+ * Exportada para tests unitarios. La fuente de verdad es cell.w (texto formateado),
+ * no cell.v (valor numérico), porque SheetJS introduce ambigüedades:
+ *   "1.000,00" → cell.v = 1.0 → Number.isInteger(1.0) === true → BUG si se divide ÷100
+ *   "1.000,00" → cell.w = "1.000,00" → normalizar → 1000.00 ✓
+ */
+export function parseNumeroExcel(cell: XLSX.CellObject | undefined): number {
+  if (!cell) return 0
+  const rawText = cell.w ?? cell.v?.toString() ?? '0'
+  const normalized = rawText
+    .replace(/\./g, '')      // quitar puntos de miles: "1.836" → "1836"
+    .replace(',', '.')       // coma decimal → punto: "1836,52" → "1836.52"
+    .replace(/[^\d.-]/g, '') // limpiar símbolo residual ($, espacios, etc.)
+  const result = parseFloat(normalized)
+  return isNaN(result) ? 0 : result
+}
+
 export function parseLibroVentas(buffer: ArrayBuffer): ExcelRow[] {
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
   const sheetName = workbook.SheetNames[0]
@@ -100,45 +119,17 @@ export function parseLibroVentas(buffer: ArrayBuffer): ExcelRow[] {
 
     if (!fecha || isNaN(fecha.getTime())) continue
 
-    // El archivo usa formato numérico europeo: punto = separador de miles, coma = decimal.
-    // SheetJS tiene dos comportamientos según el valor:
-    //
-    //   Caso A — sin punto de miles: "373,10"
-    //     SheetJS strips la coma → entero 37310 → hay que dividir entre 100 → 373.10
-    //
-    //   Caso B — con punto de miles: "1.836,00" o "1.964,52"
-    //     SheetJS interpreta el punto como decimal → 1.836 / 1.96452
-    //     El valor correcto se obtiene multiplicando por 1000 → 1836.00 / 1964.52
-    //
-    // Regla: Number.isInteger(v) → Caso A (÷100) | tiene decimales → Caso B (×1000)
-    const parseNumero = (cell: XLSX.CellObject | undefined): number => {
-      if (!cell) return 0
-      if (typeof cell.v === 'number') {
-        if (Number.isInteger(cell.v)) {
-          return cell.v / 100  // Caso A: "373,10" → 37310 → 373.10
-        } else {
-          return cell.v * 1000 // Caso B: "1.836,00" → 1.836 → 1836.00
-        }
-      }
-      // Fallback para strings: convertir separadores europeos a formato JS
-      const str = cell.v?.toString()
-        .replace(/\./g, '')     // quitar puntos de miles
-        .replace(',', '.')      // coma decimal → punto
-        .replace(/[^\d.-]/g, '') || '0'
-      return parseFloat(str) || 0
-    }
-
     const row: ExcelRow = {
       fecha,
       tipo_documento: cellTipo?.v?.toString().trim() || 'FACTURA DE OPERACION INTERNA',
-      numero_factura: cellDoc?.t === 'n' ? Math.abs(cellDoc.v as number) : Math.abs(parseNumero(cellDoc)),
+      numero_factura: cellDoc?.t === 'n' ? Math.abs(cellDoc.v as number) : Math.abs(parseNumeroExcel(cellDoc)),
       documento_afectado: cellAfect && cellAfect.v
         ? Math.abs(cellAfect.t === 'n' ? (cellAfect.v as number) : parseInt(cellAfect.v?.toString() || '0')) || null
         : null,
       nombre_cliente: nombreVal.trim(),
-      neto: parseNumero(cellNeto),
-      impuesto: parseNumero(cellImp),
-      total: parseNumero(cellTotal),
+      neto: parseNumeroExcel(cellNeto),
+      impuesto: parseNumeroExcel(cellImp),
+      total: parseNumeroExcel(cellTotal),
     }
 
     // Saltar filas sin número de documento

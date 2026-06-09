@@ -1,0 +1,767 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/dkxzbh",
+    "id": "dkxzbh",
+    "slide": 10,
+    "layoutId": "521c33de-7fd8-41ae-a8d5-4e855212633b",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "bc58cf51-0225-4d4e-9f0c-2b27bcbbc1f7",
+    "masterLayoutName": "Master",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Aptos",
+      "Aptos Display"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "521c33de-7fd8-41ae-a8d5-4e855212633b",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "bc58cf51-0225-4d4e-9f0c-2b27bcbbc1f7",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "bc58cf51-0225-4d4e-9f0c-2b27bcbbc1f7",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/d0z61032",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "#0D242D",
+      "lineColor": "#0D242D",
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/29gr2p8n",
+      "id": "2",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "#0D242D",
+      "lineColor": "#0D242D",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/at47y1kr",
+      "id": "3",
+      "bbox": [
+        70,
+        58,
+        76,
+        76
+      ],
+      "alt": "Logo Ogemi",
+      "contentType": "image/jpeg",
+      "asset": {
+        "assetId": "2f784231-9306-4d26-8d6c-fa59591e073d",
+        "contentType": "image/jpeg",
+        "byteLength": 28914
+      }
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/knih4byh",
+      "id": "4",
+      "bbox": [
+        170,
+        72,
+        260,
+        18
+      ],
+      "geometry": "rect",
+      "text": "CIERRE DE PROPUESTA",
+      "textPreview": "CIERRE DE PROPUESTA",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "fontSize": 10,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "CIERRE DE PROPUESTA"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "CIERRE DE PROPUESTA",
+          "runs": [
+            {
+              "index": 1,
+              "text": "CIERRE DE PROPUESTA",
+              "fontSize": 10,
+              "typeface": "Aptos",
+              "color": "#A8DADC",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/d8bat47y",
+      "id": "5",
+      "bbox": [
+        70,
+        190,
+        740,
+        160
+      ],
+      "geometry": "rect",
+      "text": "Una implementación acotada,\ncon costo cerrado y salida\na producción en 6 semanas.",
+      "textPreview": "Una implementación acotada, | con costo cerrado y salida | a producción en 6 semanas.",
+      "resolvedFontSize": 43,
+      "resolvedTextStyle": {
+        "fontSize": 43,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Una implementación acotada,"
+          },
+          {
+            "index": 2,
+            "text": "con costo cerrado y salida"
+          },
+          {
+            "index": 3,
+            "text": "a producción en 6 semanas."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Una implementación acotada,",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Una implementación acotada,",
+              "fontSize": 43,
+              "typeface": "Aptos Display",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "text": "con costo cerrado y salida",
+          "runs": [
+            {
+              "index": 1,
+              "text": "con costo cerrado y salida",
+              "fontSize": 43,
+              "typeface": "Aptos Display",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        },
+        {
+          "index": 3,
+          "text": "a producción en 6 semanas.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "a producción en 6 semanas.",
+              "fontSize": 43,
+              "typeface": "Aptos Display",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/2lszqtcj",
+      "id": "6",
+      "bbox": [
+        74,
+        386,
+        630,
+        42
+      ],
+      "geometry": "rect",
+      "text": "Condición sugerida de pago: 40% al inicio, 30% al avance de semana 3 y 30% contra entrega.",
+      "textPreview": "Condición sugerida de pago: 40% al inicio, 30% al avance de semana 3 y 30% contra entrega.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "fontSize": 16,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Condición sugerida de pago: 40% al inicio, 30% al avance de semana 3 y 30% contra"
+          },
+          {
+            "index": 2,
+            "text": "entrega."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Condición sugerida de pago: 40% al inicio, 30% al avance de semana 3 y 30% contra entrega.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Condición sugerida de pago: 40% al inicio, 30% al avance de semana 3 y 30% contra entrega.",
+              "fontSize": 16,
+              "typeface": "Aptos",
+              "color": "#C9DDE3"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/v6psfil0",
+      "id": "7",
+      "bbox": [
+        760,
+        210,
+        290,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/kre1w7mp",
+      "id": "8",
+      "bbox": [
+        760,
+        210,
+        5,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#18A999",
+      "lineColor": "#18A999",
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/dcbulwva",
+      "id": "9",
+      "bbox": [
+        780,
+        229,
+        254,
+        36
+      ],
+      "geometry": "rect",
+      "text": "$9,700",
+      "textPreview": "$9,700",
+      "resolvedFontSize": 29,
+      "resolvedTextStyle": {
+        "fontSize": 29,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "$9,700"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "$9,700",
+          "runs": [
+            {
+              "index": 1,
+              "text": "$9,700",
+              "fontSize": 29,
+              "typeface": "Aptos Display",
+              "color": "#18A999",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/lszqtcj6",
+      "id": "10",
+      "bbox": [
+        780,
+        270,
+        254,
+        30
+      ],
+      "geometry": "rect",
+      "text": "Desarrollo cerrado",
+      "textPreview": "Desarrollo cerrado",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Desarrollo cerrado"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Desarrollo cerrado",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Desarrollo cerrado",
+              "fontSize": 11,
+              "typeface": "Aptos",
+              "color": "#58707A",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/s72x4nap",
+      "id": "11",
+      "bbox": [
+        760,
+        345,
+        290,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3m94fu18",
+      "id": "12",
+      "bbox": [
+        760,
+        345,
+        5,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#D9902F",
+      "lineColor": "#D9902F",
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/a5gbq1or",
+      "id": "13",
+      "bbox": [
+        780,
+        364,
+        254,
+        36
+      ],
+      "geometry": "rect",
+      "text": "$45/mes",
+      "textPreview": "$45/mes",
+      "resolvedFontSize": 29,
+      "resolvedTextStyle": {
+        "fontSize": 29,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "$45/mes"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "$45/mes",
+          "runs": [
+            {
+              "index": 1,
+              "text": "$45/mes",
+              "fontSize": 29,
+              "typeface": "Aptos Display",
+              "color": "#D9902F",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/h4byhgn2",
+      "id": "14",
+      "bbox": [
+        780,
+        405,
+        254,
+        30
+      ],
+      "geometry": "rect",
+      "text": "Infraestructura base",
+      "textPreview": "Infraestructura base",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Infraestructura base"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Infraestructura base",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Infraestructura base",
+              "fontSize": 11,
+              "typeface": "Aptos",
+              "color": "#58707A",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/sji5snel",
+      "id": "15",
+      "bbox": [
+        760,
+        480,
+        290,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DCE7EB",
+      "lineWidth": 1
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3ylc7u54",
+      "id": "16",
+      "bbox": [
+        760,
+        480,
+        5,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#0E7490",
+      "lineColor": "#0E7490",
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/adsji5sn",
+      "id": "17",
+      "bbox": [
+        780,
+        499,
+        254,
+        36
+      ],
+      "geometry": "rect",
+      "text": "6 semanas",
+      "textPreview": "6 semanas",
+      "resolvedFontSize": 29,
+      "resolvedTextStyle": {
+        "fontSize": 29,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "6 semanas"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "6 semanas",
+          "runs": [
+            {
+              "index": 1,
+              "text": "6 semanas",
+              "fontSize": 29,
+              "typeface": "Aptos Display",
+              "color": "#0E7490",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/hgn29gr2",
+      "id": "18",
+      "bbox": [
+        780,
+        540,
+        254,
+        30
+      ],
+      "geometry": "rect",
+      "text": "Implementación",
+      "textPreview": "Implementación",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Implementación"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Implementación",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Implementación",
+              "fontSize": 11,
+              "typeface": "Aptos",
+              "color": "#58707A",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/svu9knih",
+      "id": "19",
+      "bbox": [
+        70,
+        620,
+        940,
+        22
+      ],
+      "geometry": "rect",
+      "text": "Alcance confirmado: importación manual, 5 usuarios, una empresa, cierre mensual simple y recibo de anticipo.",
+      "textPreview": "Alcance confirmado: importación manual, 5 usuarios, una empresa, cierre mensual simple y recibo de anticipo.",
+      "resolvedFontSize": 12.51,
+      "resolvedTextStyle": {
+        "fontSize": 12.51,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Alcance confirmado: importación manual, 5 usuarios, una empresa, cierre mensual simple y recibo de anticipo."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Alcance confirmado: importación manual, 5 usuarios, una empresa, cierre mensual simple y recibo de anticipo.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Alcance confirmado: importación manual, 5 usuarios, una empresa, cierre mensual simple y recibo de anticipo.",
+              "fontSize": 12.51,
+              "typeface": "Aptos",
+              "color": "#A8DADC"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

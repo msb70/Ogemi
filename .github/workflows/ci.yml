@@ -1,0 +1,51 @@
+name: CI
+
+# Corre en todo push a main y en cada PR hacia main.
+# Si el build de Vercel falla en prod, el error se ve acá primero.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    name: Lint · Typecheck · Build · Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ogemi-app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ogemi-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # next lint usa la configuración de .eslintrc.json
+      - name: Lint
+        run: npm run lint
+
+      # tsc --noEmit detecta errores de tipos sin emitir archivos
+      - name: Typecheck
+        run: npm run typecheck
+
+      # next build requiere las vars de entorno para compilar aunque no acceda a la DB.
+      # Los valores deben existir en GitHub → Settings → Secrets and variables → Actions.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+      # Tests unitarios (jest + ts-jest). No requieren conexión a Supabase.
+      - name: Test
+        run: npm test

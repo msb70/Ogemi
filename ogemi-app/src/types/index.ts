@@ -3,7 +3,7 @@ export type PresupuestoEstado = 'pendiente' | 'pagada';
 export type FacturaEstado = 'pendiente' | 'pagada';
 export type CompraEstado = 'pendiente' | 'pagada';
 export type MovimientoTipo = 'ingreso' | 'egreso';
-export type TramoCartera = 'corriente' | '1-30' | '31-60' | '61-90' | '+120';
+export type TramoCartera = 'corriente' | '1-30' | '31-60' | '61-90' | '91-120' | '+120';
 
 export interface Cliente {
   id: string;

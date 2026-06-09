@@ -11,6 +11,8 @@ import {
   TrendingDown, Clock, CheckCircle, ShoppingCart, Pencil, Trash2,
   QrCode, Loader2, AlertCircle, Link
 } from 'lucide-react'
+import { Toast } from '@/components/Toast'
+import { useToast } from '@/hooks/useToast'
 import QrScanner from '@/components/QrScanner'
 
 type Tab = 'listado' | 'vencidas'
@@ -24,11 +26,11 @@ interface LineaPago {
 
 const TRAMO_COLORS: Record<string, string> = {
   'corriente': '#22c55e', '1-30': '#facc15',
-  '31-60': '#fb923c', '61-90': '#f87171', '+120': '#b91c1c',
+  '31-60': '#fb923c', '61-90': '#f87171', '91-120': '#ef4444', '+120': '#b91c1c',
 }
 const TRAMO_LABELS: Record<string, string> = {
   'corriente': 'Al día', '1-30': '1–30 días',
-  '31-60': '31–60 días', '61-90': '61–90 días', '+120': '+120 días',
+  '31-60': '31–60 días', '61-90': '61–90 días', '91-120': '91–120 días', '+120': '+120 días',
 }
 
 export default function ComprasPage() {
@@ -76,6 +78,7 @@ export default function ComprasPage() {
   })
 
   const supabase = createClient()
+  const { toast, showToast, hideToast } = useToast()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -144,24 +147,35 @@ export default function ComprasPage() {
       fecha_pago: form.estado === 'pagada' ? form.fecha_pago : null,
       notas: form.notas || null,
     }
+    let error
     if (editId) {
-      await supabase.from('compras').update(payload).eq('id', editId)
+      ;({ error } = await supabase.from('compras').update(payload).eq('id', editId))
     } else {
-      await supabase.from('compras').insert(payload)
+      ;({ error } = await supabase.from('compras').insert(payload))
     }
     setSaving(false)
-    setShowForm(false)
-    resetForm()
-    load()
+    if (error) {
+      showToast(`Error al guardar: ${error.message}`, 'error')
+    } else {
+      setShowForm(false)
+      resetForm()
+      showToast(editId ? 'Compra actualizada' : 'Compra registrada', 'success')
+      load()
+    }
   }
 
   const handlePagar = async (c: Compra, cuentaId: string) => {
-    await supabase.from('compras').update({
+    const { error } = await supabase.from('compras').update({
       estado: 'pagada',
       banco_cuenta_id: cuentaId,
       fecha_pago: new Date().toISOString().split('T')[0],
     }).eq('id', c.id)
-    load()
+    if (error) {
+      showToast(`Error al registrar pago: ${error.message}`, 'error')
+    } else {
+      showToast('Compra marcada como pagada', 'success')
+      load()
+    }
   }
 
   const openPagarModal = async (c: Compra) => {
@@ -187,7 +201,7 @@ export default function ComprasPage() {
     const validas = lineas.filter(l => l.cuenta_id && parseFloat(l.monto) > 0)
     if (validas.length === 0) return
     setSavingPago(true)
-    await supabase.from('pagos').insert(
+    const { error } = await supabase.from('pagos').insert(
       validas.map(l => ({
         compra_id: selectedCompra.id,
         cuenta_id: l.cuenta_id,
@@ -197,8 +211,13 @@ export default function ComprasPage() {
       }))
     )
     setSavingPago(false)
-    setShowPagoModal(false)
-    load()
+    if (error) {
+      showToast(`Error al registrar abono: ${error.message}`, 'error')
+    } else {
+      setShowPagoModal(false)
+      showToast('Abono registrado correctamente', 'success')
+      load()
+    }
   }
 
   const handleQrScan = async (detectedUrl?: string) => {
@@ -302,6 +321,7 @@ export default function ComprasPage() {
 
   return (
     <AppLayout>
+      {toast && <Toast {...toast} onClose={hideToast} />}
       <Header
         title="Compras"
         subtitle={`${countPendiente} compras pendientes · ${formatCurrency(totalPendiente)}`}
