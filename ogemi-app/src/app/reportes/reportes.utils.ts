@@ -97,7 +97,7 @@ export function buildVencimientoSemanal(
   grandTotal: number
 } {
   const lastDate = dates[dates.length - 1]
-  const rows = items
+  const rows: (Record<string, unknown> & { fridayIdx: number })[] = items
     .filter(item => {
       if (item.estado !== 'pendiente') return false
       const fd = item[dateField] ? new Date((item[dateField] as string) + 'T00:00:00') : null
