@@ -126,7 +126,7 @@ export function buildVencimientoViernes(
   grandTotal: number
 } {
   const lastFriday = fridays[fridays.length - 1]
-  const rows = facturas
+  const rows: (Record<string, unknown> & { fridayIdx: number })[] = facturas
     .filter(f => {
       if (f.estado !== 'pendiente' || isNC(f.tipo_documento as string)) return false
       const fp = f.fecha_pago ? new Date((f.fecha_pago as string) + 'T00:00:00') : null
