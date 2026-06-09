@@ -1,12 +1,16 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useState, type FormEvent } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Lock, Mail } from 'lucide-react'
 
 function LoginContent() {
   const [loading, setLoading] = useState(false)
+  const [emailLoading, setEmailLoading] = useState(false)
   const [error, setError] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
@@ -28,6 +32,26 @@ function LoginContent() {
       setError('Error al iniciar sesión con Google. Intenta de nuevo.')
       setLoading(false)
     }
+  }
+
+  const handleEmailLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setEmailLoading(true)
+    setError('')
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    })
+
+    if (error) {
+      setError('Correo o contraseña incorrectos.')
+      setEmailLoading(false)
+      return
+    }
+
+    router.push('/dashboard')
+    router.refresh()
   }
 
   return (
@@ -53,9 +77,57 @@ function LoginContent() {
             </div>
           )}
 
+          <form onSubmit={handleEmailLogin} className="space-y-3">
+            <label className="block">
+              <span className="sr-only">Correo</span>
+              <div className="relative">
+                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={email}
+                  onChange={event => setEmail(event.target.value)}
+                  placeholder="Correo"
+                  className="input w-full pl-9"
+                />
+              </div>
+            </label>
+
+            <label className="block">
+              <span className="sr-only">Contraseña</span>
+              <div className="relative">
+                <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={event => setPassword(event.target.value)}
+                  placeholder="Contraseña"
+                  className="input w-full pl-9"
+                />
+              </div>
+            </label>
+
+            <button
+              type="submit"
+              disabled={emailLoading || loading}
+              className="w-full rounded-lg bg-brand-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {emailLoading ? 'Ingresando...' : 'Ingresar con correo'}
+            </button>
+          </form>
+
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-gray-200" />
+            <span className="text-xs font-medium text-gray-400">o</span>
+            <div className="h-px flex-1 bg-gray-200" />
+          </div>
+
           <button
             onClick={handleGoogleLogin}
-            disabled={loading}
+            disabled={loading || emailLoading}
             className="w-full flex items-center justify-center gap-3 border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {/* Google SVG icon */}
