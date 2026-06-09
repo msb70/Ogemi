@@ -35,3 +35,19 @@ next-env.d.ts
 .vscode/
 *.swp
 *.swo
+
+# Artefactos de trabajo / outputs de Claude
+outputs/
+.playwright-mcp/
+push_github.sh
+
+# Archivos de trabajo sueltos en raíz del repo
+reportes-page-modificado.tsx
+vencimiento-semanal.html
+*.pptx
+*.xlsx
+*.html
+
+# Snapshots de playwright
+*.yml
+
