@@ -54,3 +54,4 @@ vencimiento-semanal.html
 
 # Snapshots de playwright
 *.yml
+.Rhistory

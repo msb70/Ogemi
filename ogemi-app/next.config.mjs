@@ -9,7 +9,7 @@ const securityHeaders = [
   // Limita información enviada en el Referer header
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   // Desactiva features del navegador no necesarias
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+  { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=()' },
   // CSP básico: permite recursos propios + Supabase + estilos inline (necesario para Tailwind)
   {
     key: 'Content-Security-Policy',

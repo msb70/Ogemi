@@ -63,7 +63,10 @@ function ProveedoresPage() {
     if (editId) {
       await supabase.from('proveedores').update(payload).eq('id', editId)
     } else {
-      await supabase.from('proveedores').insert(payload)
+      await supabase.from('proveedores').insert({
+        ...payload,
+        created_at: new Date().toISOString(),
+      })
     }
     setSaving(false)
     handleClose()

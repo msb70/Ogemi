@@ -24,7 +24,10 @@ export function formatDateObj(d: Date): string {
 /** Formatea un string de fecha (YYYY-MM-DD) a DD/MM/YYYY */
 export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
-  return formatDateObj(new Date(dateStr + 'T00:00:00'))
+  const normalized = dateStr.includes('T') ? dateStr : `${dateStr}T00:00:00`
+  const date = new Date(normalized)
+  if (Number.isNaN(date.getTime())) return '—'
+  return formatDateObj(date)
 }
 
 export function classifyTramo(diasVencida: number): string {

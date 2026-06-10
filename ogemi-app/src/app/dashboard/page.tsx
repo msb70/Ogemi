@@ -23,6 +23,11 @@ interface KPI {
   comprasMonto: number; comprasCount: number
 }
 
+interface PendingSummary {
+  ventasMonto: number; ventasCount: number
+  comprasMonto: number; comprasCount: number
+}
+
 interface BarPoint { label: string; ventas: number; nc: number; compras: number }
 interface PiePoint { name: string; value: number }
 
@@ -89,7 +94,7 @@ function TrendBadge({ value }: { value: number | null }) {
 }
 
 function isNotaCreditо(tipoDoc: string): boolean {
-  const t = tipoDoc.toUpperCase()
+  const t = String(tipoDoc || '').toUpperCase()
   return t.includes('NOTA') || t.includes('N/C') || t.includes('CREDITO')
 }
 
@@ -122,6 +127,7 @@ function DashboardPage() {
 
   const [kpi, setKpi] = useState<KPI>({ ventasMonto:0, ventasCount:0, ncMonto:0, ncCount:0, comprasMonto:0, comprasCount:0 })
   const [prevKpi, setPrevKpi] = useState<KPI>({ ventasMonto:0, ventasCount:0, ncMonto:0, ncCount:0, comprasMonto:0, comprasCount:0 })
+  const [pendingSummary, setPendingSummary] = useState<PendingSummary>({ ventasMonto:0, ventasCount:0, comprasMonto:0, comprasCount:0 })
   const [saldoBancos, setSaldoBancos] = useState(0)
   const [barData, setBarData] = useState<BarPoint[]>([])
   const [pieVentas, setPieVentas] = useState<PiePoint[]>([])
@@ -142,12 +148,16 @@ function DashboardPage() {
         { data: comprasCur },
         { data: comprasPrev },
         { data: cuentas },
+        { data: facturasPendientes },
+        { data: comprasPendientes },
       ] = await Promise.all([
         supabase.from('facturas').select('fecha,total,tipo_documento,cliente_id,clientes(nombre)').gte('fecha', start).lte('fecha', end),
         supabase.from('facturas').select('fecha,total,tipo_documento').gte('fecha', prevStart).lte('fecha', prevEnd),
         supabase.from('compras').select('fecha,total,proveedor_id,proveedores(nombre)').gte('fecha', start).lte('fecha', end),
         supabase.from('compras').select('fecha,total').gte('fecha', prevStart).lte('fecha', prevEnd),
         supabase.from('banco_cuentas').select('id,saldo_inicial').eq('activo', true),
+        supabase.from('facturas').select('total,monto_pagado,tipo_documento').eq('estado', 'pendiente'),
+        supabase.from('compras').select('total,monto_pagado').eq('estado', 'pendiente'),
       ])
 
       // KPI actual
@@ -177,6 +187,15 @@ function DashboardPage() {
         comprasCount: comprasPrevArr.length,
       })
 
+      const ventasPendientes = (facturasPendientes || []).filter(f => !isNotaCreditо(f.tipo_documento))
+      const comprasPendientesArr = comprasPendientes || []
+      setPendingSummary({
+        ventasMonto: ventasPendientes.reduce((s, f) => s + Math.max(0, (f.total || 0) - (f.monto_pagado || 0)), 0),
+        ventasCount: ventasPendientes.length,
+        comprasMonto: comprasPendientesArr.reduce((s, c) => s + Math.max(0, (c.total || 0) - (c.monto_pagado || 0)), 0),
+        comprasCount: comprasPendientesArr.length,
+      })
+
       // Saldo bancos
       if (cuentas && cuentas.length > 0) {
         let totalSaldo = cuentas.reduce((s, c) => s + (c.saldo_inicial || 0), 0)
@@ -187,6 +206,8 @@ function DashboardPage() {
           totalSaldo += ingresos - egresos
         }
         setSaldoBancos(totalSaldo)
+      } else {
+        setSaldoBancos(0)
       }
 
       // Bar chart data
@@ -370,6 +391,41 @@ function DashboardPage() {
                 <p className="text-xs text-gray-500 font-medium">Compras</p>
                 <p className="text-2xl font-bold text-orange-700 mt-0.5">{formatCurrency(kpi.comprasMonto)}</p>
                 <p className="text-xs text-gray-400 mt-0.5">{kpi.comprasCount} compras</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="card p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-9 h-9 bg-sky-100 rounded-xl flex items-center justify-center">
+                    <FileText size={17} className="text-sky-700" />
+                  </div>
+                  <span className="badge bg-sky-100 text-sky-700">{pendingSummary.ventasCount} facturas</span>
+                </div>
+                <p className="text-xs text-gray-500 font-medium">Ventas pendientes por cobrar</p>
+                <p className="text-2xl font-bold text-sky-800 mt-0.5">{formatCurrency(pendingSummary.ventasMonto)}</p>
+              </div>
+
+              <div className="card p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-9 h-9 bg-red-100 rounded-xl flex items-center justify-center">
+                    <ShoppingCart size={17} className="text-red-600" />
+                  </div>
+                  <span className="badge bg-red-100 text-red-700">{pendingSummary.comprasCount} facturas</span>
+                </div>
+                <p className="text-xs text-gray-500 font-medium">Compras pendientes por pagar</p>
+                <p className="text-2xl font-bold text-red-700 mt-0.5">{formatCurrency(pendingSummary.comprasMonto)}</p>
+              </div>
+
+              <div className="card p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-9 h-9 bg-emerald-100 rounded-xl flex items-center justify-center">
+                    <Building2 size={17} className="text-emerald-700" />
+                  </div>
+                  <span className="badge bg-emerald-100 text-emerald-700">Bancos</span>
+                </div>
+                <p className="text-xs text-gray-500 font-medium">Saldo total de todos los bancos</p>
+                <p className="text-2xl font-bold text-emerald-800 mt-0.5">{formatCurrency(saldoBancos)}</p>
               </div>
             </div>
 

@@ -19,7 +19,6 @@ type VentasSubTab =
   | 'cartera'
   | 'porcliente'
   | 'pormes'
-  | 'semanal'
   | 'vencimiento_pivot'
   | 'antiguedad_pivot'
 
@@ -45,7 +44,6 @@ export default function VentasTab({
           { key: 'cartera',    label: 'Cartera vencida' },
           { key: 'porcliente', label: 'Por cliente' },
           { key: 'pormes',     label: 'Por período' },
-          { key: 'semanal',    label: 'Vencimiento semanal' },
           { key: 'vencimiento_pivot', label: 'Vencimiento x semana' },
           { key: 'antiguedad_pivot',  label: 'Antigüedad de cartera' },
         ].map(s => (

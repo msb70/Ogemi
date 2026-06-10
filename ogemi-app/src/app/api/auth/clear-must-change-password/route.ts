@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase-admin'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 export const dynamic = 'force-dynamic'
@@ -12,7 +13,14 @@ export async function POST() {
     return NextResponse.json({ error: 'No autenticado.' }, { status: 401 })
   }
 
-  const { error } = await supabase
+  let admin
+  try {
+    admin = createAdminClient()
+  } catch {
+    return NextResponse.json({ error: 'Falta configurar SUPABASE_SERVICE_ROLE_KEY.' }, { status: 500 })
+  }
+
+  const { error } = await admin
     .from('user_profiles')
     .update({ must_change_password: false, updated_at: new Date().toISOString() })
     .eq('id', user.id)

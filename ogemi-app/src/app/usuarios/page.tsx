@@ -27,9 +27,13 @@ import type { Modulo, RoleRecord, RolPermiso, UserProfile } from '@/types/auth'
 interface TempPasswordModal {
   email: string
   password: string
+  emailStatus?: {
+    sent: boolean
+    error?: string
+  }
 }
 
-function TempPasswordDialog({ email, password, onClose }: TempPasswordModal & { onClose: () => void }) {
+function TempPasswordDialog({ email, password, emailStatus, onClose }: TempPasswordModal & { onClose: () => void }) {
   const [copied, setCopied] = useState(false)
 
   function handleCopy() {
@@ -56,6 +60,18 @@ function TempPasswordDialog({ email, password, onClose }: TempPasswordModal & { 
           Comparte esta contraseña con <span className="font-medium text-gray-700">{email}</span>.
           El usuario deberá cambiarla en su primer inicio de sesión.
         </p>
+
+        <div
+          className={`mb-4 rounded-lg border px-3 py-2 text-xs ${
+            emailStatus?.sent
+              ? 'border-green-200 bg-green-50 text-green-700'
+              : 'border-amber-200 bg-amber-50 text-amber-700'
+          }`}
+        >
+          {emailStatus?.sent
+            ? 'El correo de bienvenida fue enviado.'
+            : emailStatus?.error || 'El correo no fue enviado porque falta configurar el proveedor de email.'}
+        </div>
 
         <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 mb-4">
           <span className="flex-1 font-mono text-lg font-bold tracking-widest text-gray-800 select-all">
@@ -231,7 +247,16 @@ function UsuariosPage() {
       setNewUser({ email: '', nombre: '', rol_id: 'visor', activo: true })
       showToast('Usuario creado correctamente.')
       if (result.tempPassword) {
-        setTempPasswordModal({ email: createdEmail, password: result.tempPassword })
+        setTempPasswordModal({
+          email: createdEmail,
+          password: result.tempPassword,
+          emailStatus: result.emailStatus,
+        })
+      }
+      if (result.emailStatus?.sent) {
+        showToast('Usuario creado y correo enviado.')
+      } else if (result.emailStatus?.error) {
+        showToast(`Usuario creado. No se envió el correo: ${result.emailStatus.error}`, 'error')
       }
       await loadAll()
     } catch (error) {
@@ -250,9 +275,13 @@ function UsuariosPage() {
         body: JSON.stringify({ id: user.id, reset_password: true }),
       })
       if (result.tempPassword) {
-        setTempPasswordModal({ email: user.email, password: result.tempPassword })
+        setTempPasswordModal({
+          email: user.email,
+          password: result.tempPassword,
+          emailStatus: result.emailStatus,
+        })
       }
-      showToast('Contraseña reseteada.')
+      showToast(result.emailStatus?.sent ? 'Contraseña reseteada y correo enviado.' : 'Contraseña reseteada.')
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'No se pudo resetear la contraseña.', 'error')
     } finally {

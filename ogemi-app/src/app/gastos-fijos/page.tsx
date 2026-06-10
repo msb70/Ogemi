@@ -52,7 +52,7 @@ function GastosFijosPage() {
   const [cuentasPorCobrar, setCuentasPorCobrar] = useState(0)
   const [facturasPendientes, setFacturasPendientes] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [savingRow, setSavingRow] = useState<string | null>(null)
+  const [savingMontos, setSavingMontos] = useState(false)
   const [nuevoGasto, setNuevoGasto] = useState({ nombre: '', categoria: '' })
 
   const periodo = useMemo(() => monthToPeriod(periodoMes), [periodoMes])
@@ -172,26 +172,35 @@ function GastosFijosPage() {
     loadGastos()
   }
 
-  const guardarFila = async (gastoId: string) => {
-    const valores = montos[gastoId] || { 15: '', 30: '' }
-    setSavingRow(gastoId)
+  const guardarMontos = async () => {
+    const rows = gastos
+      .filter(gasto => gasto.activo)
+      .flatMap(gasto => {
+        const valores = montos[gasto.id] || { 15: '', 30: '' }
+        return [
+          {
+            gasto_fijo_id: gasto.id,
+            periodo,
+            dia_corte: 15,
+            monto: parseFloat(valores[15] || '0') || 0,
+          },
+          {
+            gasto_fijo_id: gasto.id,
+            periodo,
+            dia_corte: 30,
+            monto: parseFloat(valores[30] || '0') || 0,
+          },
+        ]
+      })
 
-    const { error } = await supabase.from('gastos_fijos_montos').upsert([
-      {
-        gasto_fijo_id: gastoId,
-        periodo,
-        dia_corte: 15,
-        monto: parseFloat(valores[15] || '0') || 0,
-      },
-      {
-        gasto_fijo_id: gastoId,
-        periodo,
-        dia_corte: 30,
-        monto: parseFloat(valores[30] || '0') || 0,
-      },
-    ], { onConflict: 'gasto_fijo_id,periodo,dia_corte' })
+    if (rows.length === 0) return
 
-    setSavingRow(null)
+    setSavingMontos(true)
+    const { error } = await supabase
+      .from('gastos_fijos_montos')
+      .upsert(rows, { onConflict: 'gasto_fijo_id,periodo,dia_corte' })
+
+    setSavingMontos(false)
     if (error) {
       showToast(`Error al guardar montos: ${error.message}`, 'error')
       return
@@ -369,7 +378,16 @@ function GastosFijosPage() {
                   <th className="table-header text-right">15</th>
                   <th className="table-header text-right">30</th>
                   <th className="table-header">Estado</th>
-                  <th className="table-header">Guardar</th>
+                  <th className="table-header">
+                    <button
+                      className="btn-secondary inline-flex items-center gap-2 py-1.5 text-xs"
+                      onClick={guardarMontos}
+                      disabled={savingMontos || loading || gastos.every(gasto => !gasto.activo)}
+                    >
+                      <Save size={14} />
+                      {savingMontos ? 'Guardando' : 'Guardar'}
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -406,16 +424,7 @@ function GastosFijosPage() {
                           {gasto.activo ? 'Activo' : 'Inactivo'}
                         </button>
                       </td>
-                      <td className="table-cell">
-                        <button
-                          className="btn-secondary inline-flex items-center gap-2"
-                          onClick={() => guardarFila(gasto.id)}
-                          disabled={savingRow === gasto.id || !gasto.activo}
-                        >
-                          <Save size={14} />
-                          {savingRow === gasto.id ? 'Guardando' : 'Guardar'}
-                        </button>
-                      </td>
+                      <td className="table-cell"></td>
                     </tr>
                   ))
                 )}

@@ -21,6 +21,7 @@ export async function GET() {
 
     return NextResponse.json({ route: '/inicio' })
   } catch {
-    return NextResponse.json({ route: '/inicio' })
+    await supabase.auth.signOut()
+    return NextResponse.json({ route: '/login?error=unauthorized' }, { status: 403 })
   }
 }
