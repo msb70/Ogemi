@@ -361,7 +361,7 @@ export default function ComprasTab({
           )}
 
           {compSearch && compRows.length === 0 && (
-            <p className="text-center text-gray-400 text-sm">Sin resultados para "{compSearch}"</p>
+            <p className="text-center text-gray-400 text-sm">Sin resultados para &quot;{compSearch}&quot;</p>
           )}
         </div>
       )}

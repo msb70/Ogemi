@@ -149,7 +149,7 @@ export default function AdminPage() {
             <div>
               <p className="text-sm font-medium text-brand-800">¿Cómo agregar un nuevo usuario?</p>
               <p className="text-sm text-brand-600 mt-0.5">
-                1. El usuario debe registrarse en <strong>Supabase Authentication</strong> (o usa la función "Invite user" en el dashboard de Supabase).
+                1. El usuario debe registrarse en <strong>Supabase Authentication</strong> (o usa la función &quot;Invite user&quot; en el dashboard de Supabase).
                 2. Luego ejecuta en Supabase SQL:
               </p>
               <code className="block mt-2 bg-brand-100 rounded-lg px-3 py-2 text-xs text-brand-800 font-mono">

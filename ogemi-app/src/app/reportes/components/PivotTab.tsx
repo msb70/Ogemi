@@ -211,7 +211,7 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
           )}
 
           {viernesSearch && viernesRows.length === 0 && (
-            <p className="text-center text-gray-400 text-sm">Sin resultados para "{viernesSearch}"</p>
+            <p className="text-center text-gray-400 text-sm">Sin resultados para &quot;{viernesSearch}&quot;</p>
           )}
         </div>
       )}

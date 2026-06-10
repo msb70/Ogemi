@@ -384,7 +384,7 @@ export default function PresupuestosTab({
           )}
 
           {presSearch && presRows.length === 0 && (
-            <p className="text-center text-gray-400 text-sm">Sin resultados para "{presSearch}"</p>
+            <p className="text-center text-gray-400 text-sm">Sin resultados para &quot;{presSearch}&quot;</p>
           )}
         </div>
       )}
