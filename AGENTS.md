@@ -11,21 +11,27 @@ extraer cada cierto tiempo de una hoja de excel el libro de venta se guarda en u
 
 ## Vercel publication procedure
 
-The reliable production publication path for this project is a manual Vercel deploy from the Next.js app directory:
+**Production publishes automatically on every `git push` to `main`.** Verified working 2026-06-10
+(project `ogemi` in team `ogemi-s-projects`, Root Directory `ogemi-app`, Git connected to msb70/Ogemi).
+No manual command is needed.
+
+To verify a publication: Vercel dashboard (ogemi account) → project `ogemi` → Deployments →
+the newest entry must show the commit message with status `Ready` and the `Production` badge,
+aliased to https://ogemi-iota.vercel.app.
+
+Manual deploy — FALLBACK ONLY (e.g. Git integration down). It streams build output, useful for debugging:
 
 ```bash
 cd /Users/miguelspina/Documents/Claude/Projects/Ogemi/ogemi-app
 npx -y vercel@latest --prod --yes --scope team_skSZ5uPbcIfbs7LyfcHeca63
 ```
 
-After deployment, verify the public alias:
-
-```bash
-npx -y vercel@latest inspect https://ogemi-iota.vercel.app --scope team_skSZ5uPbcIfbs7LyfcHeca63
-```
-
-The deploy is successful when `ogemi-iota.vercel.app` is aliased to a deployment with `status Ready`.
-Avoid relying only on failed automatic Git deployments for debugging; when Vercel logs are missing, rerun the manual command above because it streams the build output.
+WARNINGS:
+- Do NOT look at the Vercel dashboard of the personal msb account: its `ogemi` project
+  (ogemi.vercel.app) is an obsolete duplicate pointing at the paused Supabase project (arill...).
+  It must be deleted; until then, ignore it.
+- The CI on GitHub Actions (lint, typecheck, build, test) is the quality gate: if CI is red,
+  do not consider the push publishable even if Vercel deploys it.
 
 ## Admin user management
 
