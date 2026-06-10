@@ -342,7 +342,7 @@ function ComprasPage() {
       />
 
       {/* Tabs */}
-      <div className="bg-white border-b border-gray-200 px-6">
+      <div className="bg-white border-b border-gray-200 px-4 md:px-6 overflow-x-auto">
         <div className="flex gap-1">
           {[{ key: 'listado', label: 'Listado' }, { key: 'vencidas', label: 'Cuentas por pagar' }].map(t => (
             <button key={t.key} onClick={() => setTab(t.key as Tab)}
@@ -400,8 +400,69 @@ function ComprasPage() {
               )}
             </div>
 
-            {/* Tabla */}
-            <div className="card overflow-hidden">
+            {/* Tarjetas (solo móvil) */}
+            <div className="md:hidden space-y-3">
+              {loading ? (
+                <div className="card p-6 text-center text-gray-400">Cargando...</div>
+              ) : filtered.length === 0 ? (
+                <div className="card p-6 text-center text-gray-400">
+                  <ShoppingCart size={32} className="mx-auto mb-2 opacity-30" />
+                  Sin compras registradas
+                </div>
+              ) : filtered.map(c => {
+                const hoy = new Date().toISOString().split('T')[0]
+                const vencida = c.vencimiento && c.estado === 'pendiente' && c.vencimiento < hoy
+                return (
+                  <div key={c.id} className={`card p-4 ${vencida ? 'border-red-200 bg-red-50/30' : ''}`}>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="font-medium text-sm flex-1 min-w-0 truncate">{(c.proveedores as any)?.nombre || '—'}</p>
+                      <span className={`badge flex items-center gap-1 flex-shrink-0 ${
+                        c.estado === 'pagada' ? 'bg-green-100 text-green-700' : vencida ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                      }`}>
+                        {c.estado === 'pagada' ? <CheckCircle size={11} /> : <Clock size={11} />}
+                        {c.estado === 'pagada' ? 'Pagada' : vencida ? 'Vencida' : 'Pendiente'}
+                      </span>
+                    </div>
+                    {c.concepto && <p className="text-xs text-gray-500 mb-2 line-clamp-2">{c.concepto}</p>}
+                    <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+                      <span>Fecha: {formatDate(c.fecha)}</span>
+                      {c.vencimiento && (
+                        <span className={vencida ? 'text-red-600 font-medium' : ''}>
+                          Vence: {formatDate(c.vencimiento)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-end justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-lg font-bold text-gray-900">{formatCurrency(c.total)}</p>
+                        <p className="text-[11px] text-gray-400">
+                          Monto {formatCurrency(c.monto)} · ITBMS {formatCurrency(c.itbms)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button onClick={() => handleOpenForm(c)}
+                          className="p-2 rounded-lg text-gray-500 border border-gray-200 hover:text-brand-600 hover:bg-brand-50"
+                          aria-label="Editar">
+                          <Pencil size={15} />
+                        </button>
+                        {c.estado === 'pendiente' && (
+                          <button
+                            onClick={() => openPagarModal(c)}
+                            className="flex items-center gap-1 text-sm text-green-700 font-medium border border-green-300 bg-green-50 rounded-lg px-3 py-2"
+                          >
+                            <CheckCircle size={14} />
+                            {(c.monto_pagado || 0) > 0 ? 'Abonar' : 'Pagar'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Tabla (solo escritorio) */}
+            <div className="card overflow-hidden hidden md:block">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
@@ -507,8 +568,35 @@ function ComprasPage() {
               </div>
             </div>
 
-            {/* Tabla */}
-            <div className="card overflow-hidden">
+            {/* Tarjetas (solo móvil) */}
+            <div className="md:hidden space-y-3">
+              {vencidas.length === 0 ? (
+                <div className="card p-6 text-center text-gray-400">Sin cuentas pendientes</div>
+              ) : vencidas.map((c: any) => (
+                <div key={c.id} className="card p-4">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <p className="font-medium text-sm flex-1 min-w-0 truncate">{c.proveedor}</p>
+                    <span className="badge text-xs flex-shrink-0" style={{
+                      backgroundColor: TRAMO_COLORS[c.tramo] + '20',
+                      color: TRAMO_COLORS[c.tramo],
+                    }}>
+                      {TRAMO_LABELS[c.tramo]}
+                    </span>
+                  </div>
+                  {c.concepto && <p className="text-xs text-gray-500 mb-2 line-clamp-2">{c.concepto}</p>}
+                  <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+                    <span>Vence: {formatDate(c.vencimiento)}</span>
+                    <span className={c.dias_vencida > 0 ? 'text-red-600 font-medium' : 'text-green-600'}>
+                      {c.dias_vencida > 0 ? `${c.dias_vencida} días vencida` : 'Al día'}
+                    </span>
+                  </div>
+                  <p className="text-lg font-bold text-gray-900">{formatCurrency(c.total)}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Tabla (solo escritorio) */}
+            <div className="card overflow-hidden hidden md:block">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
