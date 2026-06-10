@@ -39,12 +39,13 @@ jobs:
         run: npm run typecheck
 
       # next build requiere las vars de entorno para compilar aunque no acceda a la DB.
-      # Los valores deben existir en GitHub → Settings → Secrets and variables → Actions.
+      # Si los secrets no están configurados en GitHub se usan placeholders:
+      # alcanzan para validar el build (el deploy real lo hace Vercel con sus propias vars).
       - name: Build
         run: npm run build
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
 
       # Tests unitarios (jest + ts-jest). No requieren conexión a Supabase.
       - name: Test
