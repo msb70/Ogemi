@@ -1,10 +1,10 @@
-import type { Config } from 'jest'
-
 /**
  * Configuración Jest con ts-jest para tests de utilidades puras (sin componentes React).
+ * En .js (no .ts) para no requerir ts-node como dependencia adicional.
  * Para tests de componentes Next.js en el futuro, migrar a next/jest con SWC transformer.
  */
-const config: Config = {
+/** @type {import('jest').Config} */
+const config = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   // Resolver path aliases de tsconfig.json (@/ → src/)
@@ -12,7 +12,6 @@ const config: Config = {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   // Excluir imports de módulos que no son necesarios en tests de utilidades
-  // (react, next, etc.) — si se necesitan en el futuro, agregar mocks aquí
   transformIgnorePatterns: [
     '/node_modules/(?!(xlsx)/)',
   ],
@@ -28,4 +27,4 @@ const config: Config = {
   ],
 }
 
-export default config
+module.exports = config

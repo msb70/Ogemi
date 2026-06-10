@@ -1,5 +1,7 @@
+import { randomBytes } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-api'
+import { sendWelcomeEmail } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 
@@ -7,9 +9,53 @@ function normalizeEmail(value: unknown) {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
 }
 
-function generateTempPassword(): string {
+function generateTempPassword(length = 14): string {
+  // SEC: generación criptográficamente segura (no Math.random).
+  // Alfabeto sin caracteres ambiguos (I/l/1, O/0) para facilitar transcripción.
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
-  return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  const bytes = randomBytes(length)
+  return Array.from(bytes, byte => chars[byte % chars.length]).join('')
+}
+
+async function findAuthUserByEmail(admin: ReturnType<typeof import('@/lib/supabase-admin').createAdminClient>, email: string) {
+  const normalizedEmail = email.toLowerCase()
+  let page = 1
+
+  while (page <= 20) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 })
+    if (error) throw error
+
+    const user = (data.users || []).find(authUser => authUser.email?.toLowerCase() === normalizedEmail)
+    if (user) return user
+    if ((data.users || []).length < 1000) break
+    page += 1
+  }
+
+  return null
+}
+
+async function deleteAuthUsersByEmail(admin: ReturnType<typeof import('@/lib/supabase-admin').createAdminClient>, email: string) {
+  const normalizedEmail = email.toLowerCase()
+  const ids = new Set<string>()
+  let page = 1
+
+  while (page <= 20) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 })
+    if (error) throw error
+
+    const users = data.users || []
+    users
+      .filter(authUser => authUser.email?.toLowerCase() === normalizedEmail)
+      .forEach(authUser => ids.add(authUser.id))
+
+    if (users.length < 1000) break
+    page += 1
+  }
+
+  for (const id of ids) {
+    const { error } = await admin.auth.admin.deleteUser(id)
+    if (error) throw error
+  }
 }
 
 export async function GET() {
@@ -60,35 +106,77 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'El rol seleccionado no existe.' }, { status: 400 })
   }
 
+  const { data: existingProfile, error: existingProfileError } = await admin
+    .from('user_profiles')
+    .select('id')
+    .eq('email', email)
+    .maybeSingle()
+
+  if (existingProfileError) {
+    return NextResponse.json({ error: existingProfileError.message }, { status: 500 })
+  }
+
+  if (existingProfile) {
+    return NextResponse.json({ error: 'Este correo ya existe en Usuarios.' }, { status: 400 })
+  }
+
   const tempPassword = generateTempPassword()
+  const now = new Date().toISOString()
+  let authUserId = ''
 
-  const { data: created, error: createError } = await admin.auth.admin.createUser({
-    email,
-    password: tempPassword,
-    email_confirm: true,
-    user_metadata: {
-      full_name: nombre || email.split('@')[0],
-    },
-  })
+  try {
+    const existingAuthUser = await findAuthUserByEmail(admin, email)
 
-  if (createError || !created.user?.id) {
+    if (existingAuthUser) {
+      authUserId = existingAuthUser.id
+      const { error: updateAuthError } = await admin.auth.admin.updateUserById(authUserId, {
+        password: tempPassword,
+        user_metadata: {
+          full_name: nombre || email.split('@')[0],
+        },
+      })
+
+      if (updateAuthError) {
+        return NextResponse.json({ error: updateAuthError.message }, { status: 500 })
+      }
+    } else {
+      const { data: created, error: createError } = await admin.auth.admin.createUser({
+        email,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: {
+          full_name: nombre || email.split('@')[0],
+        },
+      })
+
+      if (createError || !created.user?.id) {
+        return NextResponse.json(
+          { error: createError?.message || 'No se pudo crear el usuario.' },
+          { status: 400 }
+        )
+      }
+
+      authUserId = created.user.id
+    }
+  } catch (authLookupError) {
     return NextResponse.json(
-      { error: createError?.message || 'No se pudo crear el usuario.' },
-      { status: 400 }
+      { error: authLookupError instanceof Error ? authLookupError.message : 'No se pudo validar el usuario Auth.' },
+      { status: 500 }
     )
   }
 
   const { data: profile, error: profileError } = await admin
     .from('user_profiles')
     .upsert({
-      id: created.user.id,
+      id: authUserId,
       email,
       nombre: nombre || email.split('@')[0],
       avatar_url: null,
       rol_id: rolId,
       activo,
       must_change_password: true,
-      updated_at: new Date().toISOString(),
+      created_at: now,
+      updated_at: now,
     })
     .select('*')
     .single()
@@ -97,7 +185,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: profileError.message }, { status: 500 })
   }
 
-  return NextResponse.json({ usuario: profile, tempPassword })
+  const emailStatus = await sendWelcomeEmail({
+    to: email,
+    name: nombre || email.split('@')[0],
+    tempPassword,
+  })
+
+  return NextResponse.json({ usuario: profile, tempPassword, emailStatus })
 }
 
 export async function PATCH(request: NextRequest) {
@@ -137,7 +231,22 @@ export async function PATCH(request: NextRequest) {
       .from('user_profiles')
       .update({ must_change_password: true, updated_at: new Date().toISOString() })
       .eq('id', userId)
-    return NextResponse.json({ ok: true, tempPassword: newPassword })
+
+    const { data: profile } = await admin
+      .from('user_profiles')
+      .select('email,nombre')
+      .eq('id', userId)
+      .maybeSingle()
+
+    const emailStatus = profile?.email
+      ? await sendWelcomeEmail({
+          to: normalizeEmail(profile.email),
+          name: profile.nombre || normalizeEmail(profile.email).split('@')[0],
+          tempPassword: newPassword,
+        })
+      : { sent: false, provider: 'none' as const, error: 'No se encontró el correo del usuario.' }
+
+    return NextResponse.json({ ok: true, tempPassword: newPassword, emailStatus })
   }
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
@@ -182,7 +291,7 @@ export async function DELETE(request: NextRequest) {
 
   const { data: profile, error: profileLookupError } = await admin
     .from('user_profiles')
-    .select('id')
+    .select('id, email')
     .eq('id', userId)
     .maybeSingle()
 
@@ -194,16 +303,27 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'El usuario no existe.' }, { status: 404 })
   }
 
+  const email = normalizeEmail(profile.email)
+
   const { error: authDeleteError } = await admin.auth.admin.deleteUser(userId)
 
   if (authDeleteError) {
     return NextResponse.json({ error: authDeleteError.message }, { status: 500 })
   }
 
+  try {
+    await deleteAuthUsersByEmail(admin, email)
+  } catch (deleteByEmailError) {
+    return NextResponse.json(
+      { error: deleteByEmailError instanceof Error ? deleteByEmailError.message : 'No se pudo borrar el usuario Auth por correo.' },
+      { status: 500 }
+    )
+  }
+
   const { error: profileDeleteError } = await admin
     .from('user_profiles')
     .delete()
-    .eq('id', userId)
+    .eq('email', email)
 
   if (profileDeleteError) {
     return NextResponse.json({ error: profileDeleteError.message }, { status: 500 })
