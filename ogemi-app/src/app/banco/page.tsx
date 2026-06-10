@@ -180,7 +180,7 @@ function BancoPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-4 md:p-6">
 
         {/* TAB: CUENTAS */}
         {tab === 'cuentas' && (
@@ -192,7 +192,7 @@ function BancoPage() {
             </div>
 
             {showNuevaCuenta && (
-              <div className="card p-4 grid grid-cols-2 gap-3">
+              <div className="card p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><label className="label">Nombre</label><input className="input" value={nuevaCuenta.nombre} onChange={e => setNuevaCuenta(p => ({ ...p, nombre: e.target.value }))} /></div>
                 <div><label className="label">Banco</label><input className="input" value={nuevaCuenta.banco} onChange={e => setNuevaCuenta(p => ({ ...p, banco: e.target.value }))} /></div>
                 <div><label className="label">N° de cuenta</label><input className="input" value={nuevaCuenta.numero_cuenta} onChange={e => setNuevaCuenta(p => ({ ...p, numero_cuenta: e.target.value }))} /></div>
@@ -397,7 +397,7 @@ function BancoPage() {
                   {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>)}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Tipo</label>
                   <select className="input" value={nuevoForm.tipo} onChange={e => setNuevoForm(p => ({ ...p, tipo: e.target.value }))}>
@@ -414,7 +414,7 @@ function BancoPage() {
                 <label className="label">Concepto</label>
                 <input className="input" placeholder="Descripción del movimiento" value={nuevoForm.concepto} onChange={e => setNuevoForm(p => ({ ...p, concepto: e.target.value }))} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Monto (USD)</label>
                   <input type="number" step="0.01" className="input" placeholder="0.00" value={nuevoForm.monto} onChange={e => setNuevoForm(p => ({ ...p, monto: e.target.value }))} />

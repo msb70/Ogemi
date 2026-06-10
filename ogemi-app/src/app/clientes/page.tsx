@@ -116,7 +116,7 @@ function ClientesPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-4 md:p-6">
         {/* New cliente form */}
         {showNew && (
           <div className="card p-4 mb-4 flex items-center gap-3">

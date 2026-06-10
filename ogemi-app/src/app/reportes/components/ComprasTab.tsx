@@ -97,7 +97,7 @@ export default function ComprasTab({
               <Download size={14} />Exportar
             </button>
           </div>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: 'Total compras', val: comprasFiltradas.reduce((s, c) => s + (c.total || 0), 0), color: 'text-brand-700' },
               { label: 'Pagado', val: comprasFiltradas.filter(c => c.estado === 'pagada').reduce((s, c) => s + (c.total || 0), 0), color: 'text-green-600' },
@@ -147,7 +147,7 @@ export default function ComprasTab({
 
       {comprasTab === 'cxp' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
             {TRAMOS.map(tramo => {
               const items = cxp.filter((c: any) => c.tramo === tramo)
               return (
@@ -252,7 +252,7 @@ export default function ComprasTab({
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             {compWeekDateObjs.map((_, i) => {
               const c = WEEK_COLORS[i]
               const cnt = vencCompras.rows.filter((r: any) => r.fridayIdx === i).length

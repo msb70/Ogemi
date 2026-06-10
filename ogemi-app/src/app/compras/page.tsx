@@ -355,13 +355,13 @@ function ComprasPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-4 md:p-6">
 
         {/* TAB: LISTADO */}
         {tab === 'listado' && (
           <div className="space-y-4">
             {/* KPIs */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="card p-4">
                 <p className="text-xs text-gray-500 mb-1">Pendiente de pago</p>
                 <p className="text-xl font-bold text-orange-600">{formatCurrency(totalPendiente)}</p>
@@ -483,7 +483,7 @@ function ComprasPage() {
         {tab === 'vencidas' && (
           <div className="space-y-5">
             {/* Tramos */}
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
               {resumenTramos.map(t => (
                 <div key={t.tramo} className="card p-4">
                   <div className="flex items-center gap-2 mb-2">
@@ -626,7 +626,7 @@ function ComprasPage() {
                       {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>)}
                     </select>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
                       <label className="label text-xs">Monto (USD)</label>
                       <input type="number" step="0.01" className="input text-sm" placeholder="0.00"
@@ -659,7 +659,7 @@ function ComprasPage() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold mb-5">{editId ? 'Editar compra' : 'Nueva compra'}</h2>
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Proveedor *</label>
                   <select className="input" value={form.proveedor_id}
@@ -684,7 +684,7 @@ function ComprasPage() {
                 <input className="input" placeholder="Ej: FAC-0012345" value={form.referencia}
                   onChange={e => setForm(f => ({ ...f, referencia: e.target.value }))} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Monto sin ITBMS (USD) *</label>
                   <input type="number" step="0.01" className="input" placeholder="0.00" value={form.monto}
@@ -720,7 +720,7 @@ function ComprasPage() {
                 </div>
               </div>
               {form.estado === 'pagada' && (
-                <div className="grid grid-cols-2 gap-3 border-t pt-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t pt-3">
                   <div>
                     <label className="label">Banco / Cuenta de pago</label>
                     <select className="input" value={form.banco_cuenta_id}

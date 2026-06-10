@@ -199,7 +199,7 @@ function ImportarPage() {
               <h3 className="text-lg font-semibold">Importación completada</h3>
             </div>
 
-            <div className="grid grid-cols-4 gap-4 mb-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-5">
               {[
                 { label: 'Total procesadas', value: result.total, color: 'text-gray-900' },
                 { label: 'Importadas', value: result.importadas, color: 'text-green-700' },

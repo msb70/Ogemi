@@ -35,6 +35,7 @@ declare module 'lucide-react' {
   export const Loader2: LucideIcon
   export const Lock: LucideIcon
   export const LogOut: LucideIcon
+  export const Menu: LucideIcon
   export const Mail: LucideIcon
   export const Minus: LucideIcon
   export const Pencil: LucideIcon

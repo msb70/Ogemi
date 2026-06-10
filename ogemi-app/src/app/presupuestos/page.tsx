@@ -221,7 +221,7 @@ function PresupuestosPage() {
 
       {/* KPIs */}
       <div className="px-6 py-4 bg-white border-b border-gray-100">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-orange-50 rounded-xl p-3">
             <p className="text-xs text-gray-500 mb-0.5">Pendiente de cobro</p>
             <p className="text-lg font-bold text-orange-600">{formatCurrency(totalPendiente)}</p>
@@ -263,7 +263,7 @@ function PresupuestosPage() {
       </div>
 
       {/* Tabla */}
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-4 md:p-6">
         <div className="card overflow-hidden">
           <table className="w-full">
             <thead>
@@ -393,7 +393,7 @@ function PresupuestosPage() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold mb-5">{editId ? 'Editar presupuesto' : 'Nuevo presupuesto'}</h2>
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Número</label>
                   <div className="input bg-gray-50 text-gray-500 font-mono flex items-center">
@@ -420,7 +420,7 @@ function PresupuestosPage() {
                 <input className="input" value={form.tipo_documento}
                   onChange={e => setForm(f => ({ ...f, tipo_documento: e.target.value }))} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Monto *</label>
                   <input type="number" step="0.01" className="input" placeholder="0.00"

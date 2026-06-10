@@ -64,7 +64,7 @@ export default function LibrosTab({
             </button>
           </div>
 
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: 'Total ventas',      val: ventasFiltradas.reduce((s, f) => s + (f.total || 0), 0),              color: 'text-brand-700' },
               { label: 'Total NC',          val: ncFiltradas.reduce((s, f) => s + Math.abs(f.total || 0), 0),          color: 'text-amber-600' },
@@ -172,7 +172,7 @@ export default function LibrosTab({
             </button>
           </div>
 
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: 'Total compras',      val: libroCompraFiltrado.reduce((s, c) => s + (c.total || 0), 0),                         color: 'text-orange-600' },
               { label: 'ITBMS acreditable',  val: libroCompraFiltrado.reduce((s, c) => s + (c.itbms || 0), 0),                         color: 'text-purple-600' },

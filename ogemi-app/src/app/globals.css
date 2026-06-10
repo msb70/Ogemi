@@ -36,4 +36,16 @@
   .table-cell {
     @apply px-4 py-3 text-sm text-gray-900 whitespace-nowrap;
   }
+  /* Responsive: toda tarjeta que contenga una tabla scrollea horizontal
+     en vez de desbordar la pantalla (gana a .overflow-hidden por especificidad) */
+  .card:has(table) {
+    @apply overflow-x-auto;
+  }
+}
+
+/* En móvil las tablas conservan un ancho mínimo legible y la tarjeta scrollea */
+@media (max-width: 767px) {
+  .card table {
+    min-width: 640px;
+  }
 }

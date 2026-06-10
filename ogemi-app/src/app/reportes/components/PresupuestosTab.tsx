@@ -97,7 +97,7 @@ export default function PresupuestosTab({
               <Download size={14} />Exportar
             </button>
           </div>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: 'Total presupuestado', val: presupuestosFiltrados.reduce((s, p) => s + (p.total || 0), 0), color: 'text-brand-700' },
               { label: 'Cobrado', val: presupuestosFiltrados.filter(p => p.estado === 'pagada').reduce((s, p) => s + (p.total || 0), 0), color: 'text-green-600' },
@@ -147,7 +147,7 @@ export default function PresupuestosTab({
 
       {presupuestosTab === 'cartera' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
             {TRAMOS.map(tramo => {
               const items = carteraPresupuestos.filter((c: any) => c.tramo === tramo)
               return (
@@ -205,7 +205,7 @@ export default function PresupuestosTab({
 
       {presupuestosTab === 'porcliente' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="card p-5">
               <h3 className="text-sm font-semibold text-gray-700 mb-3">Top clientes</h3>
               <ResponsiveContainer width="100%" height={320}>
@@ -277,7 +277,7 @@ export default function PresupuestosTab({
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             {presWeekDateObjs.map((_, i) => {
               const c = WEEK_COLORS[i]
               const cnt = vencPresupuestos.rows.filter((r: any) => r.fridayIdx === i).length

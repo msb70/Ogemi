@@ -70,7 +70,7 @@ export default function VentasTab({
               <Download size={14} />Exportar
             </button>
           </div>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: 'Total facturado', val: ventasFiltradas.reduce((s, f) => s + (f.total || 0), 0), color: 'text-brand-700' },
               { label: 'Cobrado', val: ventasFiltradas.filter(f => f.estado === 'pagada').reduce((s, f) => s + (f.total || 0), 0), color: 'text-green-600' },
@@ -120,7 +120,7 @@ export default function VentasTab({
 
       {ventasTab === 'cartera' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
             {TRAMOS.map(tramo => {
               const items = cartera.filter(c => c.tramo === tramo)
               return (
@@ -178,7 +178,7 @@ export default function VentasTab({
 
       {ventasTab === 'porcliente' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="card p-5">
               <h3 className="text-sm font-semibold text-gray-700 mb-3">Top clientes</h3>
               <ResponsiveContainer width="100%" height={320}>

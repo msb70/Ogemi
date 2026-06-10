@@ -104,7 +104,7 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             {weekDateObjs.map((_, i) => {
               const c = WEEK_COLORS[i]
               const cnt = vencViernes.rows.filter((r: any) => r.fridayIdx === i).length
@@ -218,7 +218,7 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
 
       {pivotTab === 'antigüedad' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
             {BUCKETS.map(bucket => {
               const total = pivotAnt.clientes.reduce((s: number, c: string) => s + (pivotAnt.data[c]?.[bucket.key] || 0), 0)
               return (
