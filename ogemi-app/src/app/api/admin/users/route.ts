@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
     tempPassword,
   })
 
-  return NextResponse.json({ usuario: profile, tempPassword, emailStatus })
+  return NextResponse.json({ usuario: profile, emailStatus })
 }
 
 export async function PATCH(request: NextRequest) {
@@ -246,7 +246,7 @@ export async function PATCH(request: NextRequest) {
         })
       : { sent: false, provider: 'none' as const, error: 'No se encontró el correo del usuario.' }
 
-    return NextResponse.json({ ok: true, tempPassword: newPassword, emailStatus })
+    return NextResponse.json({ ok: true, emailStatus })
   }
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }

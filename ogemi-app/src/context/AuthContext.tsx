@@ -46,6 +46,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(payload.user as User)
     setProfile(payload.profile as UserProfile)
     setPermisos((payload.permisos || {}) as Record<string, RolPermiso>)
+
+    if (
+      payload.profile?.must_change_password &&
+      typeof window !== 'undefined' &&
+      !window.location.pathname.startsWith('/auth/cambiar-password')
+    ) {
+      window.location.replace('/auth/cambiar-password')
+    }
   }, [rejectUnauthorizedSession])
 
   useEffect(() => {

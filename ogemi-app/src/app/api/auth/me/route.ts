@@ -2,9 +2,20 @@ import { NextResponse } from 'next/server'
 import { resolveAuthorizedProfile } from '@/lib/auth-profile'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import type { User } from '@supabase/supabase-js'
 import type { RolPermiso } from '@/types/auth'
 
 export const dynamic = 'force-dynamic'
+
+const AUTH_ME_CACHE_TTL_MS = 10_000
+
+type CachedAuthPayload = {
+  user: User
+  profile: Awaited<ReturnType<typeof resolveAuthorizedProfile>>
+  permisos: Record<string, RolPermiso>
+}
+
+const profileCache = new Map<string, { expiresAt: number; payload: CachedAuthPayload }>()
 
 export async function GET() {
   const supabase = await createServerSupabaseClient()
@@ -15,6 +26,13 @@ export async function GET() {
   }
 
   try {
+    const cached = profileCache.get(user.id)
+    if (cached && cached.expiresAt > Date.now()) {
+      return NextResponse.json(cached.payload, {
+        headers: { 'Cache-Control': 'private, no-store' },
+      })
+    }
+
     const profile = await resolveAuthorizedProfile(user)
     if (!profile) {
       await supabase.auth.signOut()
@@ -36,7 +54,15 @@ export async function GET() {
       permisosMap[permiso.modulo] = permiso
     })
 
-    return NextResponse.json({ user, profile, permisos: permisosMap })
+    const payload = { user, profile, permisos: permisosMap }
+    profileCache.set(user.id, {
+      expiresAt: Date.now() + AUTH_ME_CACHE_TTL_MS,
+      payload,
+    })
+
+    return NextResponse.json(payload, {
+      headers: { 'Cache-Control': 'private, no-store' },
+    })
   } catch {
     return NextResponse.json({ error: 'No se pudo cargar tu perfil de usuario.' }, { status: 500 })
   }

@@ -17,7 +17,8 @@ export async function GET(request: Request) {
           const profile = await resolveAuthorizedProfile(user)
           if (profile) {
             // Validación pasada: redirigir (respetando `next` solo si el perfil existe)
-            const destination = next ? `${origin}${next}` : `${origin}/inicio`
+            const safeNext = next?.startsWith('/') && !next.startsWith('//') ? next : '/inicio'
+            const destination = `${origin}${safeNext}`
             return NextResponse.redirect(destination)
           }
         } catch {}

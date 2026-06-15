@@ -210,6 +210,8 @@ export interface CompraVencida {
   monto: number;
   itbms: number;
   total: number;
+  monto_pagado: number;
+  saldo_pendiente: number;
   dias_vencida: number;
   tramo: TramoCartera;
 }

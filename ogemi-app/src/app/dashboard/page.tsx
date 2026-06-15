@@ -30,6 +30,12 @@ interface PendingSummary {
 
 interface BarPoint { label: string; ventas: number; nc: number; compras: number }
 interface PiePoint { name: string; value: number }
+interface ChartTooltipPayload {
+  dataKey: string
+  fill: string
+  name: string
+  value: number
+}
 
 const PIE_COLORS = [
   '#0284c7','#7c3aed','#059669','#d97706','#dc2626',
@@ -90,6 +96,28 @@ function TrendBadge({ value }: { value: number | null }) {
       {up ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
       {up ? '+' : ''}{value.toFixed(1)}%
     </span>
+  )
+}
+
+function CustomTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean
+  payload?: ChartTooltipPayload[]
+  label?: string
+}) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl shadow-lg p-3 text-sm">
+      <p className="font-semibold text-gray-700 mb-1">{label}</p>
+      {payload.map((p) => (
+        <p key={p.dataKey} style={{ color: p.fill }} className="text-xs">
+          {p.name}: {formatCurrency(p.value)}
+        </p>
+      ))}
+    </div>
   )
 }
 
@@ -268,31 +296,6 @@ function DashboardPage() {
     if (periodType === 'quarterly') return `Q${selQuarter} ${selYear}`
     return String(selYear)
   }, [periodType, selYear, selMonth, selQuarter])
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (!active || !payload?.length) return null
-    return (
-      <div className="bg-white border border-gray-200 rounded-xl shadow-lg p-3 text-sm">
-        <p className="font-semibold text-gray-700 mb-1">{label}</p>
-        {payload.map((p: any) => (
-          <p key={p.dataKey} style={{ color: p.fill }} className="text-xs">
-            {p.name}: {formatCurrency(p.value)}
-          </p>
-        ))}
-      </div>
-    )
-  }
-
-  const PieTooltip = ({ active, payload }: any) => {
-    if (!active || !payload?.length) return null
-    const total = payload[0].payload.total || 1
-    return (
-      <div className="bg-white border border-gray-200 rounded-xl shadow-lg p-2 text-xs">
-        <p className="font-medium">{payload[0].name}</p>
-        <p>{formatCurrency(payload[0].value)}</p>
-      </div>
-    )
-  }
 
   return (
     <AppLayout>

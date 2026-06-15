@@ -4,7 +4,6 @@ import { useState, useRef } from 'react'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
-import { parseLibroVentas } from '@/lib/excel-parser'
 import { formatDateObj } from '@/lib/utils'
 import { importarLibroVentas } from '@/lib/services/importar.service'
 import { ImportResult, ExcelRow } from '@/types'
@@ -32,6 +31,7 @@ function ImportarPage() {
 
     const buffer = await f.arrayBuffer()
     try {
+      const { parseLibroVentas } = await import('@/lib/excel-parser')
       const rows = parseLibroVentas(buffer)
       setPreview(rows)
     } catch (e) {

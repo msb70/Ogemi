@@ -9,8 +9,6 @@ import { formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
 import { Toast } from '@/components/Toast'
 import {
-  Check,
-  Copy,
   KeyRound,
   Lock,
   Plus,
@@ -20,82 +18,8 @@ import {
   UserCheck,
   UserPlus,
   UserX,
-  X,
 } from 'lucide-react'
 import type { Modulo, RoleRecord, RolPermiso, UserProfile } from '@/types/auth'
-
-interface TempPasswordModal {
-  email: string
-  password: string
-  emailStatus?: {
-    sent: boolean
-    error?: string
-  }
-}
-
-function TempPasswordDialog({ email, password, emailStatus, onClose }: TempPasswordModal & { onClose: () => void }) {
-  const [copied, setCopied] = useState(false)
-
-  function handleCopy() {
-    navigator.clipboard.writeText(password).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-2 text-brand-700">
-            <KeyRound size={18} />
-            <h2 className="font-semibold text-sm">Contraseña temporal</h2>
-          </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100">
-            <X size={16} className="text-gray-400" />
-          </button>
-        </div>
-
-        <p className="text-sm text-gray-500 mb-4">
-          Comparte esta contraseña con <span className="font-medium text-gray-700">{email}</span>.
-          El usuario deberá cambiarla en su primer inicio de sesión.
-        </p>
-
-        <div
-          className={`mb-4 rounded-lg border px-3 py-2 text-xs ${
-            emailStatus?.sent
-              ? 'border-green-200 bg-green-50 text-green-700'
-              : 'border-amber-200 bg-amber-50 text-amber-700'
-          }`}
-        >
-          {emailStatus?.sent
-            ? 'El correo de bienvenida fue enviado.'
-            : emailStatus?.error || 'El correo no fue enviado porque falta configurar el proveedor de email.'}
-        </div>
-
-        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 mb-4">
-          <span className="flex-1 font-mono text-lg font-bold tracking-widest text-gray-800 select-all">
-            {password}
-          </span>
-          <button
-            onClick={handleCopy}
-            className="p-1.5 rounded hover:bg-gray-200 transition-colors"
-            title="Copiar"
-          >
-            {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} className="text-gray-500" />}
-          </button>
-        </div>
-
-        <button
-          onClick={onClose}
-          className="w-full rounded-lg bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-800 transition-colors"
-        >
-          Entendido
-        </button>
-      </div>
-    </div>
-  )
-}
 
 const MODULES: { id: Modulo; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -147,7 +71,6 @@ function UsuariosPage() {
   const [deletingUser, setDeletingUser] = useState<string | null>(null)
   const [creatingUser, setCreatingUser] = useState(false)
   const [resettingPassword, setResettingPassword] = useState<string | null>(null)
-  const [tempPasswordModal, setTempPasswordModal] = useState<TempPasswordModal | null>(null)
   const [savingRole, setSavingRole] = useState(false)
   const [deletingRole, setDeletingRole] = useState(false)
   const [selectedRoleId, setSelectedRoleId] = useState('')
@@ -243,16 +166,7 @@ function UsuariosPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUser),
       })
-      const createdEmail = newUser.email
       setNewUser({ email: '', nombre: '', rol_id: 'visor', activo: true })
-      showToast('Usuario creado correctamente.')
-      if (result.tempPassword) {
-        setTempPasswordModal({
-          email: createdEmail,
-          password: result.tempPassword,
-          emailStatus: result.emailStatus,
-        })
-      }
       if (result.emailStatus?.sent) {
         showToast('Usuario creado y correo enviado.')
       } else if (result.emailStatus?.error) {
@@ -274,13 +188,6 @@ function UsuariosPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: user.id, reset_password: true }),
       })
-      if (result.tempPassword) {
-        setTempPasswordModal({
-          email: user.email,
-          password: result.tempPassword,
-          emailStatus: result.emailStatus,
-        })
-      }
       showToast(result.emailStatus?.sent ? 'Contraseña reseteada y correo enviado.' : 'Contraseña reseteada.')
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'No se pudo resetear la contraseña.', 'error')
@@ -532,6 +439,7 @@ function UsuariosPage() {
                                 onClick={() => updateUser(user.id, { activo: !user.activo })}
                                 disabled={isBusy || !canDeleteUsers}
                                 title={user.activo ? 'Desactivar usuario' : 'Activar usuario'}
+                                aria-label={user.activo ? `Desactivar usuario ${user.email}` : `Activar usuario ${user.email}`}
                                 className={`p-1.5 rounded-lg transition-colors ${
                                   user.activo
                                     ? 'text-red-400 hover:bg-red-50'
@@ -547,6 +455,7 @@ function UsuariosPage() {
                                 onClick={() => deleteUser(user)}
                                 disabled={isBusy || !canDeleteUsers}
                                 title="Borrar usuario"
+                                aria-label={`Borrar usuario ${user.email}`}
                                 className="p-1.5 rounded-lg text-red-600 transition-colors hover:bg-red-50 disabled:opacity-40"
                               >
                                 <Trash2 size={15} />
@@ -558,6 +467,7 @@ function UsuariosPage() {
                                 onClick={() => resetPassword(user)}
                                 disabled={isBusy || !canEditUsers}
                                 title="Resetear contraseña"
+                                aria-label={`Resetear contraseña de ${user.email}`}
                                 className="p-1.5 rounded-lg text-amber-600 transition-colors hover:bg-amber-50 disabled:opacity-40"
                               >
                                 <KeyRound size={15} />
@@ -568,6 +478,7 @@ function UsuariosPage() {
                               <a
                                 href="/auth/cambiar-password"
                                 title="Cambiar mi contraseña"
+                                aria-label="Cambiar mi contraseña"
                                 className="p-1.5 rounded-lg text-brand-600 transition-colors hover:bg-brand-50"
                               >
                                 <Lock size={15} />
@@ -684,14 +595,6 @@ function UsuariosPage() {
       </div>
 
       {toast && <Toast {...toast} onClose={hideToast} />}
-
-      {tempPasswordModal && (
-        <TempPasswordDialog
-          email={tempPasswordModal.email}
-          password={tempPasswordModal.password}
-          onClose={() => setTempPasswordModal(null)}
-        />
-      )}
     </AppLayout>
   )
 }

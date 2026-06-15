@@ -156,7 +156,7 @@ export default function ComprasTab({
                     <div className="w-3 h-3 rounded-full" style={{ background: TRAMO_COLORS_HEX[tramo] }} />
                     <span className="text-xs font-medium text-gray-600">{TRAMO_LABELS[tramo]}</span>
                   </div>
-                  <p className="text-lg font-bold">{formatCurrency(items.reduce((s: number, c: any) => s + c.total, 0))}</p>
+                  <p className="text-lg font-bold">{formatCurrency(items.reduce((s: number, c: any) => s + (c.saldo_pendiente ?? c.total), 0))}</p>
                   <p className="text-xs text-gray-400">{items.length} compras</p>
                 </div>
               )
@@ -169,7 +169,7 @@ export default function ComprasTab({
                 <th className="table-header">Concepto</th>
                 <th className="table-header">Vencimiento</th>
                 <th className="table-header text-right">Días</th>
-                <th className="table-header text-right">Total</th>
+                <th className="table-header text-right">Saldo</th>
                 <th className="table-header">Tramo</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-100">
@@ -183,7 +183,7 @@ export default function ComprasTab({
                         {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
                       </span>
                     </td>
-                    <td className="table-cell text-right font-semibold">{formatCurrency(c.total)}</td>
+                    <td className="table-cell text-right font-semibold">{formatCurrency(c.saldo_pendiente ?? c.total)}</td>
                     <td className="table-cell">
                       <span className="badge text-xs" style={{ backgroundColor: TRAMO_COLORS_HEX[c.tramo] + '20', color: TRAMO_COLORS_HEX[c.tramo] }}>
                         {TRAMO_LABELS[c.tramo]}
