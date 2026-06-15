@@ -65,6 +65,56 @@ export function parseNumeroExcel(cell: XLSX.CellObject | undefined): number {
   return isNaN(result) ? 0 : result
 }
 
+/**
+ * Parsea la celda de fecha del Libro de Ventas a un objeto Date.
+ *
+ * BUG CRÍTICO QUE RESUELVE (swap día/mes):
+ *   El archivo de Premium Soft trae las fechas como texto "DD/MM/YYYY" (europeo).
+ *   SheetJS, al leer el HTML, interpreta las fechas ambiguas (día ≤ 12) como
+ *   formato gringo MM/DD/YYYY y deja `cell.v` como un Date swapeado:
+ *     texto "12/05/2026" (12-may) → cell.v = 2026-12-05 (5-dic)  ❌
+ *   PERO `cell.w` SIEMPRE conserva el texto original "12/05/2026".  ✓ (verificado)
+ *
+ * Por eso parseamos SIEMPRE el texto DD/MM/YYYY desde `cell.w` (o desde `cell.v`
+ * si es string). Solo si no hay texto DD/MM/YYYY usable caemos a la
+ * interpretación de SheetJS (date serial / Date) como último recurso.
+ *
+ * Exportada para tests unitarios de regresión.
+ */
+export function parseFechaCell(cell: XLSX.CellObject | undefined): Date | null {
+  if (!cell) return null
+
+  // Fuente de verdad: el texto formateado conserva el orden DD/MM/YYYY original.
+  const rawText = (typeof cell.w === 'string'
+    ? cell.w
+    : (cell.t === 's' && cell.v != null ? String(cell.v) : '')
+  ).trim()
+
+  const m = rawText.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (m) {
+    const dd = parseInt(m[1], 10)
+    const mm = parseInt(m[2], 10)
+    const yyyy = parseInt(m[3], 10)
+    if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12) {
+      const d = new Date(yyyy, mm - 1, dd)
+      return isNaN(d.getTime()) ? null : d
+    }
+  }
+
+  // Último recurso (no debería ocurrir con este origen): confiar en SheetJS.
+  if (cell.t === 'd' && cell.v instanceof Date) {
+    return isNaN(cell.v.getTime()) ? null : cell.v
+  }
+  if (cell.t === 'n') {
+    const parsed = XLSX.SSF.parse_date_code(cell.v as number)
+    if (parsed) {
+      const d = new Date(parsed.y, parsed.m - 1, parsed.d)
+      return isNaN(d.getTime()) ? null : d
+    }
+  }
+  return null
+}
+
 export function parseLibroVentas(buffer: ArrayBuffer): ExcelRow[] {
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
   const sheetName = workbook.SheetNames[0]
@@ -98,26 +148,9 @@ export function parseLibroVentas(buffer: ArrayBuffer): ExcelRow[] {
     const nombreVal = cellNomb.v?.toString() || ''
     if (!nombreVal || nombreVal.startsWith('TOTAL') || nombreVal.startsWith('BASE')) continue
 
-    // Validar que la fecha sea válida
-    // SheetJS a veces parsea fechas como Date, a veces como número serial,
-    // y a veces las deja como string "DD/MM/YYYY" según el HTML de origen.
-    let fecha: Date
-    if (cellFecha.t === 'd') {
-      fecha = cellFecha.v as Date
-    } else if (cellFecha.t === 'n') {
-      const parsed = XLSX.SSF.parse_date_code(cellFecha.v as number)
-      fecha = new Date(parsed.y, parsed.m - 1, parsed.d)
-    } else if (cellFecha.t === 's') {
-      // Formato "DD/MM/YYYY" (separador de fecha europeo)
-      const str = cellFecha.v as string
-      const m = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
-      if (!m) continue
-      fecha = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]))
-    } else {
-      continue // saltar si no es fecha válida
-    }
-
-    if (!fecha || isNaN(fecha.getTime())) continue
+    // Parsear fecha (siempre desde texto DD/MM/YYYY — ver parseFechaCell).
+    const fecha = parseFechaCell(cellFecha)
+    if (!fecha) continue
 
     const row: ExcelRow = {
       fecha,

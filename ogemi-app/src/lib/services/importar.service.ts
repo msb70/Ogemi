@@ -37,6 +37,22 @@ export interface InsertBatchResult {
   errores: string[]
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Convierte un Date a string 'YYYY-MM-DD' usando los componentes LOCALES.
+ *
+ * NO usar toISOString(): convierte a UTC y puede correr la fecha un día
+ * según la zona horaria (ej. medianoche local en un servidor UTC). Como las
+ * facturas guardan solo la fecha (sin hora), tomamos año/mes/día locales.
+ */
+export function toISODateLocal(d: Date): string {
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
 // ── Lógica pura (sin Supabase — exportada para tests) ────────────────────────
 
 /**
@@ -93,7 +109,7 @@ export function buildInsertBatch(
 
     facturasAInsertar.push({
       numero_factura: row.numero_factura,
-      fecha: row.fecha.toISOString().split('T')[0],
+      fecha: toISODateLocal(row.fecha),
       cliente_id: clienteId,
       tipo_documento: row.tipo_documento,
       documento_afectado: row.documento_afectado,

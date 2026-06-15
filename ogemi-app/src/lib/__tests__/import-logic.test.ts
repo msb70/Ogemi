@@ -150,8 +150,9 @@ describe('buildInsertBatch — cliente sin ID en map', () => {
 // ── buildInsertBatch — construcción de campos ─────────────────────────────────
 
 describe('buildInsertBatch — mapeo de campos', () => {
-  test('fecha se formatea como YYYY-MM-DD', () => {
-    const preview = [makeRow({ fecha: new Date('2024-03-15') })]
+  test('fecha se formatea como YYYY-MM-DD (componentes locales, sin corrimiento UTC)', () => {
+    // El parser construye fechas con new Date(y, m-1, d) (local); replicamos eso.
+    const preview = [makeRow({ fecha: new Date(2024, 2, 15) })]
     const clientesMap = { 'CLIENTE SA': 'uuid-1' }
 
     const { facturasAInsertar } = buildInsertBatch(preview, clientesMap, new Set())

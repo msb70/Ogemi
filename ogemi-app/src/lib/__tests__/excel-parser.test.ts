@@ -8,8 +8,9 @@
  * y sirven como red de seguridad contra regresiones en parseNumeroExcel y classifyTramo.
  */
 
-import { parseNumeroExcel } from '../excel-parser'
+import { parseNumeroExcel, parseFechaCell } from '../excel-parser'
 import { classifyTramo } from '../utils'
+import { toISODateLocal } from '../services/importar.service'
 
 // ── parseNumeroExcel ──────────────────────────────────────────────────────────
 
@@ -65,6 +66,63 @@ describe('parseNumeroExcel — formato europeo (punto=miles, coma=decimal)', () 
 
   test('texto con espacios: " 373,10 " → 373.10', () => {
     expect(parseNumeroExcel({ w: ' 373,10 ', t: 's' })).toBeCloseTo(373.10, 2)
+  })
+})
+
+// ── parseFechaCell — swap día/mes de SheetJS ─────────────────────────────────
+
+describe('parseFechaCell — fechas DD/MM/YYYY (anti-swap SheetJS)', () => {
+  const ymd = (d: Date | null) =>
+    d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : null
+
+  test('CASO BUG — SheetJS swapea v a 5-dic, pero w="12/05/2026" → 12-mayo', () => {
+    // SheetJS interpretó "12/05/2026" como MM/DD → Date 2026-12-05 (swapeado)
+    const cell = { t: 'd', v: new Date(2026, 11, 5), w: '12/05/2026' } as any
+    expect(ymd(parseFechaCell(cell))).toBe('2026-05-12')
+  })
+
+  test('CASO BUG — w="03/06/2026" con v swapeado a 6-mar → 3-junio', () => {
+    const cell = { t: 'd', v: new Date(2026, 2, 6), w: '03/06/2026' } as any
+    expect(ymd(parseFechaCell(cell))).toBe('2026-06-03')
+  })
+
+  test('día > 12 (no ambiguo) — string "15/05/2026" → 15-mayo', () => {
+    const cell = { t: 's', v: '15/05/2026', w: '15/05/2026' } as any
+    expect(ymd(parseFechaCell(cell))).toBe('2026-05-15')
+  })
+
+  test('día > 12 — "28/02/2026" → 28-feb', () => {
+    const cell = { t: 's', v: '28/02/2026', w: '28/02/2026' } as any
+    expect(ymd(parseFechaCell(cell))).toBe('2026-02-28')
+  })
+
+  test('celda undefined → null', () => {
+    expect(parseFechaCell(undefined)).toBeNull()
+  })
+
+  test('texto no-fecha → null', () => {
+    expect(parseFechaCell({ t: 's', v: 'TOTAL', w: 'TOTAL' } as any)).toBeNull()
+  })
+
+  test('fallback a serial numérico cuando no hay texto DD/MM/YYYY', () => {
+    // 2026-05-12 como serial Excel (sin cell.w de fecha)
+    const serial = 46154 // 12-may-2026
+    const cell = { t: 'n', v: serial } as any
+    expect(ymd(parseFechaCell(cell))).toBe('2026-05-12')
+  })
+})
+
+// ── toISODateLocal — serialización sin corrimiento por timezone ──────────────
+
+describe('toISODateLocal — fecha local a YYYY-MM-DD', () => {
+  test('12-mayo-2026 → "2026-05-12"', () => {
+    expect(toISODateLocal(new Date(2026, 4, 12))).toBe('2026-05-12')
+  })
+  test('1-enero-2026 → "2026-01-01" (padding)', () => {
+    expect(toISODateLocal(new Date(2026, 0, 1))).toBe('2026-01-01')
+  })
+  test('31-diciembre-2026 → "2026-12-31"', () => {
+    expect(toISODateLocal(new Date(2026, 11, 31))).toBe('2026-12-31')
   })
 })
 
