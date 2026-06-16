@@ -8,7 +8,7 @@ import { formatCurrency } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
 import { Toast } from '@/components/Toast'
 import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
-import { CalendarDays, Plus, Save, WalletCards, Trash2 } from 'lucide-react'
+import { CalendarDays, Plus, Save, WalletCards, Trash2, X } from 'lucide-react'
 
 type GastoFijo = {
   id: string
@@ -76,6 +76,8 @@ function GastosFijosPage() {
   const [nuevoGasto, setNuevoGasto] = useState({ nombre: '', categoria: '' })
   const [gastoAEliminar, setGastoAEliminar] = useState<GastoFijo | null>(null)
   const [eliminando, setEliminando] = useState(false)
+  const [categoriaAEliminar, setCategoriaAEliminar] = useState<string | null>(null)
+  const [eliminandoCat, setEliminandoCat] = useState(false)
 
   const periodo = useMemo(() => monthToPeriod(periodoMes), [periodoMes])
 
@@ -293,6 +295,23 @@ function GastosFijosPage() {
     setGastos(prev => prev.map(g => (g.id === id ? { ...g, [field]: value } : g)))
   }
 
+  const eliminarCategoria = async () => {
+    if (!categoriaAEliminar) return
+    setEliminandoCat(true)
+    const { error } = await supabase
+      .from('gastos_fijos')
+      .update({ categoria: null })
+      .eq('categoria', categoriaAEliminar)
+    setEliminandoCat(false)
+    if (error) {
+      showToast(`Error al eliminar categoría: ${error.message}`, 'error')
+      return
+    }
+    showToast('Categoría eliminada.')
+    setCategoriaAEliminar(null)
+    loadGastos()
+  }
+
   const eliminarGasto = async () => {
     if (!gastoAEliminar) return
     setEliminando(true)
@@ -454,6 +473,28 @@ function GastosFijosPage() {
               Crear
             </button>
           </div>
+
+          {categorias.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <p className="label mb-2">Categorías existentes</p>
+              <div className="flex flex-wrap gap-2">
+                {categorias.map(cat => (
+                  <span key={cat} className="badge bg-gray-100 text-gray-600 inline-flex items-center gap-1.5">
+                    {cat}
+                    <PermissionGuard modulo="gastos_fijos" accion="editar" silent>
+                      <button
+                        onClick={() => setCategoriaAEliminar(cat)}
+                        className="text-gray-400 hover:text-red-600"
+                        title="Eliminar categoría (la quita de todos los gastos)"
+                      >
+                        <X size={13} />
+                      </button>
+                    </PermissionGuard>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="card overflow-hidden">
@@ -592,6 +633,37 @@ function GastosFijosPage() {
           </div>
         </section>
       </div>
+
+      {/* Modal: confirmar eliminación de categoría */}
+      {categoriaAEliminar && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold mb-1 flex items-center gap-2">
+              <Trash2 size={18} className="text-red-500" /> Eliminar categoría
+            </h2>
+            <p className="text-sm text-gray-600 mb-4">
+              ¿Eliminar la categoría <span className="font-semibold">{categoriaAEliminar}</span>?
+              Se quitará de todos los gastos que la usan (los gastos quedan sin categoría). No se borra ningún gasto.
+            </p>
+            <div className="flex gap-3">
+              <button
+                className="btn-secondary flex-1"
+                onClick={() => setCategoriaAEliminar(null)}
+                disabled={eliminandoCat}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn-primary flex-1 !bg-red-600 hover:!bg-red-700"
+                onClick={eliminarCategoria}
+                disabled={eliminandoCat}
+              >
+                {eliminandoCat ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal: confirmar eliminación */}
       {gastoAEliminar && (
