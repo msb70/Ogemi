@@ -6,11 +6,12 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate, formatDateObj } from '@/lib/utils'
 import { BancoCuenta, BancoMovimiento } from '@/types'
-import { Plus, Building2, TrendingUp, TrendingDown, Calendar, Printer } from 'lucide-react'
+import { Plus, Building2, TrendingUp, TrendingDown, Printer } from 'lucide-react'
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
 import { withPagePermission } from '@/components/PermissionGuard'
 import EstadoCuentaTab from './EstadoCuentaTab'
+import CierreMesTab from './CierreMesTab'
 
 type Tab = 'cuentas' | 'movimientos' | 'estado' | 'cierre'
 
@@ -21,13 +22,6 @@ function BancoPage() {
   const [cuentaSelected, setCuentaSelected] = useState<string>('')
   const [saldos, setSaldos] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
-
-  // Cierre de mes
-  const [periodoMes, setPeriodoMes] = useState(() => {
-    const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  })
-  const [saldoBanco, setSaldoBanco] = useState('')
-  const [notasCierre, setNotasCierre] = useState('')
 
   // Nuevo movimiento
   const [showNuevo, setShowNuevo] = useState(false)
@@ -121,24 +115,6 @@ function BancoPage() {
       setNuevaCuenta({ nombre: '', banco: '', numero_cuenta: '', saldo_inicial: '0' })
       showToast('Cuenta creada', 'success')
       loadData()
-    }
-  }
-
-  const handleCierreMes = async () => {
-    if (!cuentaSelected || !saldoBanco) return
-    const saldoSistema = saldos[cuentaSelected] || 0
-    const { error } = await supabase.from('cierre_mes').upsert({
-      cuenta_id: cuentaSelected,
-      periodo: periodoMes,
-      saldo_sistema: saldoSistema,
-      saldo_banco: parseFloat(saldoBanco),
-      notas: notasCierre || null,
-      cerrado: true,
-    }, { onConflict: 'cuenta_id,periodo' })
-    if (error) {
-      showToast(`Error al guardar cierre: ${error.message}`, 'error')
-    } else {
-      showToast(`Cierre guardado. Diferencia: ${formatCurrency(parseFloat(saldoBanco) - saldoSistema)}`, 'success')
     }
   }
 
@@ -327,71 +303,12 @@ function BancoPage() {
 
         {/* TAB: CIERRE DE MES */}
         {tab === 'cierre' && (
-          <div className="max-w-lg">
-            <div className="card p-6 space-y-4">
-              <div className="flex items-center gap-3 mb-2">
-                <Calendar size={20} className="text-brand-600" />
-                <h2 className="text-base font-semibold">Cierre de mes</h2>
-              </div>
-
-              <div>
-                <label className="label">Cuenta bancaria</label>
-                <select className="input" value={cuentaSelected} onChange={e => setCuentaSelected(e.target.value)}>
-                  {cuentas.map(c => (
-                    <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="label">Período (AAAA-MM)</label>
-                <input type="month" className="input" value={periodoMes} onChange={e => setPeriodoMes(e.target.value)} />
-              </div>
-
-              {cuentaSelected && (
-                <div className="bg-blue-50 rounded-xl p-4">
-                  <p className="text-sm text-blue-600 font-medium">Saldo en sistema</p>
-                  <p className="text-2xl font-bold text-blue-800">{formatCurrency(saldos[cuentaSelected] || 0)}</p>
-                </div>
-              )}
-
-              <div>
-                <label className="label">Saldo según estado de cuenta del banco (USD)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input"
-                  placeholder="0.00"
-                  value={saldoBanco}
-                  onChange={e => setSaldoBanco(e.target.value)}
-                />
-              </div>
-
-              {saldoBanco && cuentaSelected && (
-                <div className={`rounded-xl p-3 text-sm font-medium ${
-                  Math.abs(parseFloat(saldoBanco) - (saldos[cuentaSelected] || 0)) < 0.01
-                    ? 'bg-green-50 text-green-700'
-                    : 'bg-orange-50 text-orange-700'
-                }`}>
-                  Diferencia: {formatCurrency(parseFloat(saldoBanco) - (saldos[cuentaSelected] || 0))}
-                </div>
-              )}
-
-              <div>
-                <label className="label">Notas</label>
-                <textarea
-                  className="input min-h-[80px] resize-y"
-                  placeholder="Observaciones del cierre..."
-                  value={notasCierre}
-                  onChange={e => setNotasCierre(e.target.value)}
-                />
-              </div>
-
-              <button className="btn-primary w-full" onClick={handleCierreMes} disabled={!saldoBanco || !cuentaSelected}>
-                Guardar cierre de mes
-              </button>
-            </div>
-          </div>
+          <CierreMesTab
+            cuentas={cuentas}
+            cuentaInicial={cuentaSelected}
+            showToast={showToast}
+            onSaved={() => { loadData(); loadMovimientos() }}
+          />
         )}
       </div>
 
