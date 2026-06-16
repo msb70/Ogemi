@@ -198,33 +198,155 @@ export default function ComprasTab({
       )}
 
       {comprasTab === 'porproveedor' && (
-        <div className="card p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Top proveedores</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={topProveedores.slice(0, 10).map(([n, v]) => ({ name: n.substring(0, 18), monto: v }))}
-              layout="vertical" margin={{ left: 10, right: 30 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
-              <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={130} />
-              <Tooltip formatter={(v: number) => formatCurrency(v)} />
-              <Bar dataKey="monto" name="Compras" fill="#f97316" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="space-y-4">
+          <FiltrosBar {...{ search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }} />
+          {(() => {
+            const totalMonto = comprasFiltradas.reduce((s, c) => s + (c.total || 0), 0)
+            const totalCount = comprasFiltradas.length
+            const map: Record<string, { count: number; monto: number }> = {}
+            comprasFiltradas.forEach((c: any) => {
+              const k = c.proveedores?.nombre || 'Sin nombre'
+              if (!map[k]) map[k] = { count: 0, monto: 0 }
+              map[k].count += 1
+              map[k].monto += c.total || 0
+            })
+            const rows = Object.entries(map)
+              .map(([nombre, v]) => ({ nombre, count: v.count, monto: v.monto, pct: totalMonto > 0 ? (v.monto / totalMonto) * 100 : 0 }))
+              .sort((a, b) => b.monto - a.monto)
+            let acc = 0
+            return (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="card p-4">
+                    <p className="text-xs font-semibold uppercase text-gray-500">Total compras</p>
+                    <p className="text-2xl font-bold text-gray-900">{totalCount.toLocaleString('es-PA')}</p>
+                  </div>
+                  <div className="card p-4">
+                    <p className="text-xs font-semibold uppercase text-gray-500">Monto total</p>
+                    <p className="text-2xl font-bold text-orange-700">{formatCurrency(totalMonto)}</p>
+                  </div>
+                </div>
+                <div className="card overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 text-xs text-gray-500 uppercase border-b border-gray-200">
+                          <th className="text-left px-3 py-2 font-semibold">#</th>
+                          <th className="text-left px-3 py-2 font-semibold">Proveedor</th>
+                          <th className="text-right px-3 py-2 font-semibold">Compras</th>
+                          <th className="text-right px-3 py-2 font-semibold">Monto</th>
+                          <th className="text-right px-3 py-2 font-semibold">% del total</th>
+                          <th className="text-right px-3 py-2 font-semibold">% acumulado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {rows.length === 0 ? (
+                          <tr><td colSpan={6} className="text-center py-8 text-gray-400">Sin compras en el período</td></tr>
+                        ) : rows.map((r, i) => {
+                          acc += r.pct
+                          return (
+                            <tr key={r.nombre} className="hover:bg-gray-50">
+                              <td className="px-3 py-2 text-gray-400">{i + 1}</td>
+                              <td className="px-3 py-2 font-medium">{r.nombre}</td>
+                              <td className="px-3 py-2 text-right text-gray-500">{r.count}</td>
+                              <td className="px-3 py-2 text-right font-semibold">{formatCurrency(r.monto)}</td>
+                              <td className="px-3 py-2 text-right text-orange-700">{r.pct.toFixed(1)}%</td>
+                              <td className="px-3 py-2 text-right text-gray-600">{Math.min(acc, 100).toFixed(1)}%</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                      {rows.length > 0 && (
+                        <tfoot>
+                          <tr className="bg-gray-50 border-t border-gray-200 font-bold">
+                            <td className="px-3 py-2" colSpan={2}>Total</td>
+                            <td className="px-3 py-2 text-right">{totalCount}</td>
+                            <td className="px-3 py-2 text-right">{formatCurrency(totalMonto)}</td>
+                            <td className="px-3 py-2 text-right">100%</td>
+                            <td className="px-3 py-2"></td>
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  </div>
+                </div>
+                <div className="card p-5">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Top proveedores</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={topProveedores.slice(0, 10).map(([n, v]) => ({ name: n.substring(0, 18), monto: v }))}
+                      layout="vertical" margin={{ left: 10, right: 30 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                      <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={130} />
+                      <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                      <Bar dataKey="monto" name="Compras" fill="#f97316" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </>
+            )
+          })()}
         </div>
       )}
 
       {comprasTab === 'pormes' && (
-        <div className="card p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Compras mensuales</h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={comprasPorMes} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => formatCurrency(v)} />
-              <Bar dataKey="total" name="Compras" fill="#f97316" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="space-y-4">
+          <div className="card p-5">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4">Compras mensuales</h3>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={comprasPorMes} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                <Bar dataKey="total" name="Compras" fill="#f97316" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          {(() => {
+            const totalMonto = comprasPorMes.reduce((s, m) => s + (m.total || 0), 0)
+            const totalCount = comprasPorMes.reduce((s, m) => s + (m.count || 0), 0)
+            return (
+              <div className="card overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 text-xs text-gray-500 uppercase border-b border-gray-200">
+                        <th className="text-left px-3 py-2 font-semibold">Mes</th>
+                        <th className="text-right px-3 py-2 font-semibold">Compras</th>
+                        <th className="text-right px-3 py-2 font-semibold">Monto</th>
+                        <th className="text-right px-3 py-2 font-semibold">% del total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {comprasPorMes.length === 0 ? (
+                        <tr><td colSpan={4} className="text-center py-8 text-gray-400">Sin datos en el período</td></tr>
+                      ) : comprasPorMes.map(m => (
+                        <tr key={m.mes} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 font-medium">{m.mes}</td>
+                          <td className="px-3 py-2 text-right text-gray-500">{m.count}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{formatCurrency(m.total)}</td>
+                          <td className="px-3 py-2 text-right text-orange-700">
+                            {totalMonto > 0 ? ((m.total / totalMonto) * 100).toFixed(1) : '0.0'}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    {comprasPorMes.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-gray-50 border-t border-gray-200 font-bold">
+                          <td className="px-3 py-2">Total</td>
+                          <td className="px-3 py-2 text-right">{totalCount}</td>
+                          <td className="px-3 py-2 text-right">{formatCurrency(totalMonto)}</td>
+                          <td className="px-3 py-2 text-right">100%</td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )}
 
