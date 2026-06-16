@@ -66,6 +66,7 @@ function GastosFijosPage() {
   const [gastos, setGastos] = useState<GastoFijo[]>([])
   const [montos, setMontos] = useState<Record<string, MontosSemana>>({})
   const [semanaFechas, setSemanaFechas] = useState<string[]>(() => defaultWeekDates(currentMonth()))
+  const [cxcSemana, setCxcSemana] = useState<number[]>([0, 0, 0, 0])
   const [cuentas, setCuentas] = useState<BancoCuentaLite[]>([])
   const [saldoBancos, setSaldoBancos] = useState(0)
   const [cuentasPorCobrar, setCuentasPorCobrar] = useState(0)
@@ -86,6 +87,11 @@ function GastosFijosPage() {
   const totalGastos = useMemo(() => totalesSemana.reduce((a, b) => a + b, 0), [totalesSemana])
   const totalCxCBancos = cuentasPorCobrar + saldoBancos
   const disponibleDespuesGastos = totalCxCBancos - totalGastos
+
+  const categorias = useMemo(
+    () => Array.from(new Set(gastos.map(g => g.categoria).filter((c): c is string => !!c))).sort(),
+    [gastos]
+  )
 
   const loadGastos = useCallback(async () => {
     const { data, error } = await supabase
@@ -184,6 +190,24 @@ function GastosFijosPage() {
     setSaldoBancos(saldos.reduce((sum, result) => sum + (result.data || 0), 0))
   }, [fechaResumen, showToast, supabase])
 
+  const loadCxcSemana = useCallback(async (fechas: string[]) => {
+    const results = await Promise.all(
+      fechas.map(async fecha => {
+        if (!fecha) return 0
+        const { data } = await supabase
+          .from('facturas')
+          .select('total,monto_pagado')
+          .eq('estado', 'pendiente')
+          .lte('fecha_pago', fecha)
+        return (data || []).reduce(
+          (sum, f) => sum + Math.max(0, (f.total || 0) - (f.monto_pagado || 0)),
+          0
+        )
+      })
+    )
+    setCxcSemana(results)
+  }, [supabase])
+
   const loadAll = useCallback(async () => {
     setLoading(true)
     await Promise.all([loadGastos(), loadMontos(), loadSemanas(), loadResumen()])
@@ -191,6 +215,9 @@ function GastosFijosPage() {
   }, [loadGastos, loadMontos, loadSemanas, loadResumen])
 
   useEffect(() => { loadAll() }, [loadAll])
+
+  // Recalcular CxC vencida a la fecha de cada semana cuando cambian las fechas
+  useEffect(() => { loadCxcSemana(semanaFechas) }, [semanaFechas, loadCxcSemana])
 
   const crearGasto = async () => {
     const nombre = nuevoGasto.nombre.trim()
@@ -231,24 +258,37 @@ function GastosFijosPage() {
       fecha: semanaFechas[semana - 1] || defaultWeekDates(periodoMes)[semana - 1],
     }))
 
+    // Persistir nombres/categorías editados (solo filas con nombre no vacío)
+    const gastoRows = gastos
+      .filter(g => g.nombre.trim())
+      .map(g => ({ id: g.id, nombre: g.nombre.trim(), categoria: g.categoria?.trim() || null }))
+
     setSavingMontos(true)
 
-    const [montosRes, fechasRes] = await Promise.all([
+    const [montosRes, fechasRes, gastosRes] = await Promise.all([
       rows.length > 0
         ? supabase.from('gastos_fijos_montos').upsert(rows, { onConflict: 'gasto_fijo_id,periodo,semana' })
         : Promise.resolve({ error: null }),
       supabase.from('gastos_fijos_semanas').upsert(fechasRows, { onConflict: 'periodo,semana' }),
+      gastoRows.length > 0
+        ? supabase.from('gastos_fijos').upsert(gastoRows, { onConflict: 'id' })
+        : Promise.resolve({ error: null }),
     ])
 
     setSavingMontos(false)
 
-    const err = montosRes.error || fechasRes.error
+    const err = montosRes.error || fechasRes.error || gastosRes.error
     if (err) {
       showToast(`Error al guardar: ${err.message}`, 'error')
       return
     }
 
-    showToast('Montos y fechas guardados.')
+    showToast('Cambios guardados.')
+    loadGastos()
+  }
+
+  const updateGasto = (id: string, field: 'nombre' | 'categoria', value: string) => {
+    setGastos(prev => prev.map(g => (g.id === id ? { ...g, [field]: value } : g)))
   }
 
   const updateMonto = (gastoId: string, semana: Semana, value: string) => {
@@ -387,9 +427,10 @@ function GastosFijosPage() {
               <span className="label">Categoria</span>
               <input
                 className="input"
+                list="categorias-list"
                 value={nuevoGasto.categoria}
                 onChange={event => setNuevoGasto(prev => ({ ...prev, categoria: event.target.value }))}
-                placeholder="Administrativo, operativo..."
+                placeholder="Selecciona o crea una..."
               />
             </label>
             <button className="btn-primary inline-flex items-center gap-2" onClick={crearGasto}>
@@ -413,6 +454,10 @@ function GastosFijosPage() {
               {savingMontos ? 'Guardando' : 'Guardar'}
             </button>
           </div>
+
+          <datalist id="categorias-list">
+            {categorias.map(c => <option key={c} value={c} />)}
+          </datalist>
 
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -449,8 +494,24 @@ function GastosFijosPage() {
                     const totalFila = SEMANAS.reduce((sum, s) => sum + (parseFloat(fila[s] || '0') || 0), 0)
                     return (
                       <tr key={gasto.id} className={!gasto.activo ? 'opacity-50' : ''}>
-                        <td className="table-cell font-medium">{gasto.nombre}</td>
-                        <td className="table-cell text-gray-500">{gasto.categoria || '-'}</td>
+                        <td className="table-cell">
+                          <input
+                            className="input min-w-[160px]"
+                            value={gasto.nombre}
+                            onChange={event => updateGasto(gasto.id, 'nombre', event.target.value)}
+                            disabled={!gasto.activo}
+                          />
+                        </td>
+                        <td className="table-cell">
+                          <input
+                            className="input min-w-[150px]"
+                            list="categorias-list"
+                            value={gasto.categoria || ''}
+                            onChange={event => updateGasto(gasto.id, 'categoria', event.target.value)}
+                            placeholder="Categoría..."
+                            disabled={!gasto.activo}
+                          />
+                        </td>
                         {SEMANAS.map(semana => (
                           <td key={semana} className="table-cell">
                             <input
@@ -481,11 +542,21 @@ function GastosFijosPage() {
               {gastos.length > 0 && (
                 <tfoot>
                   <tr className="border-t border-gray-200 bg-gray-50">
-                    <td className="table-cell font-bold" colSpan={2}>Total</td>
+                    <td className="table-cell font-bold" colSpan={2}>Total semana</td>
                     {totalesSemana.map((total, i) => (
                       <td key={i} className="table-cell text-right font-bold">{formatCurrency(total)}</td>
                     ))}
                     <td className="table-cell text-right font-bold text-brand-700">{formatCurrency(totalGastos)}</td>
+                    <td className="table-cell"></td>
+                  </tr>
+                  <tr className="bg-gray-50">
+                    <td className="table-cell text-xs text-gray-500" colSpan={2}>CxC vencida a la fecha</td>
+                    {cxcSemana.map((v, i) => (
+                      <td key={i} className="table-cell text-right text-xs font-semibold text-orange-600">
+                        {formatCurrency(v)}
+                      </td>
+                    ))}
+                    <td className="table-cell"></td>
                     <td className="table-cell"></td>
                   </tr>
                 </tfoot>
