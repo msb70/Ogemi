@@ -80,6 +80,12 @@ function getPeriodRange(type: PeriodType, year: number, month: number, quarter: 
     prevStart = `${prevYear}-${String(prevMonth).padStart(2,'0')}-01`
     const prevLast = new Date(prevYear, prevMonth, 0).getDate()
     prevEnd = `${prevYear}-${String(prevMonth).padStart(2,'0')}-${prevLast}`
+  } else if (type === 'quarterly' && quarter === 0) {
+    // Todos los trimestres = año completo, comparado con el año anterior
+    start = `${year}-01-01`
+    end = `${year}-12-31`
+    prevStart = `${year - 1}-01-01`
+    prevEnd = `${year - 1}-12-31`
   } else if (type === 'quarterly') {
     const qStart = (quarter - 1) * 3 + 1
     const qEnd = quarter * 3
@@ -190,6 +196,8 @@ function generateBarLabels(type: PeriodType, year: number, month: number, quarte
   if (type === 'monthly') {
     const days = new Date(year, month, 0).getDate()
     return Array.from({ length: days }, (_, i) => String(i + 1))
+  } else if (type === 'quarterly' && quarter === 0) {
+    return ['Q1', 'Q2', 'Q3', 'Q4']
   } else if (type === 'quarterly') {
     const qStart = (quarter - 1) * 3 + 1
     return [qStart, qStart + 1, qStart + 2].map(m => MONTHS_ES[m - 1])
@@ -198,9 +206,10 @@ function generateBarLabels(type: PeriodType, year: number, month: number, quarte
   }
 }
 
-function getBarKey(type: PeriodType, dateStr: string): string {
+function getBarKey(type: PeriodType, dateStr: string, quarter: number): string {
   const d = new Date(dateStr + 'T00:00:00')
   if (type === 'monthly') return String(d.getDate())
+  if (type === 'quarterly' && quarter === 0) return `Q${Math.floor(d.getMonth() / 3) + 1}`
   return MONTHS_ES[d.getMonth()]
 }
 
@@ -309,15 +318,15 @@ function DashboardPage() {
       const barMap: Record<string, BarPoint> = {}
       labels.forEach(l => { barMap[l] = { label: l, ventas: 0, nc: 0, compras: 0 } })
       ventas.forEach(f => {
-        const key = getBarKey(periodType, f.fecha)
+        const key = getBarKey(periodType, f.fecha, selQuarter)
         if (barMap[key]) barMap[key].ventas += f.total || 0
       })
       nc.forEach(f => {
-        const key = getBarKey(periodType, f.fecha)
+        const key = getBarKey(periodType, f.fecha, selQuarter)
         if (barMap[key]) barMap[key].nc += Math.abs(f.total || 0)
       })
       comprasArr.forEach(c => {
-        const key = getBarKey(periodType, c.fecha)
+        const key = getBarKey(periodType, c.fecha, selQuarter)
         if (barMap[key]) barMap[key].compras += c.total || 0
       })
       setBarData(labels.map(l => barMap[l]))
@@ -365,7 +374,7 @@ function DashboardPage() {
 
   const periodLabel = useMemo(() => {
     if (periodType === 'monthly') return `${MONTHS_ES[selMonth - 1]} ${selYear}`
-    if (periodType === 'quarterly') return `Q${selQuarter} ${selYear}`
+    if (periodType === 'quarterly') return selQuarter === 0 ? `Trimestres ${selYear}` : `Q${selQuarter} ${selYear}`
     return String(selYear)
   }, [periodType, selYear, selMonth, selQuarter])
 
@@ -412,8 +421,9 @@ function DashboardPage() {
 
         {/* Trimestre (solo si trimestral) */}
         {periodType === 'quarterly' && (
-          <select className="input text-sm py-1.5 max-w-[90px]" value={selQuarter}
+          <select className="input text-sm py-1.5 max-w-[110px]" value={selQuarter}
             onChange={e => setSelQuarter(parseInt(e.target.value))}>
+            <option value={0}>Todos</option>
             {[1,2,3,4].map(q => <option key={q} value={q}>Q{q}</option>)}
           </select>
         )}
