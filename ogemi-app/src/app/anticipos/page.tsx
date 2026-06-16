@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import type { CSSProperties } from 'react'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
@@ -147,7 +148,7 @@ function AnticiposPage() {
     <AppLayout>
       {/* Área de impresión — solo visible al imprimir */}
       {printData && (
-        <div ref={printRef} className="print-only hidden print:block">
+        <div ref={printRef} id="recibo-print" className="hidden print:block">
           <ReciboAnticipo anticipo={printData} />
         </div>
       )}
@@ -452,8 +453,16 @@ function AnticiposPage() {
 
       <style>{`
         @media print {
-          body > * { display: none !important; }
-          .print-receipt { display: block !important; }
+          body * { visibility: hidden !important; }
+          #recibo-print, #recibo-print * { visibility: visible !important; }
+          #recibo-print {
+            display: block !important;
+            position: absolute;
+            left: 0; top: 0;
+            width: 100%;
+            padding: 24px;
+          }
+          @page { margin: 12mm; }
         }
       `}</style>
     </AppLayout>
@@ -468,70 +477,97 @@ export default withPagePermission(AnticiposPage, 'facturas', 'ver')
 function ReciboAnticipo({ anticipo, preview = false }: { anticipo: Anticipo; preview?: boolean }) {
   const fecha = formatDate(anticipo.fecha)
   const hoy = formatDate(new Date().toISOString().split('T')[0])
+  // Fuerza la impresión de colores de fondo
+  const exact = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as CSSProperties
+  const reciboNo = anticipo.id.slice(0, 8).toUpperCase()
 
   return (
-    <div className={`font-sans text-gray-900 ${preview ? 'text-sm' : ''}`}>
-      {/* Encabezado */}
-      <div className="text-center border-b-2 border-gray-900 pb-3 mb-4">
-        <h1 className="text-lg font-bold uppercase tracking-wide">Ogemi · Impresoras Comerciales</h1>
-        <p className="text-xs text-gray-500 mt-0.5">Recibo de Anticipo</p>
-      </div>
-
-      {/* Número y fecha */}
-      <div className="flex justify-between text-xs mb-4">
-        <div>
-          <span className="text-gray-500">Fecha emisión:</span>
-          <span className="ml-1 font-medium">{hoy}</span>
-        </div>
-        <div>
-          <span className="text-gray-500">Fecha depósito:</span>
-          <span className="ml-1 font-medium">{fecha}</span>
-        </div>
-      </div>
-
-      {/* Datos del cliente */}
-      <div className="border border-gray-200 rounded-lg p-3 mb-4 space-y-1.5">
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-500">Cliente:</span>
-          <span className="font-semibold">{anticipo.clientes?.nombre}</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-500">Cuenta:</span>
-          <span>{anticipo.banco_cuentas?.nombre} · {anticipo.banco_cuentas?.banco}</span>
-        </div>
-        {anticipo.numero_deposito && (
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">N° Depósito:</span>
-            <span className="font-mono">{anticipo.numero_deposito}</span>
+    <div className={`font-sans text-gray-900 mx-auto ${preview ? 'max-w-md' : 'max-w-xl'}`}>
+      <div className="rounded-2xl overflow-hidden border border-gray-200 shadow-sm">
+        {/* Encabezado con logo y marca */}
+        <div
+          className="flex items-center gap-4 px-6 py-5 text-white"
+          style={{ ...exact, background: 'linear-gradient(135deg, #0f766e 0%, #115e59 100%)' }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.jpeg"
+            alt="Logo"
+            className="w-16 h-16 rounded-xl bg-white object-contain p-1 shrink-0"
+            style={exact}
+          />
+          <div className="flex-1 min-w-0">
+            <h1 className="text-lg font-bold leading-tight">IMPRESOS COMERCIALES S.A.</h1>
+            <p className="text-xs text-white/80">RUC 1635517-1-672731 DV 0 · Río Abajo, Calle 8</p>
+            <p className="text-xs text-white/80">Tel. 6931-8390</p>
           </div>
-        )}
-        {anticipo.notas && (
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Notas:</span>
-            <span className="max-w-[200px] text-right">{anticipo.notas}</span>
+          <div className="text-right shrink-0">
+            <p className="text-[10px] uppercase tracking-widest text-white/70">Recibo de</p>
+            <p className="text-base font-bold">ANTICIPO</p>
+            <p className="text-[10px] text-white/70 font-mono mt-0.5">N° {reciboNo}</p>
           </div>
-        )}
-      </div>
-
-      {/* Monto */}
-      <div className="bg-gray-50 border-2 border-gray-900 rounded-lg p-4 text-center mb-4">
-        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Monto recibido</p>
-        <p className="text-3xl font-bold text-gray-900">{formatCurrency(anticipo.monto)}</p>
-      </div>
-
-      {/* Pie */}
-      <div className="text-center text-xs text-gray-400 border-t border-gray-200 pt-3">
-        <p>Este documento es un comprobante de anticipo.</p>
-        <p>No constituye una factura fiscal.</p>
-      </div>
-
-      {/* Firmas */}
-      <div className="flex justify-between mt-8 pt-4">
-        <div className="text-center">
-          <div className="border-t border-gray-400 pt-1 w-32 text-xs text-gray-500">Entregado por</div>
         </div>
-        <div className="text-center">
-          <div className="border-t border-gray-400 pt-1 w-32 text-xs text-gray-500">Recibido por</div>
+
+        <div className="p-6">
+          {/* Fechas */}
+          <div className="flex justify-between text-xs mb-4">
+            <div>
+              <span className="text-gray-400">Fecha de emisión</span>
+              <p className="font-semibold text-gray-700">{hoy}</p>
+            </div>
+            <div className="text-right">
+              <span className="text-gray-400">Fecha de depósito</span>
+              <p className="font-semibold text-gray-700">{fecha}</p>
+            </div>
+          </div>
+
+          {/* Datos */}
+          <div className="rounded-xl bg-gray-50 border border-gray-100 divide-y divide-gray-100 mb-5" style={exact}>
+            <div className="flex justify-between px-4 py-2.5 text-sm">
+              <span className="text-gray-500">Cliente</span>
+              <span className="font-semibold text-right">{anticipo.clientes?.nombre}</span>
+            </div>
+            <div className="flex justify-between px-4 py-2.5 text-sm">
+              <span className="text-gray-500">Cuenta de depósito</span>
+              <span className="text-right">{anticipo.banco_cuentas?.nombre} · {anticipo.banco_cuentas?.banco}</span>
+            </div>
+            {anticipo.numero_deposito && (
+              <div className="flex justify-between px-4 py-2.5 text-sm">
+                <span className="text-gray-500">N° de depósito</span>
+                <span className="font-mono text-right">{anticipo.numero_deposito}</span>
+              </div>
+            )}
+            {anticipo.notas && (
+              <div className="flex justify-between px-4 py-2.5 text-sm">
+                <span className="text-gray-500">Notas</span>
+                <span className="max-w-[260px] text-right text-gray-600">{anticipo.notas}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Monto */}
+          <div
+            className="rounded-xl px-6 py-5 text-center mb-5 border-2"
+            style={{ ...exact, borderColor: '#0f766e', background: '#f0fdfa' }}
+          >
+            <p className="text-[11px] text-teal-700 uppercase tracking-widest mb-1">Monto recibido</p>
+            <p className="text-4xl font-extrabold" style={{ color: '#0f766e' }}>{formatCurrency(anticipo.monto)}</p>
+          </div>
+
+          {/* Firmas */}
+          <div className="flex justify-between gap-8 mt-10 mb-2">
+            <div className="flex-1 text-center">
+              <div className="border-t border-gray-400 pt-1 text-xs text-gray-500">Entregado por</div>
+            </div>
+            <div className="flex-1 text-center">
+              <div className="border-t border-gray-400 pt-1 text-xs text-gray-500">Recibido por</div>
+            </div>
+          </div>
+
+          {/* Pie */}
+          <div className="text-center text-[10px] text-gray-400 border-t border-gray-100 pt-3 mt-4">
+            <p>Comprobante de anticipo · No constituye una factura fiscal.</p>
+          </div>
         </div>
       </div>
     </div>
