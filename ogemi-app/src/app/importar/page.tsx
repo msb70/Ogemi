@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
@@ -67,6 +67,17 @@ function ImportarPage() {
   }
 
   const fmt = (n: number) => new Intl.NumberFormat('es-PA', { style: 'currency', currency: 'USD' }).format(n)
+
+  // Totales de la vista previa (antes de importar)
+  const previewTotals = useMemo(() => {
+    let ventas = 0, nc = 0
+    for (const r of preview) {
+      if (/CREDITO/i.test(r.tipo_documento)) nc += r.total
+      else ventas += r.total
+    }
+    const round = (n: number) => Math.round(n * 100) / 100
+    return { ventas: round(ventas), nc: round(nc), neto: round(ventas + nc) }
+  }, [preview])
 
   return (
     <AppLayout>
@@ -139,6 +150,22 @@ function ImportarPage() {
                   <><Upload size={16} />Importar al sistema</>
                 )}
               </button>
+            </div>
+
+            {/* Totales de la vista previa */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-blue-50 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-blue-700">{fmt(previewTotals.ventas)}</p>
+                <p className="text-xs text-gray-500 mt-1">Total facturas</p>
+              </div>
+              <div className="bg-purple-50 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-purple-700">{fmt(previewTotals.nc)}</p>
+                <p className="text-xs text-gray-500 mt-1">Total notas de crédito</p>
+              </div>
+              <div className="bg-green-50 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-green-700">{fmt(previewTotals.neto)}</p>
+                <p className="text-xs text-gray-500 mt-1">Facturado − NC</p>
+              </div>
             </div>
 
             <div className="card overflow-hidden">
