@@ -149,7 +149,7 @@ function AnticiposPage() {
       {/* Área de impresión — solo visible al imprimir */}
       {printData && (
         <div ref={printRef} id="recibo-print" className="hidden print:block">
-          <ReciboAnticipo anticipo={printData} />
+          <ReciboAnticipo anticipo={printData} fullPage />
         </div>
       )}
 
@@ -460,9 +460,9 @@ function AnticiposPage() {
             position: absolute;
             left: 0; top: 0;
             width: 100%;
-            padding: 24px;
+            min-height: 100vh;
           }
-          @page { margin: 12mm; }
+          @page { margin: 14mm; }
         }
       `}</style>
     </AppLayout>
@@ -474,7 +474,7 @@ export default withPagePermission(AnticiposPage, 'facturas', 'ver')
 // ============================================================
 // Componente: Recibo de anticipo
 // ============================================================
-function ReciboAnticipo({ anticipo, preview = false }: { anticipo: Anticipo; preview?: boolean }) {
+function ReciboAnticipo({ anticipo, preview = false, fullPage = false }: { anticipo: Anticipo; preview?: boolean; fullPage?: boolean }) {
   const fecha = formatDate(anticipo.fecha)
   const hoy = formatDate(new Date().toISOString().split('T')[0])
   // Fuerza la impresión de colores de fondo
@@ -482,35 +482,38 @@ function ReciboAnticipo({ anticipo, preview = false }: { anticipo: Anticipo; pre
   const reciboNo = anticipo.id.slice(0, 8).toUpperCase()
 
   return (
-    <div className={`font-sans text-gray-900 mx-auto ${preview ? 'max-w-md' : 'max-w-xl'}`}>
-      <div className="rounded-2xl overflow-hidden border border-gray-200 shadow-sm">
+    <div
+      className={`font-sans text-gray-900 ${preview ? 'max-w-md mx-auto' : fullPage ? 'w-full' : 'max-w-xl mx-auto'}`}
+      style={fullPage ? { minHeight: 'calc(100vh - 28mm)', display: 'flex', flexDirection: 'column' } : undefined}
+    >
+      <div className={`overflow-hidden ${fullPage ? 'border-2 border-gray-200 rounded-2xl flex-1 flex flex-col' : 'rounded-2xl border border-gray-200 shadow-sm'}`}>
         {/* Encabezado con logo y marca */}
         <div
-          className="flex items-center gap-4 px-6 py-5 text-white"
+          className={`flex items-center text-white ${fullPage ? 'gap-6 px-10 py-8' : 'gap-4 px-6 py-5'}`}
           style={{ ...exact, background: 'linear-gradient(135deg, #0f766e 0%, #115e59 100%)' }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/logo.jpeg"
             alt="Logo"
-            className="w-16 h-16 rounded-xl bg-white object-contain p-1 shrink-0"
+            className={`rounded-xl bg-white object-contain p-1 shrink-0 ${fullPage ? 'w-24 h-24' : 'w-16 h-16'}`}
             style={exact}
           />
           <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-bold leading-tight">IMPRESOS COMERCIALES S.A.</h1>
-            <p className="text-xs text-white/80">RUC 1635517-1-672731 DV 0 · Río Abajo, Calle 8</p>
-            <p className="text-xs text-white/80">Tel. 6931-8390</p>
+            <h1 className={`font-bold leading-tight ${fullPage ? 'text-2xl' : 'text-lg'}`}>IMPRESOS COMERCIALES S.A.</h1>
+            <p className={`text-white/80 ${fullPage ? 'text-sm' : 'text-xs'}`}>RUC 1635517-1-672731 DV 0 · Río Abajo, Calle 8</p>
+            <p className={`text-white/80 ${fullPage ? 'text-sm' : 'text-xs'}`}>Tel. 6931-8390</p>
           </div>
           <div className="text-right shrink-0">
-            <p className="text-[10px] uppercase tracking-widest text-white/70">Recibo de</p>
-            <p className="text-base font-bold">ANTICIPO</p>
-            <p className="text-[10px] text-white/70 font-mono mt-0.5">N° {reciboNo}</p>
+            <p className={`uppercase tracking-widest text-white/70 ${fullPage ? 'text-xs' : 'text-[10px]'}`}>Recibo de</p>
+            <p className={`font-bold ${fullPage ? 'text-2xl' : 'text-base'}`}>ANTICIPO</p>
+            <p className={`text-white/70 font-mono mt-0.5 ${fullPage ? 'text-xs' : 'text-[10px]'}`}>N° {reciboNo}</p>
           </div>
         </div>
 
-        <div className="p-6">
+        <div className={`flex-1 flex flex-col ${fullPage ? 'p-10' : 'p-6'}`}>
           {/* Fechas */}
-          <div className="flex justify-between text-xs mb-4">
+          <div className={`flex justify-between mb-6 ${fullPage ? 'text-sm' : 'text-xs'}`}>
             <div>
               <span className="text-gray-400">Fecha de emisión</span>
               <p className="font-semibold text-gray-700">{hoy}</p>
@@ -522,50 +525,53 @@ function ReciboAnticipo({ anticipo, preview = false }: { anticipo: Anticipo; pre
           </div>
 
           {/* Datos */}
-          <div className="rounded-xl bg-gray-50 border border-gray-100 divide-y divide-gray-100 mb-5" style={exact}>
-            <div className="flex justify-between px-4 py-2.5 text-sm">
+          <div className={`rounded-xl bg-gray-50 border border-gray-100 divide-y divide-gray-100 mb-6 ${fullPage ? 'text-base' : 'text-sm'}`} style={exact}>
+            <div className={`flex justify-between ${fullPage ? 'px-5 py-3.5' : 'px-4 py-2.5'}`}>
               <span className="text-gray-500">Cliente</span>
               <span className="font-semibold text-right">{anticipo.clientes?.nombre}</span>
             </div>
-            <div className="flex justify-between px-4 py-2.5 text-sm">
+            <div className={`flex justify-between ${fullPage ? 'px-5 py-3.5' : 'px-4 py-2.5'}`}>
               <span className="text-gray-500">Cuenta de depósito</span>
               <span className="text-right">{anticipo.banco_cuentas?.nombre} · {anticipo.banco_cuentas?.banco}</span>
             </div>
             {anticipo.numero_deposito && (
-              <div className="flex justify-between px-4 py-2.5 text-sm">
+              <div className={`flex justify-between ${fullPage ? 'px-5 py-3.5' : 'px-4 py-2.5'}`}>
                 <span className="text-gray-500">N° de depósito</span>
                 <span className="font-mono text-right">{anticipo.numero_deposito}</span>
               </div>
             )}
             {anticipo.notas && (
-              <div className="flex justify-between px-4 py-2.5 text-sm">
+              <div className={`flex justify-between ${fullPage ? 'px-5 py-3.5' : 'px-4 py-2.5'}`}>
                 <span className="text-gray-500">Notas</span>
-                <span className="max-w-[260px] text-right text-gray-600">{anticipo.notas}</span>
+                <span className="max-w-[320px] text-right text-gray-600">{anticipo.notas}</span>
               </div>
             )}
           </div>
 
           {/* Monto */}
           <div
-            className="rounded-xl px-6 py-5 text-center mb-5 border-2"
+            className={`rounded-xl text-center border-2 ${fullPage ? 'px-8 py-8' : 'px-6 py-5 mb-5'}`}
             style={{ ...exact, borderColor: '#0f766e', background: '#f0fdfa' }}
           >
-            <p className="text-[11px] text-teal-700 uppercase tracking-widest mb-1">Monto recibido</p>
-            <p className="text-4xl font-extrabold" style={{ color: '#0f766e' }}>{formatCurrency(anticipo.monto)}</p>
+            <p className={`text-teal-700 uppercase tracking-widest mb-1 ${fullPage ? 'text-sm' : 'text-[11px]'}`}>Monto recibido</p>
+            <p className={`font-extrabold ${fullPage ? 'text-6xl' : 'text-4xl'}`} style={{ color: '#0f766e' }}>{formatCurrency(anticipo.monto)}</p>
           </div>
 
+          {/* Espaciador para empujar firmas al fondo en página completa */}
+          {fullPage && <div className="flex-1" />}
+
           {/* Firmas */}
-          <div className="flex justify-between gap-8 mt-10 mb-2">
+          <div className={`flex justify-between gap-10 ${fullPage ? 'mt-16' : 'mt-10 mb-2'}`}>
             <div className="flex-1 text-center">
-              <div className="border-t border-gray-400 pt-1 text-xs text-gray-500">Entregado por</div>
+              <div className={`border-t border-gray-400 pt-1 text-gray-500 ${fullPage ? 'text-sm' : 'text-xs'}`}>Entregado por</div>
             </div>
             <div className="flex-1 text-center">
-              <div className="border-t border-gray-400 pt-1 text-xs text-gray-500">Recibido por</div>
+              <div className={`border-t border-gray-400 pt-1 text-gray-500 ${fullPage ? 'text-sm' : 'text-xs'}`}>Recibido por</div>
             </div>
           </div>
 
           {/* Pie */}
-          <div className="text-center text-[10px] text-gray-400 border-t border-gray-100 pt-3 mt-4">
+          <div className={`text-center text-gray-400 border-t border-gray-100 pt-3 mt-6 ${fullPage ? 'text-xs' : 'text-[10px]'}`}>
             <p>Comprobante de anticipo · No constituye una factura fiscal.</p>
           </div>
         </div>
