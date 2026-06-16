@@ -10,8 +10,9 @@ import { Plus, Building2, TrendingUp, TrendingDown, Calendar, Printer } from 'lu
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
 import { withPagePermission } from '@/components/PermissionGuard'
+import EstadoCuentaTab from './EstadoCuentaTab'
 
-type Tab = 'cuentas' | 'movimientos' | 'cierre'
+type Tab = 'cuentas' | 'movimientos' | 'estado' | 'cierre'
 
 function BancoPage() {
   const [tab, setTab] = useState<Tab>('cuentas')
@@ -144,8 +145,24 @@ function BancoPage() {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'cuentas', label: 'Cuentas' },
     { key: 'movimientos', label: 'Movimientos' },
+    { key: 'estado', label: 'Estado de cuenta' },
     { key: 'cierre', label: 'Cierre de mes' },
   ]
+
+  // Saldo corrido (acumulado tras cada movimiento). Se ancla en el saldo actual
+  // de la cuenta: el movimiento más reciente (primero en la lista, orden desc)
+  // queda con el saldo total y, hacia atrás, se descuenta el efecto de cada
+  // movimiento más nuevo. Así el resultado es correcto aunque la lista esté
+  // truncada a 100 filas.
+  const saldosCorridos: number[] = []
+  {
+    let acc = saldos[cuentaSelected] || 0
+    for (let i = 0; i < movimientos.length; i++) {
+      saldosCorridos[i] = acc
+      const signed = movimientos[i].tipo === 'ingreso' ? Number(movimientos[i].monto) : -Number(movimientos[i].monto)
+      acc = acc - signed
+    }
+  }
 
   return (
     <AppLayout>
@@ -258,13 +275,14 @@ function BancoPage() {
                     <th className="table-header">Referencia</th>
                     <th className="table-header">Tipo</th>
                     <th className="table-header text-right">Monto</th>
+                    <th className="table-header text-right">Saldo</th>
                     <th className="table-header"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {movimientos.length === 0 ? (
-                    <tr><td colSpan={5} className="text-center py-10 text-gray-400">Sin movimientos</td></tr>
-                  ) : movimientos.map(m => (
+                    <tr><td colSpan={7} className="text-center py-10 text-gray-400">Sin movimientos</td></tr>
+                  ) : movimientos.map((m, i) => (
                     <tr key={m.id} className="hover:bg-gray-50">
                       <td className="table-cell text-gray-500">{formatDate(m.fecha)}</td>
                       <td className="table-cell">{m.concepto}</td>
@@ -277,6 +295,9 @@ function BancoPage() {
                       </td>
                       <td className={`table-cell text-right font-semibold ${m.tipo === 'ingreso' ? 'text-green-700' : 'text-red-600'}`}>
                         {m.tipo === 'egreso' ? '-' : ''}{formatCurrency(m.monto)}
+                      </td>
+                      <td className="table-cell text-right font-semibold text-gray-800">
+                        {formatCurrency(saldosCorridos[i] ?? 0)}
                       </td>
                       <td className="table-cell">
                         <button
@@ -293,6 +314,15 @@ function BancoPage() {
               </table>
             </div>
           </div>
+        )}
+
+        {/* TAB: ESTADO DE CUENTA */}
+        {tab === 'estado' && (
+          <EstadoCuentaTab
+            cuentas={cuentas}
+            cuentaInicial={cuentaSelected}
+            showToast={showToast}
+          />
         )}
 
         {/* TAB: CIERRE DE MES */}
