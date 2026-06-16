@@ -1,0 +1,5 @@
+
+# Scripts temporales de análisis (no versionar)
+_*.cjs
+_*.js
+reimport.sql
