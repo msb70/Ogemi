@@ -7,8 +7,8 @@ import { createClient } from '@/lib/supabase'
 import { formatCurrency } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
 import { Toast } from '@/components/Toast'
-import { withPagePermission } from '@/components/PermissionGuard'
-import { CalendarDays, Plus, Save, WalletCards } from 'lucide-react'
+import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
+import { CalendarDays, Plus, Save, WalletCards, Trash2 } from 'lucide-react'
 
 type GastoFijo = {
   id: string
@@ -74,6 +74,8 @@ function GastosFijosPage() {
   const [loading, setLoading] = useState(true)
   const [savingMontos, setSavingMontos] = useState(false)
   const [nuevoGasto, setNuevoGasto] = useState({ nombre: '', categoria: '' })
+  const [gastoAEliminar, setGastoAEliminar] = useState<GastoFijo | null>(null)
+  const [eliminando, setEliminando] = useState(false)
 
   const periodo = useMemo(() => monthToPeriod(periodoMes), [periodoMes])
 
@@ -289,6 +291,20 @@ function GastosFijosPage() {
 
   const updateGasto = (id: string, field: 'nombre' | 'categoria', value: string) => {
     setGastos(prev => prev.map(g => (g.id === id ? { ...g, [field]: value } : g)))
+  }
+
+  const eliminarGasto = async () => {
+    if (!gastoAEliminar) return
+    setEliminando(true)
+    const { error } = await supabase.from('gastos_fijos').delete().eq('id', gastoAEliminar.id)
+    setEliminando(false)
+    if (error) {
+      showToast(`Error al eliminar: ${error.message}`, 'error')
+      return
+    }
+    showToast('Gasto fijo eliminado.')
+    setGastoAEliminar(null)
+    loadGastos()
   }
 
   const updateMonto = (gastoId: string, semana: Semana, value: string) => {
@@ -527,12 +543,23 @@ function GastosFijosPage() {
                         ))}
                         <td className="table-cell text-right font-semibold">{formatCurrency(totalFila)}</td>
                         <td className="table-cell">
-                          <button
-                            className={`badge ${gasto.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}
-                            onClick={() => toggleActivo(gasto)}
-                          >
-                            {gasto.activo ? 'Activo' : 'Inactivo'}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              className={`badge ${gasto.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}
+                              onClick={() => toggleActivo(gasto)}
+                            >
+                              {gasto.activo ? 'Activo' : 'Inactivo'}
+                            </button>
+                            <PermissionGuard modulo="gastos_fijos" accion="borrar" silent>
+                              <button
+                                className="text-red-400 hover:text-red-600"
+                                onClick={() => setGastoAEliminar(gasto)}
+                                title="Eliminar gasto fijo"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </PermissionGuard>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -565,6 +592,37 @@ function GastosFijosPage() {
           </div>
         </section>
       </div>
+
+      {/* Modal: confirmar eliminación */}
+      {gastoAEliminar && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold mb-1 flex items-center gap-2">
+              <Trash2 size={18} className="text-red-500" /> Eliminar gasto fijo
+            </h2>
+            <p className="text-sm text-gray-600 mb-4">
+              ¿Seguro que quieres eliminar <span className="font-semibold">{gastoAEliminar.nombre}</span>?
+              Se borrarán también sus montos registrados en todos los periodos. Esta acción no se puede deshacer.
+            </p>
+            <div className="flex gap-3">
+              <button
+                className="btn-secondary flex-1"
+                onClick={() => setGastoAEliminar(null)}
+                disabled={eliminando}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn-primary flex-1 !bg-red-600 hover:!bg-red-700"
+                onClick={eliminarGasto}
+                disabled={eliminando}
+              >
+                {eliminando ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }
