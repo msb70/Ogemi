@@ -225,18 +225,30 @@ function PresupuestosPage() {
 
       {/* KPIs */}
       <div className="px-6 py-4 bg-white border-b border-gray-100">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          <div className="bg-gray-50 rounded-xl p-3">
+            <p className="text-[11px] font-semibold uppercase text-gray-500">Presupuestos</p>
+            <p className="text-lg font-bold text-gray-900">{filtered.length.toLocaleString('es-PA')}</p>
+          </div>
+          <div className="bg-yellow-50 rounded-xl p-3">
+            <p className="text-[11px] font-semibold uppercase text-gray-500">Pendientes</p>
+            <p className="text-lg font-bold text-yellow-700">{filtered.filter(p => p.estado === 'pendiente').length.toLocaleString('es-PA')}</p>
+          </div>
+          <div className="bg-green-50 rounded-xl p-3">
+            <p className="text-[11px] font-semibold uppercase text-gray-500">Pagados</p>
+            <p className="text-lg font-bold text-green-600">{filtered.filter(p => p.estado === 'pagada').length.toLocaleString('es-PA')}</p>
+          </div>
+          <div className="bg-brand-50 rounded-xl p-3">
+            <p className="text-[11px] font-semibold uppercase text-gray-500">Monto total</p>
+            <p className="text-lg font-bold text-brand-700">{formatCurrency(totalPendiente + totalPagado)}</p>
+          </div>
           <div className="bg-orange-50 rounded-xl p-3">
-            <p className="text-xs text-gray-500 mb-0.5">Pendiente de cobro</p>
+            <p className="text-[11px] font-semibold uppercase text-gray-500">Monto pendiente</p>
             <p className="text-lg font-bold text-orange-600">{formatCurrency(totalPendiente)}</p>
           </div>
           <div className="bg-green-50 rounded-xl p-3">
-            <p className="text-xs text-gray-500 mb-0.5">Cobrado</p>
+            <p className="text-[11px] font-semibold uppercase text-gray-500">Monto pagado</p>
             <p className="text-lg font-bold text-green-600">{formatCurrency(totalPagado)}</p>
-          </div>
-          <div className="bg-brand-50 rounded-xl p-3">
-            <p className="text-xs text-gray-500 mb-0.5">Total registrado</p>
-            <p className="text-lg font-bold text-brand-700">{formatCurrency(totalPendiente + totalPagado)}</p>
           </div>
         </div>
       </div>

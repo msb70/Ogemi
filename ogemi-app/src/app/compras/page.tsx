@@ -366,21 +366,30 @@ function ComprasPage() {
         {tab === 'listado' && (
           <div className="space-y-4">
             {/* KPIs */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
               <div className="card p-4">
-                <p className="text-xs text-gray-500 mb-1">Pendiente de pago</p>
-                <p className="text-xl font-bold text-orange-600">{formatCurrency(totalPendiente)}</p>
-                <p className="text-xs text-gray-400">{countPendiente} compras</p>
+                <p className="text-[11px] font-semibold uppercase text-gray-500">Compras</p>
+                <p className="text-xl font-bold text-gray-900">{filtered.length.toLocaleString('es-PA')}</p>
               </div>
               <div className="card p-4">
-                <p className="text-xs text-gray-500 mb-1">Pagado total</p>
-                <p className="text-xl font-bold text-green-600">{formatCurrency(totalPagado)}</p>
-                <p className="text-xs text-gray-400">{filtered.filter(c => c.estado === 'pagada').length} compras</p>
+                <p className="text-[11px] font-semibold uppercase text-gray-500">Pendientes</p>
+                <p className="text-xl font-bold text-orange-600">{countPendiente.toLocaleString('es-PA')}</p>
               </div>
               <div className="card p-4">
-                <p className="text-xs text-gray-500 mb-1">Total registrado</p>
-                <p className="text-xl font-bold text-brand-700">{formatCurrency(totalPendiente + totalPagado)}</p>
-                <p className="text-xs text-gray-400">{filtered.length} compras</p>
+                <p className="text-[11px] font-semibold uppercase text-gray-500">Pagadas</p>
+                <p className="text-xl font-bold text-green-600">{filtered.filter(c => c.estado === 'pagada').length.toLocaleString('es-PA')}</p>
+              </div>
+              <div className="card p-4">
+                <p className="text-[11px] font-semibold uppercase text-gray-500">Monto total</p>
+                <p className="text-lg font-bold text-brand-700">{formatCurrency(totalPendiente + totalPagado)}</p>
+              </div>
+              <div className="card p-4">
+                <p className="text-[11px] font-semibold uppercase text-gray-500">Monto pendiente</p>
+                <p className="text-lg font-bold text-orange-600">{formatCurrency(totalPendiente)}</p>
+              </div>
+              <div className="card p-4">
+                <p className="text-[11px] font-semibold uppercase text-gray-500">Monto pagado</p>
+                <p className="text-lg font-bold text-green-600">{formatCurrency(totalPagado)}</p>
               </div>
             </div>
 
