@@ -46,6 +46,12 @@ function ReportesPage() {
   const [saldos, setSaldos] = useState<Record<string, number>>({})
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState('')
 
+  // Flujo de caja (rango propio = año en curso + multi-cuenta)
+  const [flujoDesde, setFlujoDesde] = useState(() => `${new Date().getFullYear()}-01-01`)
+  const [flujoHasta, setFlujoHasta] = useState(new Date().toISOString().split('T')[0])
+  const [flujoCuentas, setFlujoCuentas] = useState<string[]>([])
+  const [flujoMovs, setFlujoMovs] = useState<any[]>([])
+
   const supabase = createClient()
 
   const loadAll = useCallback(async () => {
@@ -77,6 +83,10 @@ function ReportesPage() {
     if (cuentasData && cuentasData.length > 0 && !cuentaSeleccionada) {
       setCuentaSeleccionada(cuentasData[0].id)
     }
+    // Por defecto, todas las cuentas seleccionadas para el flujo
+    if (cuentasData && cuentasData.length > 0) {
+      setFlujoCuentas(prev => prev.length > 0 ? prev : cuentasData.map(c => c.id))
+    }
 
     // N+1 known issue — sprint 4.6 scope: no fix here
     const saldosMap: Record<string, number> = {}
@@ -92,19 +102,51 @@ function ReportesPage() {
 
   const loadMovimientos = useCallback(async () => {
     if (!cuentaSeleccionada) return
-    const q = supabase.from('banco_movimientos').select('*').eq('cuenta_id', cuentaSeleccionada).order('fecha', { ascending: false })
-    if (fechaDesde) q.gte('fecha', fechaDesde)
-    if (fechaHasta) q.lte('fecha', fechaHasta)
-    const { data } = await q.limit(200)
-    setMovimientos(data || [])
-  }, [cuentaSeleccionada, fechaDesde, fechaHasta])
+    const cuenta = cuentas.find(c => c.id === cuentaSeleccionada)
+    const saldoInicial = cuenta?.saldo_inicial || 0
+    // Base: saldo inicial + neto de movimientos anteriores a "desde"
+    let base = saldoInicial
+    if (fechaDesde) {
+      const { data: prev } = await supabase.from('banco_movimientos')
+        .select('tipo,monto').eq('cuenta_id', cuentaSeleccionada).lt('fecha', fechaDesde)
+      const ing = prev?.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + m.monto, 0) || 0
+      const egr = prev?.filter(m => m.tipo === 'egreso').reduce((s, m) => s + m.monto, 0) || 0
+      base = saldoInicial + ing - egr
+    }
+    let q = supabase.from('banco_movimientos').select('*').eq('cuenta_id', cuentaSeleccionada)
+    if (fechaDesde) q = q.gte('fecha', fechaDesde)
+    if (fechaHasta) q = q.lte('fecha', fechaHasta)
+    const { data } = await q.order('fecha', { ascending: true }).order('created_at', { ascending: true }).limit(1000)
+    // Saldo corrido (ascendente), luego mostrar descendente
+    let running = base
+    const conSaldo = (data || []).map(m => {
+      running += m.tipo === 'ingreso' ? (m.monto || 0) : -(m.monto || 0)
+      return { ...m, saldo: running }
+    })
+    conSaldo.reverse()
+    setMovimientos(conSaldo)
+  }, [cuentaSeleccionada, fechaDesde, fechaHasta, cuentas])
 
   const loadCierres = useCallback(async () => {
     const { data } = await supabase.from('cierre_mes').select('*, banco_cuentas(nombre,banco)').order('periodo', { ascending: false }).limit(24)
     setCierres(data || [])
   }, [])
 
+  const loadFlujo = useCallback(async () => {
+    if (flujoCuentas.length === 0) { setFlujoMovs([]); return }
+    let q = supabase.from('banco_movimientos').select('tipo,monto,fecha,cuenta_id')
+      .in('cuenta_id', flujoCuentas)
+    if (flujoDesde) q = q.gte('fecha', flujoDesde)
+    if (flujoHasta) q = q.lte('fecha', flujoHasta)
+    const { data } = await q.limit(5000)
+    setFlujoMovs(data || [])
+  }, [flujoCuentas, flujoDesde, flujoHasta])
+
   useEffect(() => { loadAll() }, [loadAll])
+  // Refrescar movimientos al cambiar cuenta/fechas estando en banco
+  useEffect(() => { if (tab === 'banco') loadMovimientos() }, [tab, loadMovimientos])
+  // Refrescar flujo al cambiar rango/cuentas estando en banco
+  useEffect(() => { if (tab === 'banco') loadFlujo() }, [tab, loadFlujo])
 
   // Derivados
   const ventas = facturas.filter(f => !isNC(f.tipo_documento))
@@ -200,17 +242,6 @@ function ReportesPage() {
     return Object.entries(map).sort((a, b) => b[1] - a[1])
   })()
 
-  const flujoPorMes = (() => {
-    const map: Record<string, { ingresos: number; egresos: number }> = {}
-    movimientos.forEach(m => {
-      const mes = (m.fecha || '').substring(0, 7)
-      if (!map[mes]) map[mes] = { ingresos: 0, egresos: 0 }
-      if (m.tipo === 'ingreso') map[mes].ingresos += m.monto || 0
-      else map[mes].egresos += m.monto || 0
-    })
-    return Object.entries(map).sort().map(([mes, v]) => ({ mes, ...v, neto: v.ingresos - v.egresos }))
-  })()
-
   const filtrosBarProps = { search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }
 
   const tabs: { key: ReporteTab; label: string; icon: React.ElementType }[] = [
@@ -290,7 +321,13 @@ function ReportesPage() {
             saldos={saldos}
             movimientos={movimientos}
             cierres={cierres}
-            flujoPorMes={flujoPorMes}
+            flujoMovs={flujoMovs}
+            flujoDesde={flujoDesde}
+            setFlujoDesde={setFlujoDesde}
+            flujoHasta={flujoHasta}
+            setFlujoHasta={setFlujoHasta}
+            flujoCuentas={flujoCuentas}
+            setFlujoCuentas={setFlujoCuentas}
             cuentaSeleccionada={cuentaSeleccionada}
             setCuentaSeleccionada={setCuentaSeleccionada}
             fechaDesde={fechaDesde}
