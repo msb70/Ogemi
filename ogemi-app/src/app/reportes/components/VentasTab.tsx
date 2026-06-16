@@ -303,6 +303,52 @@ export default function VentasTab({
               </BarChart>
             </ResponsiveContainer>
           </div>
+
+          {/* Tabla por período */}
+          {(() => {
+            const totalMonto = ventasPorMes.reduce((s, m) => s + (m.ventas || 0), 0)
+            const totalCount = ventasPorMes.reduce((s, m) => s + (m.count || 0), 0)
+            return (
+              <div className="card overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 text-xs text-gray-500 uppercase border-b border-gray-200">
+                        <th className="text-left px-3 py-2 font-semibold">Mes</th>
+                        <th className="text-right px-3 py-2 font-semibold">Facturas</th>
+                        <th className="text-right px-3 py-2 font-semibold">Monto</th>
+                        <th className="text-right px-3 py-2 font-semibold">% del total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {ventasPorMes.length === 0 ? (
+                        <tr><td colSpan={4} className="text-center py-8 text-gray-400">Sin datos en el período</td></tr>
+                      ) : ventasPorMes.map(m => (
+                        <tr key={m.mes} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 font-medium">{m.mes}</td>
+                          <td className="px-3 py-2 text-right text-gray-500">{m.count}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{formatCurrency(m.ventas)}</td>
+                          <td className="px-3 py-2 text-right text-brand-700">
+                            {totalMonto > 0 ? ((m.ventas / totalMonto) * 100).toFixed(1) : '0.0'}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    {ventasPorMes.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-gray-50 border-t border-gray-200 font-bold">
+                          <td className="px-3 py-2">Total</td>
+                          <td className="px-3 py-2 text-right">{totalCount}</td>
+                          <td className="px-3 py-2 text-right">{formatCurrency(totalMonto)}</td>
+                          <td className="px-3 py-2 text-right">100%</td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )}
 
