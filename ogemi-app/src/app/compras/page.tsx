@@ -42,6 +42,8 @@ function ComprasPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('todos')
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -304,12 +306,15 @@ function ComprasPage() {
     const matchSearch = !search || prov.toLowerCase().includes(search.toLowerCase()) ||
       (c.concepto || '').toLowerCase().includes(search.toLowerCase())
     const matchEstado = estadoFilter === 'todos' || c.estado === estadoFilter
-    return matchSearch && matchEstado
+    const matchDesde = !fechaDesde || c.fecha >= fechaDesde
+    const matchHasta = !fechaHasta || c.fecha <= fechaHasta
+    return matchSearch && matchEstado && matchDesde && matchHasta
   })
 
-  const totalPendiente = compras.filter(c => c.estado === 'pendiente').reduce((s, c) => s + c.total, 0)
-  const totalPagado = compras.filter(c => c.estado === 'pagada').reduce((s, c) => s + c.total, 0)
-  const countPendiente = compras.filter(c => c.estado === 'pendiente').length
+  // Totales del set filtrado (reflejan búsqueda, estado y rango de fechas)
+  const totalPendiente = filtered.filter(c => c.estado === 'pendiente').reduce((s, c) => s + c.total, 0)
+  const totalPagado = filtered.filter(c => c.estado === 'pagada').reduce((s, c) => s + c.total, 0)
+  const countPendiente = filtered.filter(c => c.estado === 'pendiente').length
 
   const totalVencidas = vencidas.reduce((s: number, c: any) => s + (c.total || 0), 0)
 
@@ -370,12 +375,12 @@ function ComprasPage() {
               <div className="card p-4">
                 <p className="text-xs text-gray-500 mb-1">Pagado total</p>
                 <p className="text-xl font-bold text-green-600">{formatCurrency(totalPagado)}</p>
-                <p className="text-xs text-gray-400">{compras.filter(c => c.estado === 'pagada').length} compras</p>
+                <p className="text-xs text-gray-400">{filtered.filter(c => c.estado === 'pagada').length} compras</p>
               </div>
               <div className="card p-4">
                 <p className="text-xs text-gray-500 mb-1">Total registrado</p>
                 <p className="text-xl font-bold text-brand-700">{formatCurrency(totalPendiente + totalPagado)}</p>
-                <p className="text-xs text-gray-400">{compras.length} compras</p>
+                <p className="text-xs text-gray-400">{filtered.length} compras</p>
               </div>
             </div>
 
@@ -392,9 +397,17 @@ function ComprasPage() {
                 <option value="pendiente">Pendientes</option>
                 <option value="pagada">Pagadas</option>
               </select>
-              {(search || estadoFilter !== 'todos') && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">Desde</span>
+                <input type="date" className="input text-sm w-[150px]" value={fechaDesde}
+                  onChange={e => setFechaDesde(e.target.value)} />
+                <span className="text-xs text-gray-500">Hasta</span>
+                <input type="date" className="input text-sm w-[150px]" value={fechaHasta}
+                  onChange={e => setFechaHasta(e.target.value)} />
+              </div>
+              {(search || estadoFilter !== 'todos' || fechaDesde || fechaHasta) && (
                 <button className="text-sm text-brand-600 hover:text-brand-800"
-                  onClick={() => { setSearch(''); setEstadoFilter('todos') }}>
+                  onClick={() => { setSearch(''); setEstadoFilter('todos'); setFechaDesde(''); setFechaHasta('') }}>
                   Limpiar
                 </button>
               )}

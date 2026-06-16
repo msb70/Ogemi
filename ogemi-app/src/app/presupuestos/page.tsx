@@ -38,6 +38,8 @@ function PresupuestosPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('todos')
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
 
   // Modal pago
   const [selected, setSelected] = useState<Presupuesto | null>(null)
@@ -70,6 +72,8 @@ function PresupuestosPage() {
       .order('fecha', { ascending: false })
       .order('numero_presupuesto', { ascending: false })
     if (estadoFilter !== 'todos') query = query.eq('estado', estadoFilter)
+    if (fechaDesde) query = query.gte('fecha', fechaDesde)
+    if (fechaHasta) query = query.lte('fecha', fechaHasta)
 
     const [{ data: presData }, { data: cliData }, { data: cuentasData }] = await Promise.all([
       query,
@@ -80,7 +84,7 @@ function PresupuestosPage() {
     setClientes(cliData || [])
     setCuentas(cuentasData || [])
     setLoading(false)
-  }, [estadoFilter])
+  }, [estadoFilter, fechaDesde, fechaHasta])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -199,14 +203,14 @@ function PresupuestosPage() {
     a.click()
   }
 
-  const totalPendiente = presupuestos.filter(p => p.estado === 'pendiente').reduce((s, p) => s + p.total, 0)
-  const totalPagado = presupuestos.filter(p => p.estado === 'pagada').reduce((s, p) => s + p.total, 0)
+  const totalPendiente = filtered.filter(p => p.estado === 'pendiente').reduce((s, p) => s + p.total, 0)
+  const totalPagado = filtered.filter(p => p.estado === 'pagada').reduce((s, p) => s + p.total, 0)
 
   return (
     <AppLayout>
       <Header
         title="Presupuestos"
-        subtitle={`${filtered.length} registros · ${presupuestos.filter(p => p.estado === 'pendiente').length} pendientes`}
+        subtitle={`${filtered.length} registros · ${filtered.filter(p => p.estado === 'pendiente').length} pendientes`}
         actions={
           <div className="flex items-center gap-2">
             <button className="btn-secondary flex items-center gap-2" onClick={exportCSV}>
@@ -238,13 +242,27 @@ function PresupuestosPage() {
       </div>
 
       {/* Filtros */}
-      <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+      <div className="bg-white border-b border-gray-200 px-6 py-3 flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 max-w-sm min-w-[200px]">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input className="input pl-9" placeholder="Buscar por #, cliente..." value={search}
             onChange={e => setSearch(e.target.value)} />
           {search && (
             <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">Desde</span>
+          <input type="date" className="input py-1.5 text-sm w-[150px]" value={fechaDesde}
+            onChange={e => setFechaDesde(e.target.value)} />
+          <span className="text-xs text-gray-500">Hasta</span>
+          <input type="date" className="input py-1.5 text-sm w-[150px]" value={fechaHasta}
+            onChange={e => setFechaHasta(e.target.value)} />
+          {(fechaDesde || fechaHasta) && (
+            <button onClick={() => { setFechaDesde(''); setFechaHasta('') }}
+              className="text-gray-400 hover:text-gray-600" title="Limpiar fechas">
               <X size={14} />
             </button>
           )}
