@@ -27,10 +27,25 @@ type FacturasResumen = {
 const PAGE_SIZE = 50
 
 interface LineaPago {
+  origen: 'cuenta' | 'anticipo'
   cuenta_id: string
+  anticipo_id: string
   monto: string
   referencia: string
 }
+
+type AnticipoDisp = {
+  id: string
+  fecha: string
+  monto: number
+  saldo: number
+  numero_deposito: string | null
+  cuenta_id: string
+}
+
+const emptyLinea = (cuentaId = ''): LineaPago => ({
+  origen: 'cuenta', cuenta_id: cuentaId, anticipo_id: '', monto: '', referencia: '',
+})
 
 function FacturasPage() {
   const [facturas, setFacturas] = useState<Factura[]>([])
@@ -51,8 +66,9 @@ function FacturasPage() {
   const [selectedFactura, setSelectedFactura] = useState<Factura | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [fechaPago, setFechaPago] = useState('')
-  const [lineas, setLineas] = useState<LineaPago[]>([{ cuenta_id: '', monto: '', referencia: '' }])
+  const [lineas, setLineas] = useState<LineaPago[]>([emptyLinea()])
   const [saving, setSaving] = useState(false)
+  const [anticipos, setAnticipos] = useState<AnticipoDisp[]>([])
   const [pagosExistentes, setPagosExistentes] = useState<any[]>([])
   const [reversadosIds, setReversadosIds] = useState<Set<string>>(new Set())
 
@@ -154,11 +170,12 @@ function FacturasPage() {
   const openPagoModal = async (f: Factura) => {
     setSelectedFactura(f)
     setFechaPago(new Date().toISOString().split('T')[0])
-    setLineas([{ cuenta_id: cuentas[0]?.id || '', monto: '', referencia: '' }])
+    setLineas([emptyLinea(cuentas[0]?.id || '')])
+    setAnticipos([])
     setShowModal(true)
 
-    // Cargar pagos existentes + reversos de esta factura (en paralelo)
-    const [{ data }, { data: reversos }] = await Promise.all([
+    // Cargar pagos existentes + reversos + anticipos disponibles del cliente (en paralelo)
+    const [{ data }, { data: reversos }, { data: anticData }] = await Promise.all([
       supabase
         .from('pagos')
         .select('*, banco_cuentas(nombre, banco)')
@@ -168,9 +185,17 @@ function FacturasPage() {
         .from('pago_reversos')
         .select('pago_id')
         .eq('factura_id', f.id),
+      supabase
+        .from('anticipos_saldos')
+        .select('id, fecha, monto, saldo, numero_deposito, cuenta_id')
+        .eq('cliente_id', f.cliente_id)
+        .eq('estado', 'activo')
+        .gt('saldo', 0)
+        .order('fecha'),
     ])
     setPagosExistentes(data || [])
     setReversadosIds(new Set((reversos || []).map(r => r.pago_id)))
+    setAnticipos((anticData || []) as AnticipoDisp[])
   }
 
   const handleReversarPago = async () => {
@@ -200,7 +225,7 @@ function FacturasPage() {
   }
 
   const addLinea = () => {
-    setLineas(prev => [...prev, { cuenta_id: cuentas[0]?.id || '', monto: '', referencia: '' }])
+    setLineas(prev => [...prev, emptyLinea(cuentas[0]?.id || '')])
   }
 
   const removeLinea = (idx: number) => {
@@ -208,7 +233,7 @@ function FacturasPage() {
   }
 
   const updateLinea = (idx: number, field: keyof LineaPago, value: string) => {
-    setLineas(prev => prev.map((l, i) => i === idx ? { ...l, [field]: value } : l))
+    setLineas(prev => prev.map((l, i) => i === idx ? ({ ...l, [field]: value } as LineaPago) : l))
   }
 
   const totalLineas = lineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0)
@@ -219,19 +244,36 @@ function FacturasPage() {
 
   const handleRegistrarAbono = async () => {
     if (!selectedFactura) return
-    const lineasValidas = lineas.filter(l => l.cuenta_id && parseFloat(l.monto) > 0)
+    const lineasValidas = lineas.filter(l =>
+      parseFloat(l.monto) > 0 && (l.origen === 'cuenta' ? l.cuenta_id : l.anticipo_id)
+    )
     if (lineasValidas.length === 0) return
+
+    // Validar que no se exceda el saldo de cada anticipo usado
+    for (const l of lineasValidas) {
+      if (l.origen === 'anticipo') {
+        const ant = anticipos.find(a => a.id === l.anticipo_id)
+        if (ant && parseFloat(l.monto) > ant.saldo + 0.01) {
+          showToast(`El monto supera el saldo del anticipo (${formatCurrency(ant.saldo)})`, 'error')
+          return
+        }
+      }
+    }
 
     setSaving(true)
 
-    // Insertar cada línea como un pago
-    const pagosInsert = lineasValidas.map(l => ({
-      factura_id: selectedFactura.id,
-      cuenta_id: l.cuenta_id,
-      monto: parseFloat(l.monto),
-      fecha: fechaPago,
-      referencia: l.referencia || null,
-    }))
+    // Cada línea es un pago. Si es anticipo, se aplica el crédito (cuenta del anticipo, sin mover banco).
+    const pagosInsert = lineasValidas.map(l => {
+      const ant = l.origen === 'anticipo' ? anticipos.find(a => a.id === l.anticipo_id) : null
+      return {
+        factura_id: selectedFactura.id,
+        cuenta_id: l.origen === 'anticipo' ? (ant?.cuenta_id || null) : l.cuenta_id,
+        anticipo_id: l.origen === 'anticipo' ? l.anticipo_id : null,
+        monto: parseFloat(l.monto),
+        fecha: fechaPago,
+        referencia: l.referencia || (l.origen === 'anticipo' ? 'Aplicación de anticipo' : null),
+      }
+    })
 
     const { error } = await supabase.from('pagos').insert(pagosInsert)
 
@@ -563,7 +605,7 @@ function FacturasPage() {
                   onClick={addLinea}
                   className="text-xs flex items-center gap-1 text-brand-600 hover:text-brand-800"
                 >
-                  <Plus size={13} /> Agregar cuenta
+                  <Plus size={13} /> Agregar pago
                 </button>
               </div>
 
@@ -577,18 +619,53 @@ function FacturasPage() {
                       </button>
                     )}
                   </div>
-                  <div>
-                    <label className="label text-xs">Cuenta bancaria</label>
-                    <select
-                      className="input text-sm"
-                      value={linea.cuenta_id}
-                      onChange={e => updateLinea(idx, 'cuenta_id', e.target.value)}
-                    >
-                      <option value="">Seleccionar cuenta...</option>
-                      {cuentas.map(c => (
-                        <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="label text-xs">Origen</label>
+                      <select
+                        className="input text-sm"
+                        value={linea.origen}
+                        onChange={e => updateLinea(idx, 'origen', e.target.value)}
+                      >
+                        <option value="cuenta">Cuenta bancaria</option>
+                        <option value="anticipo" disabled={anticipos.length === 0}>
+                          {anticipos.length === 0 ? 'Anticipo (sin saldo)' : 'Anticipo'}
+                        </option>
+                      </select>
+                    </div>
+                    <div>
+                      {linea.origen === 'cuenta' ? (
+                        <>
+                          <label className="label text-xs">Cuenta bancaria</label>
+                          <select
+                            className="input text-sm"
+                            value={linea.cuenta_id}
+                            onChange={e => updateLinea(idx, 'cuenta_id', e.target.value)}
+                          >
+                            <option value="">Seleccionar cuenta...</option>
+                            {cuentas.map(c => (
+                              <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>
+                            ))}
+                          </select>
+                        </>
+                      ) : (
+                        <>
+                          <label className="label text-xs">Anticipo</label>
+                          <select
+                            className="input text-sm"
+                            value={linea.anticipo_id}
+                            onChange={e => updateLinea(idx, 'anticipo_id', e.target.value)}
+                          >
+                            <option value="">Seleccionar anticipo...</option>
+                            {anticipos.map(a => (
+                              <option key={a.id} value={a.id}>
+                                {formatDate(a.fecha)} · saldo {formatCurrency(a.saldo)}{a.numero_deposito ? ` · ${a.numero_deposito}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </>
+                      )}
+                    </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
@@ -638,7 +715,7 @@ function FacturasPage() {
               <button
                 className="btn-primary flex-1"
                 onClick={handleRegistrarAbono}
-                disabled={saving || lineas.every(l => !l.cuenta_id || !l.monto)}
+                disabled={saving || lineas.every(l => !l.monto || (l.origen === 'cuenta' ? !l.cuenta_id : !l.anticipo_id))}
               >
                 {saving ? 'Guardando...' : 'Registrar pago'}
               </button>

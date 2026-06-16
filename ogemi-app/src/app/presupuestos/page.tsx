@@ -11,6 +11,27 @@ import { withPagePermission } from '@/components/PermissionGuard'
 
 type EstadoFilter = 'todos' | 'pendiente' | 'pagada'
 
+interface LineaPago {
+  origen: 'cuenta' | 'anticipo'
+  cuenta_id: string
+  anticipo_id: string
+  monto: string
+  referencia: string
+}
+
+type AnticipoDisp = {
+  id: string
+  fecha: string
+  monto: number
+  saldo: number
+  numero_deposito: string | null
+  cuenta_id: string
+}
+
+const emptyLinea = (cuentaId = ''): LineaPago => ({
+  origen: 'cuenta', cuenta_id: cuentaId, anticipo_id: '', monto: '', referencia: '',
+})
+
 interface Presupuesto {
   id: string
   numero_presupuesto: number
@@ -41,11 +62,13 @@ function PresupuestosPage() {
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
 
-  // Modal pago
+  // Modal pago (multi-línea, igual a facturas)
   const [selected, setSelected] = useState<Presupuesto | null>(null)
   const [showPagoModal, setShowPagoModal] = useState(false)
   const [fechaCobro, setFechaCobro] = useState('')
-  const [cuentaId, setCuentaId] = useState('')
+  const [lineas, setLineas] = useState<LineaPago[]>([emptyLinea()])
+  const [anticipos, setAnticipos] = useState<AnticipoDisp[]>([])
+  const [pagosExistentes, setPagosExistentes] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
 
   // Modal nuevo/editar
@@ -109,24 +132,66 @@ function PresupuestosPage() {
     return '+120'
   }
 
-  const openPagoModal = (p: Presupuesto) => {
+  const openPagoModal = async (p: Presupuesto) => {
     setSelected(p)
     setFechaCobro(new Date().toISOString().split('T')[0])
-    setCuentaId(cuentas[0]?.id || '')
+    setLineas([emptyLinea(cuentas[0]?.id || '')])
+    setAnticipos([])
     setShowPagoModal(true)
+    const [{ data: pagosData }, { data: anticData }] = await Promise.all([
+      supabase.from('pagos').select('*, banco_cuentas(nombre, banco)')
+        .eq('presupuesto_id', p.id).order('fecha', { ascending: false }),
+      supabase.from('anticipos_saldos')
+        .select('id, fecha, monto, saldo, numero_deposito, cuenta_id')
+        .eq('cliente_id', p.cliente_id).eq('estado', 'activo').gt('saldo', 0).order('fecha'),
+    ])
+    setPagosExistentes(pagosData || [])
+    setAnticipos((anticData || []) as AnticipoDisp[])
   }
 
-  const handleCobrar = async () => {
-    if (!selected || !cuentaId) return
+  const addLinea = () => setLineas(prev => [...prev, emptyLinea(cuentas[0]?.id || '')])
+  const removeLinea = (idx: number) => setLineas(prev => prev.filter((_, i) => i !== idx))
+  const updateLinea = (idx: number, field: keyof LineaPago, value: string) =>
+    setLineas(prev => prev.map((l, i) => i === idx ? ({ ...l, [field]: value } as LineaPago) : l))
+
+  const totalLineas = lineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0)
+  const saldoPendiente = selected ? (selected.total - (selected.monto_pagado || 0)) : 0
+
+  const handleRegistrarAbono = async () => {
+    if (!selected) return
+    const validas = lineas.filter(l =>
+      parseFloat(l.monto) > 0 && (l.origen === 'cuenta' ? l.cuenta_id : l.anticipo_id)
+    )
+    if (validas.length === 0) return
+    for (const l of validas) {
+      if (l.origen === 'anticipo') {
+        const ant = anticipos.find(a => a.id === l.anticipo_id)
+        if (ant && parseFloat(l.monto) > ant.saldo + 0.01) {
+          alert(`El monto supera el saldo del anticipo (${formatCurrency(ant.saldo)})`)
+          return
+        }
+      }
+    }
     setSaving(true)
-    await supabase.from('presupuestos').update({
-      estado: 'pagada',
-      fecha_cobro: fechaCobro,
-      banco_cuenta_id: cuentaId,
-      monto_pagado: selected.total,
-    }).eq('id', selected.id)
+    const pagosInsert = validas.map(l => {
+      const ant = l.origen === 'anticipo' ? anticipos.find(a => a.id === l.anticipo_id) : null
+      return {
+        presupuesto_id: selected.id,
+        cuenta_id: l.origen === 'anticipo' ? (ant?.cuenta_id || null) : l.cuenta_id,
+        anticipo_id: l.origen === 'anticipo' ? l.anticipo_id : null,
+        monto: parseFloat(l.monto),
+        fecha: fechaCobro,
+        referencia: l.referencia || (l.origen === 'anticipo' ? 'Aplicación de anticipo' : null),
+      }
+    })
+    const { error } = await supabase.from('pagos').insert(pagosInsert)
     setSaving(false)
+    if (error) {
+      alert(`Error al registrar el cobro: ${error.message}`)
+      return
+    }
     setShowPagoModal(false)
+    setSelected(null)
     loadData()
   }
 
@@ -378,38 +443,141 @@ function PresupuestosPage() {
         </div>
       </div>
 
-      {/* Modal: Cobrar presupuesto */}
+      {/* Modal: Cobrar presupuesto (multi-línea, igual a facturas) */}
       {showPagoModal && selected && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold mb-1">Registrar cobro</h2>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-semibold mb-1">
+              {(selected.monto_pagado || 0) > 0 ? 'Registrar abono' : 'Registrar cobro'}
+            </h2>
             <p className="text-sm text-gray-500 mb-4">
               Presupuesto #{selected.numero_presupuesto} · {selected.clientes?.nombre}
             </p>
-            <div className="bg-gray-50 rounded-xl p-4 mb-4">
-              <div className="flex justify-between text-sm font-semibold">
-                <span>Total a cobrar</span>
-                <span className="text-brand-700">{formatCurrency(selected.total)}</span>
+
+            <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-1.5">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Total presupuesto</span>
+                <span className="font-semibold">{formatCurrency(selected.total)}</span>
+              </div>
+              {(selected.monto_pagado || 0) > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Ya cobrado</span>
+                  <span className="text-green-600">{formatCurrency(selected.monto_pagado || 0)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm font-semibold border-t pt-1.5 mt-1.5">
+                <span>Saldo pendiente</span>
+                <span className="text-orange-600">{formatCurrency(saldoPendiente)}</span>
               </div>
             </div>
-            <div className="space-y-3 mb-5">
-              <div>
-                <label className="label">Fecha de cobro</label>
-                <input type="date" className="input" value={fechaCobro}
-                  onChange={e => setFechaCobro(e.target.value)} />
+
+            {pagosExistentes.length > 0 && (
+              <div className="mb-4">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-2">Cobros registrados</p>
+                <div className="space-y-1.5">
+                  {pagosExistentes.map(p => (
+                    <div key={p.id} className="flex justify-between text-sm bg-green-50 rounded-lg px-3 py-2">
+                      <span className="text-gray-600">{formatDate(p.fecha)} · {p.anticipo_id ? 'Anticipo' : p.banco_cuentas?.nombre}</span>
+                      <span className="font-medium text-green-700">{formatCurrency(p.monto)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div>
-                <label className="label">Cuenta bancaria</label>
-                <select className="input" value={cuentaId} onChange={e => setCuentaId(e.target.value)}>
-                  <option value="">Seleccionar cuenta...</option>
-                  {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>)}
-                </select>
-              </div>
+            )}
+
+            <div className="mb-4">
+              <label className="label">Fecha de cobro</label>
+              <input type="date" className="input" value={fechaCobro} onChange={e => setFechaCobro(e.target.value)} />
             </div>
+
+            <div className="space-y-3 mb-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-gray-700">Forma de cobro</p>
+                <button onClick={addLinea} className="text-xs flex items-center gap-1 text-brand-600 hover:text-brand-800">
+                  <Plus size={13} /> Agregar pago
+                </button>
+              </div>
+
+              {lineas.map((linea, idx) => (
+                <div key={idx} className="border border-gray-200 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500 font-medium">Pago {idx + 1}</span>
+                    {lineas.length > 1 && (
+                      <button onClick={() => removeLinea(idx)} className="text-red-400 hover:text-red-600">
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="label text-xs">Origen</label>
+                      <select className="input text-sm" value={linea.origen}
+                        onChange={e => updateLinea(idx, 'origen', e.target.value)}>
+                        <option value="cuenta">Cuenta bancaria</option>
+                        <option value="anticipo" disabled={anticipos.length === 0}>
+                          {anticipos.length === 0 ? 'Anticipo (sin saldo)' : 'Anticipo'}
+                        </option>
+                      </select>
+                    </div>
+                    <div>
+                      {linea.origen === 'cuenta' ? (
+                        <>
+                          <label className="label text-xs">Cuenta bancaria</label>
+                          <select className="input text-sm" value={linea.cuenta_id}
+                            onChange={e => updateLinea(idx, 'cuenta_id', e.target.value)}>
+                            <option value="">Seleccionar cuenta...</option>
+                            {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>)}
+                          </select>
+                        </>
+                      ) : (
+                        <>
+                          <label className="label text-xs">Anticipo</label>
+                          <select className="input text-sm" value={linea.anticipo_id}
+                            onChange={e => updateLinea(idx, 'anticipo_id', e.target.value)}>
+                            <option value="">Seleccionar anticipo...</option>
+                            {anticipos.map(a => (
+                              <option key={a.id} value={a.id}>
+                                {formatDate(a.fecha)} · saldo {formatCurrency(a.saldo)}{a.numero_deposito ? ` · ${a.numero_deposito}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="label text-xs">Monto (USD)</label>
+                      <input type="number" step="0.01" min="0.01" className="input text-sm" placeholder="0.00"
+                        value={linea.monto} onChange={e => updateLinea(idx, 'monto', e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="label text-xs">Referencia</label>
+                      <input className="input text-sm" placeholder="Cheque, transferencia..."
+                        value={linea.referencia} onChange={e => updateLinea(idx, 'referencia', e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {lineas.length > 1 && (
+                <div className="flex justify-between text-sm font-semibold bg-brand-50 rounded-lg px-3 py-2">
+                  <span className="text-brand-700">Total este cobro</span>
+                  <span className="text-brand-800">{formatCurrency(totalLineas)}</span>
+                </div>
+              )}
+
+              {totalLineas > saldoPendiente + 0.01 && (
+                <div className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">
+                  ⚠ El monto supera el saldo pendiente ({formatCurrency(saldoPendiente)})
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-3">
               <button className="btn-secondary flex-1" onClick={() => setShowPagoModal(false)}>Cancelar</button>
-              <button className="btn-primary flex-1" onClick={handleCobrar}
-                disabled={saving || !cuentaId}>
+              <button className="btn-primary flex-1" onClick={handleRegistrarAbono}
+                disabled={saving || lineas.every(l => !l.monto || (l.origen === 'cuenta' ? !l.cuenta_id : !l.anticipo_id))}>
                 {saving ? 'Guardando...' : 'Registrar cobro'}
               </button>
             </div>

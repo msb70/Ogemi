@@ -19,6 +19,12 @@ function AnticiposPage() {
   const [search, setSearch] = useState('')
   const [printData, setPrintData] = useState<Anticipo | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
+  const [saldos, setSaldos] = useState<Record<string, { saldo: number; aplicado: number }>>({})
+
+  // Modal de aplicaciones
+  const [aplicAnticipo, setAplicAnticipo] = useState<Anticipo | null>(null)
+  const [aplicaciones, setAplicaciones] = useState<any[]>([])
+  const [loadingAplic, setLoadingAplic] = useState(false)
 
   const [form, setForm] = useState({
     cliente_id: '',
@@ -33,7 +39,7 @@ function AnticiposPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: anticData }, { data: clientesData }, { data: cuentasData }] = await Promise.all([
+    const [{ data: anticData }, { data: clientesData }, { data: cuentasData }, { data: saldosData }] = await Promise.all([
       supabase
         .from('anticipos')
         .select('*, clientes(nombre), banco_cuentas(nombre, banco, numero_cuenta)')
@@ -41,10 +47,14 @@ function AnticiposPage() {
         .order('created_at', { ascending: false }),
       supabase.from('clientes').select('*').eq('activo', true).order('nombre'),
       supabase.from('banco_cuentas').select('*').eq('activo', true).order('nombre'),
+      supabase.from('anticipos_saldos').select('id, saldo, aplicado'),
     ])
     setAnticipos(anticData || [])
     setClientes(clientesData || [])
     setCuentas(cuentasData || [])
+    const map: Record<string, { saldo: number; aplicado: number }> = {}
+    ;(saldosData || []).forEach((s: any) => { map[s.id] = { saldo: s.saldo, aplicado: s.aplicado } })
+    setSaldos(map)
     setLoading(false)
   }, [])
 
@@ -96,6 +106,19 @@ function AnticiposPage() {
     if (!confirm('¿Anular este anticipo?')) return
     await supabase.from('anticipos').update({ estado: 'anulado' }).eq('id', id)
     load()
+  }
+
+  const openAplicaciones = async (a: Anticipo) => {
+    setAplicAnticipo(a)
+    setLoadingAplic(true)
+    setAplicaciones([])
+    const { data } = await supabase
+      .from('pagos')
+      .select('id, fecha, monto, referencia, facturas(numero_factura), presupuestos(numero_presupuesto)')
+      .eq('anticipo_id', a.id)
+      .order('fecha', { ascending: false })
+    setAplicaciones(data || [])
+    setLoadingAplic(false)
   }
 
   const filtered = anticipos.filter(a => {
@@ -180,15 +203,17 @@ function AnticiposPage() {
                 <th className="table-header">Cuenta</th>
                 <th className="table-header">N° Depósito</th>
                 <th className="table-header text-right">Monto</th>
+                <th className="table-header text-right">Aplicado</th>
+                <th className="table-header text-right">Saldo</th>
                 <th className="table-header">Estado</th>
                 <th className="table-header">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={7} className="text-center py-12 text-gray-400">Cargando...</td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-gray-400">Cargando...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-12 text-gray-400">Sin anticipos registrados</td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-gray-400">Sin anticipos registrados</td></tr>
               ) : filtered.map(a => (
                 <tr key={a.id} className="hover:bg-gray-50">
                   <td className="table-cell text-gray-500">{formatDate(a.fecha)}</td>
@@ -202,6 +227,12 @@ function AnticiposPage() {
                   <td className="table-cell text-right font-semibold text-brand-700">
                     {formatCurrency(a.monto)}
                   </td>
+                  <td className="table-cell text-right text-gray-500">
+                    {formatCurrency(saldos[a.id]?.aplicado ?? 0)}
+                  </td>
+                  <td className="table-cell text-right font-semibold text-green-700">
+                    {formatCurrency(saldos[a.id]?.saldo ?? a.monto)}
+                  </td>
                   <td className="table-cell">
                     <span className={`badge ${estadoBadge(a.estado)}`}>
                       {a.estado}
@@ -209,6 +240,15 @@ function AnticiposPage() {
                   </td>
                   <td className="table-cell">
                     <div className="flex items-center gap-2">
+                      {(saldos[a.id]?.aplicado ?? 0) > 0 && (
+                        <button
+                          onClick={() => openAplicaciones(a)}
+                          className="text-xs text-brand-600 hover:text-brand-800 transition-colors"
+                          title="Ver a qué facturas/presupuestos se aplicó"
+                        >
+                          Aplicaciones
+                        </button>
+                      )}
                       <button
                         onClick={() => handlePrint(a)}
                         className="flex items-center gap-1 text-xs text-gray-500 hover:text-brand-600 transition-colors"
@@ -365,6 +405,47 @@ function AnticiposPage() {
                 Imprimir
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Aplicaciones del anticipo */}
+      {aplicAnticipo && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 print:hidden">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-lg font-semibold">Aplicaciones del anticipo</h2>
+              <button onClick={() => setAplicAnticipo(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">
+              {aplicAnticipo.clientes?.nombre} · {formatCurrency(aplicAnticipo.monto)}
+              {' · '}saldo {formatCurrency(saldos[aplicAnticipo.id]?.saldo ?? aplicAnticipo.monto)}
+            </p>
+
+            {loadingAplic ? (
+              <p className="text-sm text-gray-400 py-6 text-center">Cargando...</p>
+            ) : aplicaciones.length === 0 ? (
+              <p className="text-sm text-gray-400 py-6 text-center">Sin aplicaciones registradas.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {aplicaciones.map(ap => (
+                  <div key={ap.id} className="flex justify-between items-center text-sm bg-gray-50 rounded-lg px-3 py-2">
+                    <div>
+                      <span className="font-medium text-gray-700">
+                        {ap.facturas ? `Factura #${ap.facturas.numero_factura}` :
+                         ap.presupuestos ? `Presupuesto #${ap.presupuestos.numero_presupuesto}` : 'Documento'}
+                      </span>
+                      <span className="text-gray-400 text-xs ml-2">{formatDate(ap.fecha)}</span>
+                    </div>
+                    <span className="font-semibold text-brand-700">{formatCurrency(ap.monto)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button className="btn-secondary w-full mt-5" onClick={() => setAplicAnticipo(null)}>Cerrar</button>
           </div>
         </div>
       )}
