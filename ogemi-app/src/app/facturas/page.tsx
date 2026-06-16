@@ -13,6 +13,17 @@ import PermissionGuard, { withPagePermission } from '@/components/PermissionGuar
 
 type EstadoFilter = 'todos' | 'pendiente' | 'pagada'
 
+type FacturasResumen = {
+  num_facturas: number
+  num_pagadas: number
+  num_pendientes: number
+  monto_total: number
+  monto_pagado: number
+  monto_pendiente: number
+  num_notas_credito: number
+  total_notas_credito: number
+}
+
 const PAGE_SIZE = 50
 
 interface LineaPago {
@@ -30,6 +41,7 @@ function FacturasPage() {
   const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('todos')
   const [page, setPage] = useState(0)
   const [totalCount, setTotalCount] = useState(0)
+  const [resumen, setResumen] = useState<FacturasResumen | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cuentasCargadasRef = useRef(false)
 
@@ -108,6 +120,11 @@ function FacturasPage() {
     setLoading(false)
   }, [estadoFilter, search, page])
 
+  const loadResumen = useCallback(async () => {
+    const { data } = await supabase.rpc('facturas_resumen')
+    if (data && data[0]) setResumen(data[0] as FacturasResumen)
+  }, [supabase])
+
   // Debounce: espera 400ms después de que el usuario deja de escribir para enviar al server
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -122,6 +139,7 @@ function FacturasPage() {
   useEffect(() => { setPage(0) }, [estadoFilter])
 
   useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { loadResumen() }, [loadResumen])
 
   const openPagoModal = async (f: Factura) => {
     setSelectedFactura(f)
@@ -168,6 +186,7 @@ function FacturasPage() {
     setShowModal(false)
     setSelectedFactura(null)
     loadData()
+    loadResumen()
   }
 
   const addLinea = () => {
@@ -213,6 +232,7 @@ function FacturasPage() {
       setShowModal(false)
       showToast('Pago registrado correctamente', 'success')
       loadData()
+      loadResumen()
     }
   }
 
@@ -233,6 +253,46 @@ function FacturasPage() {
         title="Facturas"
         subtitle={`${totalCount.toLocaleString('es-PA')} registros`}
       />
+
+      {/* Resumen */}
+      {resumen && (
+        <div className="bg-white border-b border-gray-200 px-6 py-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
+            <div className="rounded-xl bg-gray-50 p-3">
+              <p className="text-[11px] font-semibold uppercase text-gray-500">Facturas</p>
+              <p className="text-xl font-bold text-gray-900">{resumen.num_facturas.toLocaleString('es-PA')}</p>
+            </div>
+            <div className="rounded-xl bg-green-50 p-3">
+              <p className="text-[11px] font-semibold uppercase text-gray-500">Pagadas</p>
+              <p className="text-xl font-bold text-green-700">{resumen.num_pagadas.toLocaleString('es-PA')}</p>
+            </div>
+            <div className="rounded-xl bg-yellow-50 p-3">
+              <p className="text-[11px] font-semibold uppercase text-gray-500">Pendientes</p>
+              <p className="text-xl font-bold text-yellow-700">{resumen.num_pendientes.toLocaleString('es-PA')}</p>
+            </div>
+            <div className="rounded-xl bg-purple-50 p-3">
+              <p className="text-[11px] font-semibold uppercase text-gray-500">N. crédito</p>
+              <p className="text-xl font-bold text-purple-700">{resumen.num_notas_credito.toLocaleString('es-PA')}</p>
+            </div>
+            <div className="rounded-xl bg-gray-50 p-3">
+              <p className="text-[11px] font-semibold uppercase text-gray-500">Monto total</p>
+              <p className="text-lg font-bold text-gray-900">{formatCurrency(resumen.monto_total)}</p>
+            </div>
+            <div className="rounded-xl bg-green-50 p-3">
+              <p className="text-[11px] font-semibold uppercase text-gray-500">Monto pagado</p>
+              <p className="text-lg font-bold text-green-700">{formatCurrency(resumen.monto_pagado)}</p>
+            </div>
+            <div className="rounded-xl bg-orange-50 p-3">
+              <p className="text-[11px] font-semibold uppercase text-gray-500">Monto pendiente</p>
+              <p className="text-lg font-bold text-orange-600">{formatCurrency(resumen.monto_pendiente)}</p>
+            </div>
+            <div className="rounded-xl bg-purple-50 p-3">
+              <p className="text-[11px] font-semibold uppercase text-gray-500">Total N. crédito</p>
+              <p className="text-lg font-bold text-purple-700">{formatCurrency(resumen.total_notas_credito)}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-3">
