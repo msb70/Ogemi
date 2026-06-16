@@ -6,10 +6,10 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate, tramoColor, classifyTramo } from '@/lib/utils'
 import { Factura, BancoCuenta } from '@/types'
-import { Search, CheckCircle, Filter, X, Plus, Trash2 } from 'lucide-react'
+import { Search, CheckCircle, Filter, X, Plus, Trash2, RefreshCw } from 'lucide-react'
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
-import { withPagePermission } from '@/components/PermissionGuard'
+import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
 
 type EstadoFilter = 'todos' | 'pendiente' | 'pagada'
 
@@ -40,6 +40,13 @@ function FacturasPage() {
   const [lineas, setLineas] = useState<LineaPago[]>([{ cuenta_id: '', monto: '', referencia: '' }])
   const [saving, setSaving] = useState(false)
   const [pagosExistentes, setPagosExistentes] = useState<any[]>([])
+  const [reversadosIds, setReversadosIds] = useState<Set<string>>(new Set())
+
+  // Reverso de pago
+  const [pagoAReversar, setPagoAReversar] = useState<any | null>(null)
+  const [motivoReverso, setMotivoReverso] = useState('')
+  const [reversando, setReversando] = useState(false)
+
   const { toast, showToast, hideToast } = useToast()
 
   const supabase = createClient()
@@ -122,13 +129,45 @@ function FacturasPage() {
     setLineas([{ cuenta_id: cuentas[0]?.id || '', monto: '', referencia: '' }])
     setShowModal(true)
 
-    // Cargar pagos existentes
-    const { data } = await supabase
-      .from('pagos')
-      .select('*, banco_cuentas(nombre, banco)')
-      .eq('factura_id', f.id)
-      .order('fecha', { ascending: false })
+    // Cargar pagos existentes + reversos de esta factura (en paralelo)
+    const [{ data }, { data: reversos }] = await Promise.all([
+      supabase
+        .from('pagos')
+        .select('*, banco_cuentas(nombre, banco)')
+        .eq('factura_id', f.id)
+        .order('fecha', { ascending: false }),
+      supabase
+        .from('pago_reversos')
+        .select('pago_id')
+        .eq('factura_id', f.id),
+    ])
     setPagosExistentes(data || [])
+    setReversadosIds(new Set((reversos || []).map(r => r.pago_id)))
+  }
+
+  const handleReversarPago = async () => {
+    if (!pagoAReversar) return
+    if (motivoReverso.trim().length < 3) {
+      showToast('El motivo debe tener al menos 3 caracteres', 'error')
+      return
+    }
+    setReversando(true)
+    const { error } = await supabase.rpc('reversar_pago', {
+      p_pago_id: pagoAReversar.id,
+      p_motivo: motivoReverso.trim(),
+    })
+    setReversando(false)
+    if (error) {
+      showToast(`No se pudo reversar el pago: ${error.message}`, 'error')
+      return
+    }
+    showToast('Pago reversado correctamente', 'success')
+    // Cerrar todo y recargar: la lista refleja el saldo/estado recalculado por la función
+    setPagoAReversar(null)
+    setMotivoReverso('')
+    setShowModal(false)
+    setSelectedFactura(null)
+    loadData()
   }
 
   const addLinea = () => {
@@ -373,12 +412,39 @@ function FacturasPage() {
               <div className="mb-4">
                 <p className="text-xs font-medium text-gray-500 uppercase mb-2">Pagos registrados</p>
                 <div className="space-y-1.5">
-                  {pagosExistentes.map(p => (
-                    <div key={p.id} className="flex justify-between text-sm bg-green-50 rounded-lg px-3 py-2">
-                      <span className="text-gray-600">{formatDate(p.fecha)} · {p.banco_cuentas?.nombre}</span>
-                      <span className="font-medium text-green-700">{formatCurrency(p.monto)}</span>
-                    </div>
-                  ))}
+                  {pagosExistentes.map(p => {
+                    const reversado = reversadosIds.has(p.id)
+                    return (
+                      <div
+                        key={p.id}
+                        className={`flex items-center justify-between text-sm rounded-lg px-3 py-2 ${
+                          reversado ? 'bg-gray-100' : 'bg-green-50'
+                        }`}
+                      >
+                        <span className={reversado ? 'text-gray-400 line-through' : 'text-gray-600'}>
+                          {formatDate(p.fecha)} · {p.banco_cuentas?.nombre}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`font-medium ${reversado ? 'text-gray-400 line-through' : 'text-green-700'}`}>
+                            {formatCurrency(p.monto)}
+                          </span>
+                          {reversado ? (
+                            <span className="badge bg-gray-200 text-gray-500 text-xs">Reversado</span>
+                          ) : (
+                            <PermissionGuard modulo="facturas" accion="borrar" silent>
+                              <button
+                                onClick={() => { setPagoAReversar(p); setMotivoReverso('') }}
+                                className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium"
+                                title="Reversar este pago"
+                              >
+                                <RefreshCw size={13} /> Reversar
+                              </button>
+                            </PermissionGuard>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -480,6 +546,55 @@ function FacturasPage() {
                 disabled={saving || lineas.every(l => !l.cuenta_id || !l.monto)}
               >
                 {saving ? 'Guardando...' : 'Registrar pago'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Reversar pago */}
+      {pagoAReversar && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold mb-1 flex items-center gap-2">
+              <RefreshCw size={18} className="text-red-500" /> Reversar pago
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              {formatDate(pagoAReversar.fecha)} · {pagoAReversar.banco_cuentas?.nombre} ·{' '}
+              <span className="font-semibold text-gray-700">{formatCurrency(pagoAReversar.monto)}</span>
+            </p>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4 text-xs text-amber-700">
+              El pago no se borra: se registra un reverso contable y se genera el contra-movimiento en banco.
+              El saldo de la factura se recalcula automáticamente.
+            </div>
+
+            <div className="mb-4">
+              <label className="label">Motivo del reverso <span className="text-red-500">*</span></label>
+              <textarea
+                className="input"
+                rows={3}
+                placeholder="Ej: cheque devuelto, pago mal aplicado..."
+                value={motivoReverso}
+                onChange={e => setMotivoReverso(e.target.value)}
+              />
+              <p className="text-xs text-gray-400 mt-1">Mínimo 3 caracteres.</p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                className="btn-secondary flex-1"
+                onClick={() => { setPagoAReversar(null); setMotivoReverso('') }}
+                disabled={reversando}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn-primary flex-1 !bg-red-600 hover:!bg-red-700"
+                onClick={handleReversarPago}
+                disabled={reversando || motivoReverso.trim().length < 3}
+              >
+                {reversando ? 'Reversando...' : 'Confirmar reverso'}
               </button>
             </div>
           </div>

@@ -8,7 +8,7 @@
  * y sirven como red de seguridad contra regresiones en parseNumeroExcel y classifyTramo.
  */
 
-import { parseNumeroExcel, parseFechaCell } from '../excel-parser'
+import { parseNumeroExcel, parseFechaCell, parseLocaleNumber } from '../excel-parser'
 import { classifyTramo } from '../utils'
 import { toISODateLocal } from '../services/importar.service'
 
@@ -123,6 +123,45 @@ describe('toISODateLocal — fecha local a YYYY-MM-DD', () => {
   })
   test('31-diciembre-2026 → "2026-12-31"', () => {
     expect(toISODateLocal(new Date(2026, 11, 31))).toBe('2026-12-31')
+  })
+})
+
+// ── parseLocaleNumber / parseNumeroExcel — formato US vs europeo ──────────────
+
+describe('parseLocaleNumber — auto-detección de formato', () => {
+  // Americano (punto=decimal, coma=miles) — formato del .xlsx actual de Premium Soft
+  test('US "218.61" → 218.61 (NO 21861)', () => {
+    expect(parseLocaleNumber('218.61')).toBeCloseTo(218.61, 2)
+  })
+  test('US con miles "1,210.75" → 1210.75', () => {
+    expect(parseLocaleNumber('1,210.75')).toBeCloseTo(1210.75, 2)
+  })
+  test('US "678.2" → 678.2', () => {
+    expect(parseLocaleNumber('678.2')).toBeCloseTo(678.2, 2)
+  })
+  // Europeo (coma=decimal, punto=miles) — formato del export viejo
+  test('EU "204,31" → 204.31', () => {
+    expect(parseLocaleNumber('204,31')).toBeCloseTo(204.31, 2)
+  })
+  test('EU con miles "1.836,52" → 1836.52', () => {
+    expect(parseLocaleNumber('1.836,52')).toBeCloseTo(1836.52, 2)
+  })
+  // Sin decimales / signos / basura
+  test('entero "440" → 440', () => expect(parseLocaleNumber('440')).toBe(440))
+  test('US miles sin decimal "1,210" → 1210', () => expect(parseLocaleNumber('1,210')).toBe(1210))
+  test('negativo "-749" → -749', () => expect(parseLocaleNumber('-749')).toBe(-749))
+  test('con símbolo "$1,295.50" → 1295.50', () => {
+    expect(parseLocaleNumber('$1,295.50')).toBeCloseTo(1295.5, 2)
+  })
+  test('vacío → 0', () => expect(parseLocaleNumber('')).toBe(0))
+})
+
+describe('parseNumeroExcel — celda US del .xlsx (CASO BUG ×100)', () => {
+  test('celda US n: w="218.61" → 218.61 (antes daba 21861)', () => {
+    expect(parseNumeroExcel({ t: 'n', v: 218.61, w: '218.61' } as any)).toBeCloseTo(218.61, 2)
+  })
+  test('celda US con miles n: w="1,210.75" → 1210.75', () => {
+    expect(parseNumeroExcel({ t: 'n', v: 1210.75, w: '1,210.75' } as any)).toBeCloseTo(1210.75, 2)
   })
 })
 

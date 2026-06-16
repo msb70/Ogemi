@@ -47,22 +47,62 @@ import { ExcelRow } from '@/types'
  *      entero 37310. Todos los campos monetarios se dividen entre 100.
  */
 /**
- * Parsea un número con formato europeo (punto=miles, coma=decimal) desde una celda SheetJS.
+ * Parsea un string numérico detectando el formato (europeo o americano).
  *
- * Exportada para tests unitarios. La fuente de verdad es cell.w (texto formateado),
- * no cell.v (valor numérico), porque SheetJS introduce ambigüedades:
- *   "1.000,00" → cell.v = 1.0 → Number.isInteger(1.0) === true → BUG si se divide ÷100
- *   "1.000,00" → cell.w = "1.000,00" → normalizar → 1000.00 ✓
+ * El Libro de Ventas puede exportarse en dos formatos según el origen:
+ *   - Europeo: "1.836,52"  (punto=miles, coma=decimal)
+ *   - Americano: "1,836.52" (coma=miles, punto=decimal)  ← .xlsx actual de Premium Soft
+ *
+ * Regla robusta: el separador que aparece MÁS A LA DERECHA es el decimal;
+ * el otro es de miles. Si solo hay un tipo de separador, es decimal únicamente
+ * cuando aparece una sola vez seguido de 1–2 dígitos (si no, son miles).
+ *
+ * Exportada para tests unitarios.
+ */
+export function parseLocaleNumber(input: string): number {
+  const s = input.replace(/[^\d.,-]/g, '').trim() // limpiar $, espacios, etc.
+  if (!s || s === '-') return 0
+
+  const lastComma = s.lastIndexOf(',')
+  const lastDot = s.lastIndexOf('.')
+  let decSep: ',' | '.' | null = null
+
+  if (lastComma > -1 && lastDot > -1) {
+    decSep = lastComma > lastDot ? ',' : '.'        // el más a la derecha es decimal
+  } else if (lastComma > -1) {
+    const trailing = s.length - lastComma - 1
+    decSep = (s.indexOf(',') === lastComma && trailing <= 2) ? ',' : null
+  } else if (lastDot > -1) {
+    const trailing = s.length - lastDot - 1
+    decSep = (s.indexOf('.') === lastDot && trailing <= 2) ? '.' : null
+  }
+
+  let normalized: string
+  if (decSep === ',') {
+    normalized = s.replace(/\./g, '').replace(',', '.') // miles=punto, decimal=coma
+  } else if (decSep === '.') {
+    normalized = s.replace(/,/g, '')                    // miles=coma, decimal=punto
+  } else {
+    normalized = s.replace(/[.,]/g, '')                 // sin decimal: todo es miles
+  }
+
+  const result = parseFloat(normalized)
+  return isNaN(result) ? 0 : result
+}
+
+/**
+ * Parsea un número monetario desde una celda SheetJS.
+ *
+ * Fuente de verdad: cell.w (texto formateado), porque al leer el HTML/europeo
+ * SheetJS deja cell.v mal interpretado ("373,10" → cell.v = 37310), mientras que
+ * cell.w conserva el texto original. parseLocaleNumber detecta el formato real.
+ *
+ * Exportada para tests unitarios.
  */
 export function parseNumeroExcel(cell: XLSX.CellObject | undefined): number {
   if (!cell) return 0
   const rawText = cell.w ?? cell.v?.toString() ?? '0'
-  const normalized = rawText
-    .replace(/\./g, '')      // quitar puntos de miles: "1.836" → "1836"
-    .replace(',', '.')       // coma decimal → punto: "1836,52" → "1836.52"
-    .replace(/[^\d.-]/g, '') // limpiar símbolo residual ($, espacios, etc.)
-  const result = parseFloat(normalized)
-  return isNaN(result) ? 0 : result
+  return parseLocaleNumber(rawText)
 }
 
 /**
