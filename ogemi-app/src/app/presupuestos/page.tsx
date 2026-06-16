@@ -6,7 +6,8 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate, tramoColor } from '@/lib/utils'
 import { BancoCuenta, Cliente } from '@/types'
-import { Search, CheckCircle, Filter, X, Plus, Trash2, FileText, Download } from 'lucide-react'
+import { Search, CheckCircle, Filter, X, Plus, Trash2, FileText, Download, Eye, Printer } from 'lucide-react'
+import type { CSSProperties } from 'react'
 import { withPagePermission } from '@/components/PermissionGuard'
 
 type EstadoFilter = 'todos' | 'pendiente' | 'pagada'
@@ -70,6 +71,11 @@ function PresupuestosPage() {
   const [anticipos, setAnticipos] = useState<AnticipoDisp[]>([])
   const [pagosExistentes, setPagosExistentes] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
+
+  // Modal de detalle (ver presupuesto)
+  const [detalle, setDetalle] = useState<Presupuesto | null>(null)
+  const [detallePagos, setDetallePagos] = useState<any[]>([])
+  const [loadingDetalle, setLoadingDetalle] = useState(false)
 
   // Modal nuevo/editar
   const [showForm, setShowForm] = useState(false)
@@ -147,6 +153,19 @@ function PresupuestosPage() {
     ])
     setPagosExistentes(pagosData || [])
     setAnticipos((anticData || []) as AnticipoDisp[])
+  }
+
+  const openDetalle = async (p: Presupuesto) => {
+    setDetalle(p)
+    setLoadingDetalle(true)
+    setDetallePagos([])
+    const { data } = await supabase
+      .from('pagos')
+      .select('id, fecha, monto, referencia, anticipo_id, banco_cuentas(nombre, banco, numero_cuenta), anticipos(numero_deposito)')
+      .eq('presupuesto_id', p.id)
+      .order('fecha', { ascending: true })
+    setDetallePagos(data || [])
+    setLoadingDetalle(false)
   }
 
   const addLinea = () => setLineas(prev => [...prev, emptyLinea(cuentas[0]?.id || '')])
@@ -421,7 +440,12 @@ function PresupuestosPage() {
                       </span>
                     </td>
                     <td className="table-cell">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => openDetalle(p)}
+                          className="flex items-center gap-1 text-sm text-brand-600 hover:text-brand-800 font-medium"
+                          title="Ver detalle">
+                          <Eye size={15} /> Ver
+                        </button>
                         {p.estado === 'pendiente' && p.total > 0 && (
                           <button onClick={() => openPagoModal(p)}
                             className="flex items-center gap-1.5 text-sm text-green-600 hover:text-green-800 font-medium">
@@ -430,9 +454,6 @@ function PresupuestosPage() {
                         )}
                         <button onClick={() => openForm(p)}
                           className="text-xs text-gray-400 hover:text-brand-600">Editar</button>
-                        {p.estado === 'pagada' && (
-                          <span className="text-xs text-gray-400">{formatDate(p.fecha_cobro)}</span>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -656,7 +677,162 @@ function PresupuestosPage() {
           </div>
         </div>
       )}
+
+      {/* Contenedor de impresión del detalle (solo visible al imprimir) */}
+      {detalle && (
+        <div id="presupuesto-print" className="hidden print:block">
+          <PresupuestoDetalle presupuesto={detalle} pagos={detallePagos} fullPage />
+        </div>
+      )}
+
+      {/* Modal: Detalle de presupuesto */}
+      {detalle && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 print:hidden">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <h2 className="text-lg font-semibold">Detalle de presupuesto #{detalle.numero_presupuesto}</h2>
+              <div className="flex items-center gap-3">
+                <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2 py-1.5 text-sm">
+                  <Printer size={15} /> Imprimir
+                </button>
+                <button onClick={() => setDetalle(null)} className="text-gray-400 hover:text-gray-600">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="p-5">
+              {loadingDetalle ? (
+                <p className="text-sm text-gray-400 py-8 text-center">Cargando...</p>
+              ) : (
+                <PresupuestoDetalle presupuesto={detalle} pagos={detallePagos} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #presupuesto-print, #presupuesto-print * { visibility: visible !important; }
+          #presupuesto-print {
+            display: block !important;
+            position: absolute;
+            left: 0; top: 0;
+            width: 100%;
+            min-height: 100vh;
+          }
+          @page { margin: 14mm; }
+        }
+      `}</style>
     </AppLayout>
+  )
+}
+
+function PrCampo({ label, valor }: { label: string; valor: string }) {
+  return (
+    <div>
+      <p className="text-gray-400 text-xs">{label}</p>
+      <p className="font-medium text-gray-800">{valor}</p>
+    </div>
+  )
+}
+
+function PrFila({ label, valor, bold = false, className = '' }: { label: string; valor: string; bold?: boolean; className?: string }) {
+  return (
+    <div className="flex justify-between px-4 py-2.5">
+      <span className="text-gray-500">{label}</span>
+      <span className={`${bold ? 'font-bold' : 'font-medium'} ${className}`}>{valor}</span>
+    </div>
+  )
+}
+
+function PresupuestoDetalle({
+  presupuesto, pagos, fullPage = false,
+}: { presupuesto: Presupuesto; pagos: any[]; fullPage?: boolean }) {
+  const exact = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as CSSProperties
+  const montoPagado = presupuesto.monto_pagado || 0
+  const saldo = presupuesto.total - montoPagado
+
+  return (
+    <div className={`font-sans text-gray-900 ${fullPage ? 'w-full' : ''}`}>
+      <div className={`overflow-hidden ${fullPage ? 'border-2 border-gray-200 rounded-2xl' : ''}`}>
+        {/* Encabezado */}
+        <div
+          className={`flex items-center text-white ${fullPage ? 'gap-6 px-10 py-8' : 'gap-4 px-6 py-5 rounded-xl'}`}
+          style={{ ...exact, background: 'linear-gradient(135deg, #0f766e 0%, #115e59 100%)' }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.jpeg" alt="Logo" className={`rounded-xl bg-white object-contain p-1 shrink-0 ${fullPage ? 'w-24 h-24' : 'w-14 h-14'}`} style={exact} />
+          <div className="flex-1 min-w-0">
+            <h1 className={`font-bold leading-tight ${fullPage ? 'text-2xl' : 'text-base'}`}>IMPRESOS COMERCIALES S.A.</h1>
+            <p className={`text-white/80 ${fullPage ? 'text-sm' : 'text-xs'}`}>RUC 1635517-1-672731 DV 0 · Tel. 6931-8390</p>
+          </div>
+          <div className="text-right shrink-0">
+            <p className={`uppercase tracking-widest text-white/70 ${fullPage ? 'text-xs' : 'text-[10px]'}`}>Presupuesto</p>
+            <p className={`font-bold ${fullPage ? 'text-2xl' : 'text-lg'}`}>#{presupuesto.numero_presupuesto}</p>
+          </div>
+        </div>
+
+        <div className={fullPage ? 'p-10' : 'pt-5'}>
+          {/* Datos */}
+          <div className={`grid grid-cols-2 gap-x-6 gap-y-3 mb-6 ${fullPage ? 'text-base' : 'text-sm'}`}>
+            <PrCampo label="Cliente" valor={presupuesto.clientes?.nombre || '—'} />
+            <PrCampo label="Estado" valor={presupuesto.estado === 'pagada' ? 'Pagada' : 'Pendiente'} />
+            <PrCampo label="Fecha" valor={formatDate(presupuesto.fecha)} />
+            <PrCampo label="Vencimiento" valor={formatDate(presupuesto.fecha_pago)} />
+            <PrCampo label="Tipo de documento" valor={presupuesto.tipo_documento} />
+            {presupuesto.estado === 'pagada' && <PrCampo label="Fecha de cobro" valor={formatDate(presupuesto.fecha_cobro)} />}
+          </div>
+
+          {/* Montos */}
+          <div className="rounded-xl bg-gray-50 border border-gray-100 divide-y divide-gray-100 mb-6" style={exact}>
+            <PrFila label="Monto" valor={formatCurrency(presupuesto.monto)} />
+            <PrFila label="ITBMS" valor={formatCurrency(presupuesto.itbms)} />
+            <PrFila label="Total" valor={formatCurrency(presupuesto.total)} bold />
+            <PrFila label="Pagado" valor={formatCurrency(montoPagado)} className="text-green-700" />
+            <PrFila label="Saldo pendiente" valor={formatCurrency(saldo)} bold className={saldo > 0 ? 'text-orange-600' : 'text-green-700'} />
+          </div>
+
+          {/* Pagos / anticipos */}
+          <p className={`font-semibold text-gray-700 mb-2 ${fullPage ? 'text-base' : 'text-sm'}`}>Pagos y anticipos aplicados</p>
+          {pagos.length === 0 ? (
+            <p className="text-sm text-gray-400 py-3">Sin pagos registrados.</p>
+          ) : (
+            <table className="w-full text-sm border border-gray-100 rounded-xl overflow-hidden" style={exact}>
+              <thead>
+                <tr className="bg-gray-50 text-left text-xs text-gray-500 uppercase">
+                  <th className="px-3 py-2">Fecha</th>
+                  <th className="px-3 py-2">Origen</th>
+                  <th className="px-3 py-2">Banco / Cuenta</th>
+                  <th className="px-3 py-2">Referencia</th>
+                  <th className="px-3 py-2 text-right">Monto</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {pagos.map(p => (
+                  <tr key={p.id}>
+                    <td className="px-3 py-2">{formatDate(p.fecha)}</td>
+                    <td className="px-3 py-2">{p.anticipo_id ? 'Anticipo' : 'Cobro'}</td>
+                    <td className="px-3 py-2">
+                      {p.anticipo_id
+                        ? `Anticipo${p.anticipos?.numero_deposito ? ' · ' + p.anticipos.numero_deposito : ''}`
+                        : `${p.banco_cuentas?.nombre || '—'}${p.banco_cuentas?.banco ? ' · ' + p.banco_cuentas.banco : ''}${p.banco_cuentas?.numero_cuenta ? ' · ' + p.banco_cuentas.numero_cuenta : ''}`}
+                    </td>
+                    <td className="px-3 py-2">{p.referencia || '—'}</td>
+                    <td className="px-3 py-2 text-right font-medium">{formatCurrency(p.monto)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          <div className={`text-center text-gray-400 border-t border-gray-100 pt-3 mt-6 ${fullPage ? 'text-xs' : 'text-[10px]'}`}>
+            <p>Documento interno de control · No constituye una factura fiscal.</p>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
