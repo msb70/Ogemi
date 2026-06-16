@@ -213,6 +213,22 @@ function ImportarPage() {
               ))}
             </div>
 
+            {/* Montos de la importación */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+              <div className="bg-blue-50 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-blue-700">{fmt(result.monto_ventas)}</p>
+                <p className="text-xs text-gray-500 mt-1">Ventas (facturas)</p>
+              </div>
+              <div className="bg-purple-50 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-purple-700">{fmt(result.monto_notas_credito)}</p>
+                <p className="text-xs text-gray-500 mt-1">Notas de crédito</p>
+              </div>
+              <div className="bg-green-50 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-green-700">{fmt(result.monto_neto)}</p>
+                <p className="text-xs text-gray-500 mt-1">Ventas netas (ventas − NC)</p>
+              </div>
+            </div>
+
             {result.errores.length > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-xl p-4">
                 <p className="text-sm font-medium text-red-700 mb-2">Errores ({result.errores.length}):</p>

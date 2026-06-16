@@ -233,4 +233,10 @@ export interface ImportResult {
   duplicadas: number;
   errores: string[];
   clientes_creados: number;
+  /** Suma de totales de facturas (documentos que NO son nota de crédito) */
+  monto_ventas: number;
+  /** Suma de totales de notas de crédito (valor negativo) */
+  monto_notas_credito: number;
+  /** Ventas netas = ventas + notas de crédito (NC son negativas) */
+  monto_neto: number;
 }

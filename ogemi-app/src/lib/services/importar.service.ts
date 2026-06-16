@@ -141,7 +141,18 @@ export async function importarLibroVentas(
     duplicadas: 0,
     errores: [],
     clientes_creados: 0,
+    monto_ventas: 0,
+    monto_notas_credito: 0,
+    monto_neto: 0,
   }
+
+  // Acumula montos de una factura insertada con éxito.
+  const esNotaCredito = (f: FacturaInsert) => /CREDITO/i.test(f.tipo_documento)
+  const acumularMonto = (f: FacturaInsert) => {
+    if (esNotaCredito(f)) result.monto_notas_credito += f.total
+    else result.monto_ventas += f.total
+  }
+  const redondear = (n: number) => Math.round(n * 100) / 100
 
   // 1. Cargar estado actual en paralelo (2 requests)
   const [{ data: clientesDB }, { data: facturasDB }] = await Promise.all([
@@ -190,6 +201,7 @@ export async function importarLibroVentas(
 
     if (!eBatch) {
       result.importadas += chunk.length
+      chunk.forEach(acumularMonto)
     } else {
       // Fallback: individual para aislar qué fila falló (UNIQUE constraint inesperado)
       for (const fila of chunk) {
@@ -198,10 +210,16 @@ export async function importarLibroVentas(
           result.errores.push(`Error factura #${fila.numero_factura}: ${eFila.message}`)
         } else {
           result.importadas++
+          acumularMonto(fila)
         }
       }
     }
   }
+
+  // Redondear a 2 decimales para evitar ruido de coma flotante
+  result.monto_ventas = redondear(result.monto_ventas)
+  result.monto_notas_credito = redondear(result.monto_notas_credito)
+  result.monto_neto = redondear(result.monto_ventas + result.monto_notas_credito)
 
   return { result }
 }
