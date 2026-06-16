@@ -22,7 +22,7 @@ type GastoMonto = {
   id: string
   gasto_fijo_id: string
   periodo: string
-  dia_corte: 15 | 30
+  semana: 1 | 2 | 3 | 4
   monto: number
   notas: string | null
 }
@@ -33,6 +33,12 @@ type BancoCuentaLite = {
   banco: string
 }
 
+const SEMANAS = [1, 2, 3, 4] as const
+type Semana = (typeof SEMANAS)[number]
+type MontosSemana = Record<Semana, string>
+
+const emptyMontos = (): MontosSemana => ({ 1: '', 2: '', 3: '', 4: '' })
+
 const currentMonth = () => {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -40,13 +46,26 @@ const currentMonth = () => {
 
 const monthToPeriod = (month: string) => `${month}-01`
 
+const toISO = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+/** Fechas por defecto: el viernes de cada una de las 4 semanas del mes. */
+const defaultWeekDates = (month: string): string[] => {
+  const [y, m] = month.split('-').map(Number)
+  const first = new Date(y, m - 1, 1)
+  const offset = (5 - first.getDay() + 7) % 7 // 5 = viernes
+  const firstFriday = 1 + offset
+  return [0, 1, 2, 3].map(i => toISO(new Date(y, m - 1, firstFriday + i * 7)))
+}
+
 function GastosFijosPage() {
   const supabase = useMemo(() => createClient(), [])
   const { toast, showToast, hideToast } = useToast()
   const [periodoMes, setPeriodoMes] = useState(currentMonth)
   const [fechaResumen, setFechaResumen] = useState(new Date().toISOString().split('T')[0])
   const [gastos, setGastos] = useState<GastoFijo[]>([])
-  const [montos, setMontos] = useState<Record<string, { 15: string; 30: string }>>({})
+  const [montos, setMontos] = useState<Record<string, MontosSemana>>({})
+  const [semanaFechas, setSemanaFechas] = useState<string[]>(() => defaultWeekDates(currentMonth()))
   const [cuentas, setCuentas] = useState<BancoCuentaLite[]>([])
   const [saldoBancos, setSaldoBancos] = useState(0)
   const [cuentasPorCobrar, setCuentasPorCobrar] = useState(0)
@@ -57,15 +76,14 @@ function GastosFijosPage() {
 
   const periodo = useMemo(() => monthToPeriod(periodoMes), [periodoMes])
 
-  const total15 = useMemo(
-    () => gastos.reduce((sum, gasto) => sum + (parseFloat(montos[gasto.id]?.[15] || '0') || 0), 0),
+  const totalesSemana = useMemo(
+    () =>
+      SEMANAS.map(s =>
+        gastos.reduce((sum, gasto) => sum + (parseFloat(montos[gasto.id]?.[s] || '0') || 0), 0)
+      ),
     [gastos, montos]
   )
-  const total30 = useMemo(
-    () => gastos.reduce((sum, gasto) => sum + (parseFloat(montos[gasto.id]?.[30] || '0') || 0), 0),
-    [gastos, montos]
-  )
-  const totalGastos = total15 + total30
+  const totalGastos = useMemo(() => totalesSemana.reduce((a, b) => a + b, 0), [totalesSemana])
   const totalCxCBancos = cuentasPorCobrar + saldoBancos
   const disponibleDespuesGastos = totalCxCBancos - totalGastos
 
@@ -95,13 +113,35 @@ function GastosFijosPage() {
       return
     }
 
-    const next: Record<string, { 15: string; 30: string }> = {}
+    const next: Record<string, MontosSemana> = {}
     ;((data || []) as GastoMonto[]).forEach(row => {
-      if (!next[row.gasto_fijo_id]) next[row.gasto_fijo_id] = { 15: '', 30: '' }
-      next[row.gasto_fijo_id][row.dia_corte] = String(row.monto ?? '')
+      if (!next[row.gasto_fijo_id]) next[row.gasto_fijo_id] = emptyMontos()
+      if (row.semana >= 1 && row.semana <= 4) {
+        next[row.gasto_fijo_id][row.semana as Semana] = String(row.monto ?? '')
+      }
     })
     setMontos(next)
   }, [periodo, showToast, supabase])
+
+  const loadSemanas = useCallback(async () => {
+    const defaults = defaultWeekDates(periodoMes)
+    const { data, error } = await supabase
+      .from('gastos_fijos_semanas')
+      .select('semana, fecha')
+      .eq('periodo', periodo)
+
+    if (error) {
+      showToast(`Error al cargar fechas de semanas: ${error.message}`, 'error')
+      setSemanaFechas(defaults)
+      return
+    }
+
+    const fechas = [...defaults]
+    ;((data || []) as { semana: number; fecha: string }[]).forEach(row => {
+      if (row.semana >= 1 && row.semana <= 4) fechas[row.semana - 1] = row.fecha
+    })
+    setSemanaFechas(fechas)
+  }, [periodo, periodoMes, showToast, supabase])
 
   const loadResumen = useCallback(async () => {
     const { data: facturasData, error: facturasError } = await supabase
@@ -146,9 +186,9 @@ function GastosFijosPage() {
 
   const loadAll = useCallback(async () => {
     setLoading(true)
-    await Promise.all([loadGastos(), loadMontos(), loadResumen()])
+    await Promise.all([loadGastos(), loadMontos(), loadSemanas(), loadResumen()])
     setLoading(false)
-  }, [loadGastos, loadMontos, loadResumen])
+  }, [loadGastos, loadMontos, loadSemanas, loadResumen])
 
   useEffect(() => { loadAll() }, [loadAll])
 
@@ -176,48 +216,50 @@ function GastosFijosPage() {
     const rows = gastos
       .filter(gasto => gasto.activo)
       .flatMap(gasto => {
-        const valores = montos[gasto.id] || { 15: '', 30: '' }
-        return [
-          {
-            gasto_fijo_id: gasto.id,
-            periodo,
-            dia_corte: 15,
-            monto: parseFloat(valores[15] || '0') || 0,
-          },
-          {
-            gasto_fijo_id: gasto.id,
-            periodo,
-            dia_corte: 30,
-            monto: parseFloat(valores[30] || '0') || 0,
-          },
-        ]
+        const valores = montos[gasto.id] || emptyMontos()
+        return SEMANAS.map(semana => ({
+          gasto_fijo_id: gasto.id,
+          periodo,
+          semana,
+          monto: parseFloat(valores[semana] || '0') || 0,
+        }))
       })
 
-    if (rows.length === 0) return
+    const fechasRows = SEMANAS.map(semana => ({
+      periodo,
+      semana,
+      fecha: semanaFechas[semana - 1] || defaultWeekDates(periodoMes)[semana - 1],
+    }))
 
     setSavingMontos(true)
-    const { error } = await supabase
-      .from('gastos_fijos_montos')
-      .upsert(rows, { onConflict: 'gasto_fijo_id,periodo,dia_corte' })
+
+    const [montosRes, fechasRes] = await Promise.all([
+      rows.length > 0
+        ? supabase.from('gastos_fijos_montos').upsert(rows, { onConflict: 'gasto_fijo_id,periodo,semana' })
+        : Promise.resolve({ error: null }),
+      supabase.from('gastos_fijos_semanas').upsert(fechasRows, { onConflict: 'periodo,semana' }),
+    ])
 
     setSavingMontos(false)
-    if (error) {
-      showToast(`Error al guardar montos: ${error.message}`, 'error')
+
+    const err = montosRes.error || fechasRes.error
+    if (err) {
+      showToast(`Error al guardar: ${err.message}`, 'error')
       return
     }
 
-    showToast('Montos guardados.')
+    showToast('Montos y fechas guardados.')
   }
 
-  const updateMonto = (gastoId: string, diaCorte: 15 | 30, value: string) => {
+  const updateMonto = (gastoId: string, semana: Semana, value: string) => {
     setMontos(prev => ({
       ...prev,
-      [gastoId]: {
-        15: prev[gastoId]?.[15] || '',
-        30: prev[gastoId]?.[30] || '',
-        [diaCorte]: value,
-      },
+      [gastoId]: { ...emptyMontos(), ...prev[gastoId], [semana]: value },
     }))
+  }
+
+  const updateFecha = (semanaIndex: number, value: string) => {
+    setSemanaFechas(prev => prev.map((f, i) => (i === semanaIndex ? value : f)))
   }
 
   const toggleActivo = async (gasto: GastoFijo) => {
@@ -239,7 +281,7 @@ function GastosFijosPage() {
       {toast && <Toast {...toast} onClose={hideToast} />}
       <Header
         title="Gastos fijos"
-        subtitle="Planificacion quincenal, cuentas por cobrar y saldos bancarios"
+        subtitle="Planificacion semanal, cuentas por cobrar y saldos bancarios"
       />
 
       <div className="p-6 space-y-6">
@@ -297,7 +339,7 @@ function GastosFijosPage() {
           <div className="card p-4">
             <p className="text-xs font-semibold uppercase text-gray-500">Total gastos</p>
             <p className="mt-2 text-2xl font-bold text-gray-900">{formatCurrency(totalGastos)}</p>
-            <p className="text-xs text-gray-400">Cortes 15 + 30</p>
+            <p className="text-xs text-gray-400">4 semanas</p>
           </div>
           <div
             className={`card p-4 ${
@@ -358,15 +400,18 @@ function GastosFijosPage() {
         </section>
 
         <section className="card overflow-hidden">
-          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
               Montos de gastos fijos - {periodoMes}
             </p>
-            <div className="flex gap-4 text-xs font-semibold text-gray-600">
-              <span>15: {formatCurrency(total15)}</span>
-              <span>30: {formatCurrency(total30)}</span>
-              <span>Total: {formatCurrency(totalGastos)}</span>
-            </div>
+            <button
+              className="btn-secondary inline-flex items-center gap-2 py-1.5 text-xs"
+              onClick={guardarMontos}
+              disabled={savingMontos || loading || gastos.every(gasto => !gasto.activo)}
+            >
+              <Save size={14} />
+              {savingMontos ? 'Guardando' : 'Guardar'}
+            </button>
           </div>
 
           <div className="overflow-x-auto">
@@ -375,67 +420,72 @@ function GastosFijosPage() {
                 <tr className="border-b border-gray-200">
                   <th className="table-header">Gasto fijo</th>
                   <th className="table-header">Categoria</th>
-                  <th className="table-header text-right">15</th>
-                  <th className="table-header text-right">30</th>
+                  {SEMANAS.map((semana, i) => (
+                    <th key={semana} className="table-header text-right">
+                      <div className="flex flex-col items-end gap-1">
+                        <span>Semana {semana}</span>
+                        <input
+                          type="date"
+                          className="input py-1 text-xs max-w-[150px]"
+                          value={semanaFechas[i] || ''}
+                          onChange={event => updateFecha(i, event.target.value)}
+                          title="Fecha de la semana (editable)"
+                        />
+                      </div>
+                    </th>
+                  ))}
+                  <th className="table-header text-right">Total</th>
                   <th className="table-header">Estado</th>
-                  <th className="table-header">
-                    <button
-                      className="btn-secondary inline-flex items-center gap-2 py-1.5 text-xs"
-                      onClick={guardarMontos}
-                      disabled={savingMontos || loading || gastos.every(gasto => !gasto.activo)}
-                    >
-                      <Save size={14} />
-                      {savingMontos ? 'Guardando' : 'Guardar'}
-                    </button>
-                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={6} className="text-center py-10 text-gray-400">Cargando...</td></tr>
+                  <tr><td colSpan={8} className="text-center py-10 text-gray-400">Cargando...</td></tr>
                 ) : gastos.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center py-10 text-gray-400">No hay gastos fijos creados.</td></tr>
+                  <tr><td colSpan={8} className="text-center py-10 text-gray-400">No hay gastos fijos creados.</td></tr>
                 ) : (
-                  gastos.map(gasto => (
-                    <tr key={gasto.id} className={!gasto.activo ? 'opacity-50' : ''}>
-                      <td className="table-cell font-medium">{gasto.nombre}</td>
-                      <td className="table-cell text-gray-500">{gasto.categoria || '-'}</td>
-                      {[15, 30].map(dia => {
-                        const diaCorte = dia as 15 | 30
-                        return (
-                          <td key={diaCorte} className="table-cell">
+                  gastos.map(gasto => {
+                    const fila = montos[gasto.id] || emptyMontos()
+                    const totalFila = SEMANAS.reduce((sum, s) => sum + (parseFloat(fila[s] || '0') || 0), 0)
+                    return (
+                      <tr key={gasto.id} className={!gasto.activo ? 'opacity-50' : ''}>
+                        <td className="table-cell font-medium">{gasto.nombre}</td>
+                        <td className="table-cell text-gray-500">{gasto.categoria || '-'}</td>
+                        {SEMANAS.map(semana => (
+                          <td key={semana} className="table-cell">
                             <input
                               type="number"
                               min="0"
                               step="0.01"
-                              className="input max-w-[140px] text-right ml-auto"
-                              value={montos[gasto.id]?.[diaCorte] || ''}
-                              onChange={event => updateMonto(gasto.id, diaCorte, event.target.value)}
+                              className="input max-w-[120px] text-right ml-auto"
+                              value={fila[semana] || ''}
+                              onChange={event => updateMonto(gasto.id, semana, event.target.value)}
                               disabled={!gasto.activo}
                             />
                           </td>
-                        )
-                      })}
-                      <td className="table-cell">
-                        <button
-                          className={`badge ${gasto.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}
-                          onClick={() => toggleActivo(gasto)}
-                        >
-                          {gasto.activo ? 'Activo' : 'Inactivo'}
-                        </button>
-                      </td>
-                      <td className="table-cell"></td>
-                    </tr>
-                  ))
+                        ))}
+                        <td className="table-cell text-right font-semibold">{formatCurrency(totalFila)}</td>
+                        <td className="table-cell">
+                          <button
+                            className={`badge ${gasto.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}
+                            onClick={() => toggleActivo(gasto)}
+                          >
+                            {gasto.activo ? 'Activo' : 'Inactivo'}
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
               {gastos.length > 0 && (
                 <tfoot>
                   <tr className="border-t border-gray-200 bg-gray-50">
                     <td className="table-cell font-bold" colSpan={2}>Total</td>
-                    <td className="table-cell text-right font-bold">{formatCurrency(total15)}</td>
-                    <td className="table-cell text-right font-bold">{formatCurrency(total30)}</td>
-                    <td className="table-cell font-bold">{formatCurrency(totalGastos)}</td>
+                    {totalesSemana.map((total, i) => (
+                      <td key={i} className="table-cell text-right font-bold">{formatCurrency(total)}</td>
+                    ))}
+                    <td className="table-cell text-right font-bold text-brand-700">{formatCurrency(totalGastos)}</td>
                     <td className="table-cell"></td>
                   </tr>
                 </tfoot>
