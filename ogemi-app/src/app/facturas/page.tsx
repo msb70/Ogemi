@@ -39,6 +39,8 @@ function FacturasPage() {
   const [searchInput, setSearchInput] = useState('')   // valor del input (sin debounce)
   const [search, setSearch] = useState('')             // valor comprometido que va al server
   const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('todos')
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
   const [page, setPage] = useState(0)
   const [totalCount, setTotalCount] = useState(0)
   const [resumen, setResumen] = useState<FacturasResumen | null>(null)
@@ -97,6 +99,9 @@ function FacturasPage() {
       query = query.eq('estado', estadoFilter)
     }
 
+    if (fechaDesde) query = query.gte('fecha', fechaDesde)
+    if (fechaHasta) query = query.lte('fecha', fechaHasta)
+
     if (search.trim()) {
       if (/^\d+$/.test(search.trim())) {
         query = query.eq('numero_factura', parseInt(search.trim()))
@@ -118,12 +123,17 @@ function FacturasPage() {
     }
 
     setLoading(false)
-  }, [estadoFilter, search, page])
+  }, [estadoFilter, search, page, fechaDesde, fechaHasta])
 
   const loadResumen = useCallback(async () => {
-    const { data } = await supabase.rpc('facturas_resumen')
+    const { data } = await supabase.rpc('facturas_resumen', {
+      p_estado: estadoFilter === 'todos' ? null : estadoFilter,
+      p_search: search.trim() || null,
+      p_desde: fechaDesde || null,
+      p_hasta: fechaHasta || null,
+    })
     if (data && data[0]) setResumen(data[0] as FacturasResumen)
-  }, [supabase])
+  }, [supabase, estadoFilter, search, fechaDesde, fechaHasta])
 
   // Debounce: espera 400ms después de que el usuario deja de escribir para enviar al server
   useEffect(() => {
@@ -135,8 +145,8 @@ function FacturasPage() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
   }, [searchInput])
 
-  // Resetear página cuando cambia el filtro de estado
-  useEffect(() => { setPage(0) }, [estadoFilter])
+  // Resetear página cuando cambia el filtro de estado o las fechas
+  useEffect(() => { setPage(0) }, [estadoFilter, fechaDesde, fechaHasta])
 
   useEffect(() => { loadData() }, [loadData])
   useEffect(() => { loadResumen() }, [loadResumen])
@@ -295,8 +305,8 @@ function FacturasPage() {
       )}
 
       {/* Filters */}
-      <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+      <div className="bg-white border-b border-gray-200 px-6 py-3 flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 max-w-sm min-w-[200px]">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             className="input pl-9"
@@ -306,6 +316,31 @@ function FacturasPage() {
           />
           {searchInput && (
             <button onClick={() => { setSearchInput(''); setSearch('') }} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">Desde</span>
+          <input
+            type="date"
+            className="input py-1.5 text-sm w-[150px]"
+            value={fechaDesde}
+            onChange={(e) => setFechaDesde(e.target.value)}
+          />
+          <span className="text-xs text-gray-500">Hasta</span>
+          <input
+            type="date"
+            className="input py-1.5 text-sm w-[150px]"
+            value={fechaHasta}
+            onChange={(e) => setFechaHasta(e.target.value)}
+          />
+          {(fechaDesde || fechaHasta) && (
+            <button
+              onClick={() => { setFechaDesde(''); setFechaHasta('') }}
+              className="text-gray-400 hover:text-gray-600"
+              title="Limpiar fechas"
+            >
               <X size={14} />
             </button>
           )}
