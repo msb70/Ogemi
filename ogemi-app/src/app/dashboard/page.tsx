@@ -30,6 +30,25 @@ interface PendingSummary {
 
 interface BarPoint { label: string; ventas: number; nc: number; compras: number }
 interface PiePoint { name: string; value: number }
+interface TopRow { nombre: string; count: number; monto: number; pct: number }
+
+function buildTop(rows: { nombre: string; total: number }[]): TopRow[] {
+  const map: Record<string, { count: number; monto: number }> = {}
+  rows.forEach(r => {
+    const k = r.nombre || 'Sin nombre'
+    if (!map[k]) map[k] = { count: 0, monto: 0 }
+    map[k].count += 1
+    map[k].monto += r.total || 0
+  })
+  const totalGlobal = rows.reduce((s, r) => s + (r.total || 0), 0)
+  return Object.entries(map)
+    .map(([nombre, v]) => ({
+      nombre, count: v.count, monto: v.monto,
+      pct: totalGlobal > 0 ? (v.monto / totalGlobal) * 100 : 0,
+    }))
+    .sort((a, b) => b.monto - a.monto)
+    .slice(0, 10)
+}
 interface ChartTooltipPayload {
   dataKey: string
   fill: string
@@ -121,6 +140,40 @@ function CustomTooltip({
   )
 }
 
+function TopTable({ title, rows, unidad, color }: { title: string; rows: TopRow[]; unidad: string; color: string }) {
+  return (
+    <div className="card p-5">
+      <h3 className="text-sm font-semibold text-gray-700 mb-3">{title}</h3>
+      {rows.length === 0 ? (
+        <div className="h-32 flex items-center justify-center text-gray-400 text-sm">Sin datos en el período</div>
+      ) : (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-200 text-[11px] text-gray-500 uppercase">
+              <th className="text-left py-2 font-medium w-6">#</th>
+              <th className="text-left py-2 font-medium">Nombre</th>
+              <th className="text-right py-2 font-medium">{unidad}</th>
+              <th className="text-right py-2 font-medium">Monto</th>
+              <th className="text-right py-2 font-medium">%</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {rows.map((r, i) => (
+              <tr key={r.nombre}>
+                <td className="py-2 text-gray-400">{i + 1}</td>
+                <td className="py-2 max-w-[140px]"><span className="truncate block" title={r.nombre}>{r.nombre}</span></td>
+                <td className="py-2 text-right text-gray-500">{r.count}</td>
+                <td className="py-2 text-right font-semibold">{formatCurrency(r.monto)}</td>
+                <td className="py-2 text-right font-medium" style={{ color }}>{r.pct.toFixed(1)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
 function isNotaCreditо(tipoDoc: string): boolean {
   const t = String(tipoDoc || '').toUpperCase()
   return t.includes('NOTA') || t.includes('N/C') || t.includes('CREDITO')
@@ -160,6 +213,9 @@ function DashboardPage() {
   const [barData, setBarData] = useState<BarPoint[]>([])
   const [pieVentas, setPieVentas] = useState<PiePoint[]>([])
   const [pieCompras, setPieCompras] = useState<PiePoint[]>([])
+  const [topVentas, setTopVentas] = useState<TopRow[]>([])
+  const [topCompras, setTopCompras] = useState<TopRow[]>([])
+  const [topPresupuestos, setTopPresupuestos] = useState<TopRow[]>([])
 
   const { start, end, prevStart, prevEnd } = useMemo(
     () => getPeriodRange(periodType, selYear, selMonth, selQuarter),
@@ -178,6 +234,7 @@ function DashboardPage() {
         { data: cuentas },
         { data: facturasPendientes },
         { data: comprasPendientes },
+        { data: presupuestosCur },
       ] = await Promise.all([
         supabase.from('facturas').select('fecha,total,tipo_documento,cliente_id,clientes(nombre)').gte('fecha', start).lte('fecha', end),
         supabase.from('facturas').select('fecha,total,tipo_documento').gte('fecha', prevStart).lte('fecha', prevEnd),
@@ -186,6 +243,7 @@ function DashboardPage() {
         supabase.from('banco_cuentas').select('id,saldo_inicial').eq('activo', true),
         supabase.from('facturas').select('total,monto_pagado,tipo_documento').eq('estado', 'pendiente'),
         supabase.from('compras').select('total,monto_pagado').eq('estado', 'pendiente'),
+        supabase.from('presupuestos').select('fecha,total,clientes(nombre)').gte('fecha', start).lte('fecha', end),
       ])
 
       // KPI actual
@@ -281,6 +339,11 @@ function DashboardPage() {
       const pieC = top8P.map(([name, value]) => ({ name: name.substring(0, 22), value: Math.round(value * 100) / 100 }))
       if (restP > 0) pieC.push({ name: 'Otros', value: Math.round(restP * 100) / 100 })
       setPieCompras(pieC)
+
+      // Top 10 ventas (por cliente), compras (por proveedor), presupuestos (por cliente)
+      setTopVentas(buildTop(ventas.map(f => ({ nombre: (f.clientes as any)?.nombre || 'Sin nombre', total: f.total || 0 }))))
+      setTopCompras(buildTop(comprasArr.map(c => ({ nombre: (c.proveedores as any)?.nombre || 'Sin nombre', total: c.total || 0 }))))
+      setTopPresupuestos(buildTop((presupuestosCur || []).map((p: any) => ({ nombre: (p.clientes as any)?.nombre || 'Sin nombre', total: p.total || 0 }))))
 
     } finally {
       setLoading(false)
@@ -558,6 +621,13 @@ function DashboardPage() {
                   </ResponsiveContainer>
                 )}
               </div>
+            </div>
+
+            {/* Top 10 — ventas, compras y presupuestos */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <TopTable title="Top 10 ventas por cliente" rows={topVentas} unidad="Facturas" color="#0284c7" />
+              <TopTable title="Top 10 compras por proveedor" rows={topCompras} unidad="Compras" color="#f97316" />
+              <TopTable title="Top 10 presupuestos por cliente" rows={topPresupuestos} unidad="Presup." color="#7c3aed" />
             </div>
 
           </div>
