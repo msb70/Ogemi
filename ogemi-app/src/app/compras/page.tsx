@@ -79,6 +79,8 @@ function ComprasPage() {
     fecha: new Date().toISOString().split('T')[0],
     concepto: '',
     referencia: '',
+    tipo_documento: 'FACTURA',
+    documento_afectado: '',
     monto: '',
     itbms: '',
     estado: 'pendiente',
@@ -86,6 +88,8 @@ function ComprasPage() {
     fecha_pago: new Date().toISOString().split('T')[0],
     notas: '',
   })
+
+  const esNotaCredito = (t?: string | null) => !!t && t.toUpperCase().includes('CREDITO')
 
   const supabase = createClient()
   const { toast, showToast, hideToast } = useToast()
@@ -114,7 +118,8 @@ function ComprasPage() {
   const resetForm = () => {
     setForm({
       proveedor_id: '', fecha: new Date().toISOString().split('T')[0],
-      concepto: '', referencia: '', monto: '', itbms: '',
+      concepto: '', referencia: '', tipo_documento: 'FACTURA', documento_afectado: '',
+      monto: '', itbms: '',
       estado: 'pendiente', banco_cuenta_id: '',
       fecha_pago: new Date().toISOString().split('T')[0], notas: '',
     })
@@ -129,8 +134,11 @@ function ComprasPage() {
         fecha: c.fecha,
         concepto: c.concepto || '',
         referencia: c.referencia || '',
-        monto: String(c.monto),
-        itbms: String(c.itbms),
+        tipo_documento: c.tipo_documento || 'FACTURA',
+        documento_afectado: c.documento_afectado || '',
+        // Se muestran magnitudes positivas; el signo lo aplica el tipo de documento al guardar
+        monto: String(Math.abs(c.monto)),
+        itbms: String(Math.abs(c.itbms)),
         estado: c.estado,
         banco_cuenta_id: c.banco_cuenta_id || '',
         fecha_pago: c.fecha_pago || new Date().toISOString().split('T')[0],
@@ -145,13 +153,18 @@ function ComprasPage() {
   const handleSave = async () => {
     if (!form.proveedor_id || !form.monto) return
     setSaving(true)
+    // Las notas de crédito se guardan en negativo (igual que en facturas)
+    const esNC = esNotaCredito(form.tipo_documento)
+    const signo = esNC ? -1 : 1
     const payload: any = {
       proveedor_id: form.proveedor_id,
       fecha: form.fecha,
       concepto: form.concepto || null,
       referencia: form.referencia || null,
-      monto: parseFloat(form.monto) || 0,
-      itbms: parseFloat(form.itbms) || 0,
+      tipo_documento: form.tipo_documento || 'FACTURA',
+      documento_afectado: esNC ? (form.documento_afectado || null) : null,
+      monto: signo * Math.abs(parseFloat(form.monto) || 0),
+      itbms: signo * Math.abs(parseFloat(form.itbms) || 0),
       estado: form.estado,
       banco_cuenta_id: form.estado === 'pagada' && form.banco_cuenta_id ? form.banco_cuenta_id : null,
       fecha_pago: form.estado === 'pagada' ? form.fecha_pago : null,
@@ -461,7 +474,10 @@ function ComprasPage() {
                 return (
                   <div key={c.id} className={`card p-4 ${vencida ? 'border-red-200 bg-red-50/30' : ''}`}>
                     <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="font-medium text-sm flex-1 min-w-0 truncate">{(c.proveedores as any)?.nombre || '—'}</p>
+                      <p className="font-medium text-sm flex-1 min-w-0 truncate">
+                        {esNotaCredito(c.tipo_documento) && <span className="badge bg-purple-100 text-purple-700 mr-1">NC</span>}
+                        {(c.proveedores as any)?.nombre || '—'}
+                      </p>
                       <span className={`badge flex items-center gap-1 flex-shrink-0 ${
                         c.estado === 'pagada' ? 'bg-green-100 text-green-700' : vencida ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
                       }`}>
@@ -544,7 +560,10 @@ function ComprasPage() {
                     return (
                       <tr key={c.id} className={`hover:bg-gray-50 ${vencida ? 'bg-red-50/30' : ''}`}>
                         <td className="table-cell text-gray-500 text-sm">{formatDate(c.fecha)}</td>
-                        <td className="table-cell font-medium">{(c.proveedores as any)?.nombre || '—'}</td>
+                        <td className="table-cell font-medium">
+                          {esNotaCredito(c.tipo_documento) && <span className="badge bg-purple-100 text-purple-700 mr-1">NC</span>}
+                          {(c.proveedores as any)?.nombre || '—'}
+                        </td>
                         <td className="table-cell text-gray-500 max-w-[160px]">
                           <span className="truncate block" title={c.concepto || ''}>{c.concepto || '—'}</span>
                         </td>
@@ -840,6 +859,32 @@ function ComprasPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
+                  <label className="label">Tipo de documento</label>
+                  <select className="input" value={esNotaCredito(form.tipo_documento) ? 'NC' : 'FACTURA'}
+                    onChange={e => setForm(f => ({
+                      ...f,
+                      tipo_documento: e.target.value === 'NC' ? 'NOTA DE CREDITO REFERENTE A UNA FE' : 'FACTURA',
+                      documento_afectado: e.target.value === 'NC' ? f.documento_afectado : '',
+                    }))}>
+                    <option value="FACTURA">Factura</option>
+                    <option value="NC">Nota de crédito</option>
+                  </select>
+                </div>
+                {esNotaCredito(form.tipo_documento) && (
+                  <div>
+                    <label className="label">Documento afectado (factura)</label>
+                    <input className="input" placeholder="Ej: 166642" value={form.documento_afectado}
+                      onChange={e => setForm(f => ({ ...f, documento_afectado: e.target.value }))} />
+                  </div>
+                )}
+              </div>
+              {esNotaCredito(form.tipo_documento) && (
+                <p className="text-xs text-purple-700 bg-purple-50 rounded-lg px-3 py-2">
+                  Nota de crédito: ingresa los montos en positivo; se guardarán en negativo y restarán de la cuenta por pagar del proveedor.
+                </p>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
                   <label className="label">Monto sin ITBMS (USD) *</label>
                   <input type="number" step="0.01" className="input" placeholder="0.00" value={form.monto}
                     onChange={e => setForm(f => ({ ...f, monto: e.target.value }))} />
@@ -850,11 +895,11 @@ function ComprasPage() {
                     onChange={e => setForm(f => ({ ...f, itbms: e.target.value }))} />
                 </div>
               </div>
-              {(parseFloat(form.monto) || 0) + (parseFloat(form.itbms) || 0) > 0 && (
+              {(Math.abs(parseFloat(form.monto) || 0) + Math.abs(parseFloat(form.itbms) || 0)) > 0 && (
                 <div className="bg-gray-50 rounded-xl p-3 flex items-center justify-between">
                   <span className="text-sm text-gray-600">Total</span>
-                  <span className="text-lg font-bold text-brand-700">
-                    {formatCurrency((parseFloat(form.monto) || 0) + (parseFloat(form.itbms) || 0))}
+                  <span className={`text-lg font-bold ${esNotaCredito(form.tipo_documento) ? 'text-purple-700' : 'text-brand-700'}`}>
+                    {formatCurrency((esNotaCredito(form.tipo_documento) ? -1 : 1) * (Math.abs(parseFloat(form.monto) || 0) + Math.abs(parseFloat(form.itbms) || 0)))}
                   </span>
                 </div>
               )}
@@ -1095,7 +1140,9 @@ function CompraDetalle({
           </div>
           <div className="text-right shrink-0">
             <p className={`uppercase tracking-widest text-white/70 ${fullPage ? 'text-xs' : 'text-[10px]'}`}>Detalle de</p>
-            <p className={`font-bold ${fullPage ? 'text-2xl' : 'text-lg'}`}>COMPRA</p>
+            <p className={`font-bold ${fullPage ? 'text-2xl' : 'text-lg'}`}>
+              {compra.tipo_documento?.toUpperCase().includes('CREDITO') ? 'NOTA DE CRÉDITO' : 'COMPRA'}
+            </p>
           </div>
         </div>
 
@@ -1108,6 +1155,10 @@ function CompraDetalle({
             <CmpCampo label="Vencimiento" valor={formatDate(compra.vencimiento)} />
             <CmpCampo label="Concepto" valor={compra.concepto || '—'} />
             <CmpCampo label="Referencia" valor={compra.referencia || '—'} />
+            <CmpCampo label="Tipo de documento" valor={compra.tipo_documento || 'FACTURA'} />
+            {compra.tipo_documento?.toUpperCase().includes('CREDITO') && (
+              <CmpCampo label="Documento afectado" valor={compra.documento_afectado || '—'} />
+            )}
           </div>
 
           {/* Montos */}

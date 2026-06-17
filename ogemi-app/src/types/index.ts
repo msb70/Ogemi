@@ -91,6 +91,8 @@ export interface Compra {
   proveedor_id: string;
   concepto: string | null;
   referencia: string | null;
+  tipo_documento: string;
+  documento_afectado: string | null;
   monto: number;
   itbms: number;
   total: number;
