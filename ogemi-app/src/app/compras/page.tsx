@@ -323,19 +323,40 @@ function ComprasPage() {
   }
 
   const exportCSV = () => {
+    // Escape CSV: encierra en comillas y duplica comillas internas. Sin esto, los
+    // proveedores/conceptos con comas (ej. "FABIO MOLES, S. A.") parten la fila y
+    // descuadran los datos respecto a los títulos.
+    const cell = (v: unknown) => {
+      const s = v == null ? '' : String(v)
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const headers = [
+      'Fecha', 'Proveedor', 'Concepto', 'Referencia', 'Tipo documento', 'Documento afectado',
+      'Monto', 'ITBMS', 'Total', 'Pagado', 'Saldo', 'Estado', 'Vencimiento',
+    ]
     const rows = filtered.map(c => [
-      c.fecha, (c.proveedores as any)?.nombre || '', c.concepto || '',
-      c.monto, c.itbms, c.total, c.estado, c.vencimiento || ''
+      c.fecha,
+      (c.proveedores as any)?.nombre || '',
+      c.concepto || '',
+      c.referencia || '',
+      c.tipo_documento || 'FACTURA',
+      c.documento_afectado || '',
+      c.monto,
+      c.itbms,
+      c.total,
+      c.monto_pagado || 0,
+      c.total - (c.monto_pagado || 0),
+      c.estado,
+      c.vencimiento || '',
     ])
-    const csv = [
-      ['Fecha', 'Proveedor', 'Concepto', 'Monto', 'ITBMS', 'Total', 'Estado', 'Vencimiento'],
-      ...rows
-    ].map(r => r.join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
+    const csv = [headers, ...rows].map(r => r.map(cell).join(',')).join('\r\n')
+    // BOM para que Excel respete UTF-8 (ñ, acentos)
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = `compras_${new Date().toISOString().split('T')[0]}.csv`
     a.click()
+    URL.revokeObjectURL(a.href)
   }
 
   const filtered = compras.filter(c => {
