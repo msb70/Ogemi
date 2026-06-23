@@ -98,50 +98,58 @@ export async function sendWelcomeEmail({ to, name, tempPassword, modulosVisibles
   const safeEmail = escapeHtml(to)
   const safePassword = escapeHtml(tempPassword)
   const loginUrl = `${getAppUrl()}/login`
+  const manualUrl = `${getAppUrl()}/manual`
   const safeLoginUrl = escapeHtml(loginUrl)
-  const manualHtml = buildManualHtml({ nombre: name, rolNombre, modulosVisibles })
-  const manualText = buildManualText({ nombre: name, rolNombre, modulosVisibles })
+  const safeManualUrl = escapeHtml(manualUrl)
+  const rolLinea = rolNombre
+    ? `<p style="margin:0 0 16px; text-align:center; color:#6b7280; font-size:13px;">Su rol asignado: <strong style="color:#374151;">${escapeHtml(rolNombre)}</strong></p>`
+    : ''
+  void modulosVisibles
 
   const html = `
-    <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5; max-width: 620px;">
+    <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6; max-width: 520px; margin: 0 auto;">
       ${brandHeaderHtml()}
-      <h1 style="font-size: 22px; margin: 0 0 16px;">Bienvenido a Ogemi</h1>
-      <p>Hola ${safeName},</p>
-      <p>Ogemi lo está invitando al sistema de gestión de cartera de Impresos Comerciales SA.</p>
-      <p>Estos son sus datos de acceso inicial:</p>
-      <div style="background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; margin: 16px 0;">
-        <p style="margin: 0 0 8px;"><strong>Correo:</strong> ${safeEmail}</p>
-        <p style="margin: 0;"><strong>Clave temporal:</strong> <span style="font-family: monospace; font-size: 18px;">${safePassword}</span></p>
+      <h1 style="font-size: 20px; margin: 0 0 14px; color:#111827;">Bienvenido a Ogemi</h1>
+      <p style="margin:0 0 12px;">Hola ${safeName},</p>
+      <p style="margin:0 0 16px;">Lo invitamos al sistema de gestión de cartera de Impresos Comerciales S.A. Estos son sus datos de acceso inicial:</p>
+      ${rolLinea}
+
+      <div style="background:#f0fdfa; border:1px solid #99f6e4; border-radius:10px; padding:16px; margin:0 0 20px; text-align:center;">
+        <p style="margin:0 0 4px; font-size:12px; text-transform:uppercase; letter-spacing:1px; color:#0f766e;">Su correo</p>
+        <p style="margin:0 0 12px; font-size:15px; font-weight:bold; color:#115e59;">${safeEmail}</p>
+        <p style="margin:0 0 4px; font-size:12px; text-transform:uppercase; letter-spacing:1px; color:#0f766e;">Su clave temporal</p>
+        <p style="margin:0; font-family:'Courier New', monospace; font-size:24px; font-weight:bold; color:#115e59; letter-spacing:2px;">${safePassword}</p>
       </div>
-      <p>Al entrar por primera vez, el sistema le pedirá cambiar esta clave.</p>
-      <p>
-        <a href="${safeLoginUrl}" style="display: inline-block; background: #0f5f86; color: #ffffff; text-decoration: none; padding: 10px 16px; border-radius: 6px;">
+
+      <div style="text-align:center; margin:0 0 14px;">
+        <a href="${safeLoginUrl}" style="display:inline-block; background:#0f766e; color:#ffffff; text-decoration:none; padding:13px 28px; border-radius:8px; font-size:15px; font-weight:bold;">
           Entrar a Ogemi
         </a>
-      </p>
-      <hr style="border:none; border-top:1px solid #e5e7eb; margin:24px 0;" />
-      ${manualHtml}
-      <p style="font-size: 12px; color: #6b7280; margin-top: 24px;">
-        Si usted no esperaba esta invitación, ignore este correo.
-      </p>
+      </div>
+      <div style="text-align:center; margin:0 0 22px;">
+        <a href="${safeManualUrl}" style="display:inline-block; background:#ffffff; color:#0f766e; text-decoration:none; padding:11px 26px; border-radius:8px; font-size:14px; font-weight:bold; border:1px solid #0f766e;">
+          Ver manual del sistema
+        </a>
+      </div>
+
+      <p style="margin:0 0 4px; font-size:14px; color:#374151;">Al entrar por primera vez, el sistema le pedirá cambiar esta clave.</p>
+      <p style="font-size:12px; color:#9ca3af; margin:16px 0 0;">Si usted no esperaba esta invitación, ignore este correo. — Impresos Comerciales S.A.</p>
     </div>
   `
 
   const text = [
     `Hola ${name || to},`,
     '',
-    'Ogemi lo está invitando al sistema de gestión de cartera de Impresos Comerciales SA.',
+    'Lo invitamos al sistema de gestión de cartera de Impresos Comerciales S.A.',
+    rolNombre ? `Su rol: ${rolNombre}` : '',
     '',
     `Correo: ${to}`,
     `Clave temporal: ${tempPassword}`,
     '',
     'Al entrar por primera vez, el sistema le pedirá cambiar esta clave.',
     `Entrar a Ogemi: ${loginUrl}`,
-    '',
-    '----------------------------------------',
-    '',
-    manualText,
-  ].join('\n')
+    `Ver manual del sistema: ${manualUrl}`,
+  ].filter(Boolean).join('\n')
 
   return sendViaResend({ to, subject: 'Bienvenido a Ogemi', html, text })
 }
