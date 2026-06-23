@@ -36,6 +36,17 @@ function getAppUrl() {
   ).replace(/\/$/, '')
 }
 
+// Encabezado de marca (logo + nombre) reutilizable en los correos.
+function brandHeaderHtml() {
+  const logoUrl = `${getAppUrl()}/logo.jpeg`
+  return `
+    <div style="background: linear-gradient(135deg, #0f766e 0%, #115e59 100%); border-radius: 12px; padding: 20px 24px; margin: 0 0 24px; text-align: center;">
+      <img src="${logoUrl}" alt="Ogemi" width="64" height="64" style="display:inline-block; width:64px; height:64px; border-radius:12px; background:#ffffff; padding:6px; object-fit:contain;" />
+      <p style="margin: 10px 0 0; color:#ffffff; font-size:18px; font-weight:bold; letter-spacing:0.5px;">OGEMI</p>
+      <p style="margin: 2px 0 0; color:rgba(255,255,255,0.85); font-size:12px;">Impresos Comerciales S.A.</p>
+    </div>`
+}
+
 async function sendViaResend(input: {
   to: string
   subject: string
@@ -93,6 +104,7 @@ export async function sendWelcomeEmail({ to, name, tempPassword, modulosVisibles
 
   const html = `
     <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5; max-width: 620px;">
+      ${brandHeaderHtml()}
       <h1 style="font-size: 22px; margin: 0 0 16px;">Bienvenido a Ogemi</h1>
       <p>Hola ${safeName},</p>
       <p>Ogemi lo está invitando al sistema de gestión de cartera de Impresos Comerciales SA.</p>
@@ -132,6 +144,64 @@ export async function sendWelcomeEmail({ to, name, tempPassword, modulosVisibles
   ].join('\n')
 
   return sendViaResend({ to, subject: 'Bienvenido a Ogemi', html, text })
+}
+
+export async function sendResetPasswordEmail({ to, name, tempPassword }: WelcomeEmailInput): Promise<EmailResult> {
+  const safeName = escapeHtml(name || to)
+  const safePassword = escapeHtml(tempPassword)
+  const loginUrl = `${getAppUrl()}/login`
+  const safeLoginUrl = escapeHtml(loginUrl)
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6; max-width: 520px; margin: 0 auto;">
+      ${brandHeaderHtml()}
+      <h1 style="font-size: 20px; margin: 0 0 14px; color:#111827;">Restablecimiento de contraseña</h1>
+      <p style="margin:0 0 12px;">Hola ${safeName},</p>
+      <p style="margin:0 0 16px;">Se generó una nueva <strong>clave temporal</strong> para su cuenta en Ogemi. Úsela para ingresar; el sistema le pedirá crear una clave nueva de inmediato.</p>
+
+      <div style="background:#f0fdfa; border:1px solid #99f6e4; border-radius:10px; padding:16px; margin:0 0 20px; text-align:center;">
+        <p style="margin:0 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:1px; color:#0f766e;">Su clave temporal</p>
+        <p style="margin:0; font-family:'Courier New', monospace; font-size:24px; font-weight:bold; color:#115e59; letter-spacing:2px;">${safePassword}</p>
+      </div>
+
+      <div style="text-align:center; margin:0 0 22px;">
+        <a href="${safeLoginUrl}" style="display:inline-block; background:#0f766e; color:#ffffff; text-decoration:none; padding:13px 28px; border-radius:8px; font-size:15px; font-weight:bold;">
+          Entrar y cambiar mi clave
+        </a>
+      </div>
+
+      <div style="background:#f9fafb; border-radius:10px; padding:16px 18px; margin:0 0 18px;">
+        <p style="margin:0 0 8px; font-weight:bold; color:#374151;">Cómo cambiar su clave (3 pasos)</p>
+        <ol style="margin:0; padding-left:18px; color:#1f2937;">
+          <li style="margin-bottom:6px;">Pulse el botón "Entrar y cambiar mi clave".</li>
+          <li style="margin-bottom:6px;">Ingrese con su correo y la clave temporal de arriba.</li>
+          <li>El sistema le pedirá escribir su nueva clave. Confírmela y listo.</li>
+        </ol>
+      </div>
+
+      <p style="font-size:13px; color:#6b7280; margin:0 0 6px;">Por seguridad, esta clave es temporal y de un solo uso para volver a entrar.</p>
+      <p style="font-size:12px; color:#9ca3af; margin:14px 0 0;">Si usted no solicitó este cambio, contacte al administrador del sistema. — Impresos Comerciales S.A.</p>
+    </div>
+  `
+
+  const text = [
+    `Hola ${name || to},`,
+    '',
+    'Se generó una nueva clave temporal para su cuenta en Ogemi.',
+    '',
+    `Clave temporal: ${tempPassword}`,
+    '',
+    'Cómo cambiar su clave:',
+    '1. Entre a Ogemi con su correo y la clave temporal.',
+    '2. El sistema le pedirá crear una clave nueva.',
+    '3. Confírmela y listo.',
+    '',
+    `Entrar a Ogemi: ${loginUrl}`,
+    '',
+    'Si usted no solicitó este cambio, contacte al administrador.',
+  ].join('\n')
+
+  return sendViaResend({ to, subject: 'Restablecimiento de contraseña · Ogemi', html, text })
 }
 
 export async function sendManualEmail({ to, name, modulosVisibles, rolNombre }: ManualEmailInput): Promise<EmailResult> {

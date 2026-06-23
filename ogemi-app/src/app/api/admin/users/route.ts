@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-api'
-import { sendWelcomeEmail, sendManualEmail } from '@/lib/email'
+import { sendWelcomeEmail, sendManualEmail, sendResetPasswordEmail } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 
@@ -275,18 +275,15 @@ export async function PATCH(request: NextRequest) {
 
     const { data: profile } = await admin
       .from('user_profiles')
-      .select('email,nombre,rol_id')
+      .select('email,nombre')
       .eq('id', userId)
       .maybeSingle()
 
-    const roleCtx = profile?.rol_id ? await getRoleContext(admin, profile.rol_id) : { modulosVisibles: [], rolNombre: undefined }
     const emailStatus = profile?.email
-      ? await sendWelcomeEmail({
+      ? await sendResetPasswordEmail({
           to: normalizeEmail(profile.email),
           name: profile.nombre || normalizeEmail(profile.email).split('@')[0],
           tempPassword: newPassword,
-          modulosVisibles: roleCtx.modulosVisibles,
-          rolNombre: roleCtx.rolNombre,
         })
       : { sent: false, provider: 'none' as const, error: 'No se encontró el correo del usuario.' }
 
