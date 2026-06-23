@@ -36,6 +36,7 @@ const emptyLinea = (cuentaId = ''): LineaPago => ({
 interface Presupuesto {
   id: string
   numero_presupuesto: number
+  orden_trabajo: string | null
   fecha: string
   cliente_id: string
   tipo_documento: string
@@ -81,8 +82,11 @@ function PresupuestosPage() {
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [savingForm, setSavingForm] = useState(false)
+  const otAnioActual = String(new Date().getFullYear() % 100).padStart(2, '0')
   const [form, setForm] = useState({
     numero_presupuesto: '',
+    ot_anio: otAnioActual,
+    ot_num: '',
     fecha: new Date().toISOString().split('T')[0],
     cliente_id: '',
     tipo_documento: 'PRESUPUESTO',
@@ -122,6 +126,7 @@ function PresupuestosPage() {
     const q = search.toLowerCase()
     return (
       p.numero_presupuesto?.toString().includes(q) ||
+      p.orden_trabajo?.toLowerCase().includes(q) ||
       p.clientes?.nombre?.toLowerCase().includes(q)
     )
   })
@@ -215,15 +220,18 @@ function PresupuestosPage() {
   }
 
   const resetForm = () => {
-    setForm({ numero_presupuesto: '', fecha: new Date().toISOString().split('T')[0], cliente_id: '', tipo_documento: 'PRESUPUESTO', monto: '', itbms: '0', notas: '' })
+    setForm({ numero_presupuesto: '', ot_anio: otAnioActual, ot_num: '', fecha: new Date().toISOString().split('T')[0], cliente_id: '', tipo_documento: 'PRESUPUESTO', monto: '', itbms: '0', notas: '' })
     setEditId(null)
   }
 
   const openForm = async (p?: Presupuesto) => {
     if (p) {
       setEditId(p.id)
+      const otMatch = p.orden_trabajo?.match(/^(\d{2})-(\d+)$/)
       setForm({
         numero_presupuesto: String(p.numero_presupuesto),
+        ot_anio: otMatch ? otMatch[1] : otAnioActual,
+        ot_num: otMatch ? String(parseInt(otMatch[2], 10)) : '',
         fecha: p.fecha,
         cliente_id: p.cliente_id,
         tipo_documento: p.tipo_documento,
@@ -232,15 +240,24 @@ function PresupuestosPage() {
         notas: p.notas || '',
       })
     } else {
-      // Auto-numerar: max actual + 1
+      // Auto-numerar presupuesto: max actual + 1
       const { data } = await supabase
         .from('presupuestos')
         .select('numero_presupuesto')
         .order('numero_presupuesto', { ascending: false })
         .limit(1)
       const siguiente = data && data.length > 0 ? (data[0].numero_presupuesto + 1) : 1
+      // Auto-consecutivo de orden de trabajo del anio en curso
+      const { data: otData } = await supabase
+        .from('presupuestos')
+        .select('orden_trabajo')
+        .like('orden_trabajo', `${otAnioActual}-%`)
+      const maxOt = (otData || []).reduce((m, r) => {
+        const n = parseInt((r.orden_trabajo || '').split('-')[1] || '0', 10)
+        return n > m ? n : m
+      }, 0)
       resetForm()
-      setForm(f => ({ ...f, numero_presupuesto: String(siguiente), itbms: '0' }))
+      setForm(f => ({ ...f, numero_presupuesto: String(siguiente), ot_anio: otAnioActual, ot_num: String(maxOt + 1), itbms: '0' }))
     }
     setShowForm(true)
   }
@@ -250,8 +267,12 @@ function PresupuestosPage() {
     setSavingForm(true)
     const monto = parseFloat(form.monto) || 0
     const itbms = parseFloat(form.itbms) || 0
+    const ordenTrabajo = form.ot_num.trim()
+      ? `${form.ot_anio}-${String(parseInt(form.ot_num, 10)).padStart(3, '0')}`
+      : null
     const payload = {
       numero_presupuesto: parseInt(form.numero_presupuesto),
+      orden_trabajo: ordenTrabajo,
       fecha: form.fecha,
       cliente_id: form.cliente_id,
       tipo_documento: form.tipo_documento,
@@ -273,11 +294,11 @@ function PresupuestosPage() {
 
   const exportCSV = () => {
     const rows = filtered.map(p => [
-      p.numero_presupuesto, p.fecha, p.clientes?.nombre || '', p.tipo_documento,
+      p.numero_presupuesto, p.orden_trabajo || '', p.fecha, p.clientes?.nombre || '', p.tipo_documento,
       p.monto, p.itbms, p.total, p.estado, p.fecha_pago || '', p.fecha_cobro || ''
     ])
     const csv = [
-      ['#', 'Fecha', 'Cliente', 'Tipo', 'Monto', 'ITBMS', 'Total', 'Estado', 'Vence', 'Cobrado'],
+      ['#', 'Orden trabajo', 'Fecha', 'Cliente', 'Tipo', 'Monto', 'ITBMS', 'Total', 'Estado', 'Vence', 'Cobrado'],
       ...rows
     ].map(r => r.map(v => `"${v ?? ''}"`).join(',')).join('\n')
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
@@ -383,6 +404,7 @@ function PresupuestosPage() {
             <thead>
               <tr className="border-b border-gray-200">
                 <th className="table-header">#Presupuesto</th>
+                <th className="table-header">Orden trabajo</th>
                 <th className="table-header">Fecha</th>
                 <th className="table-header">Cliente</th>
                 <th className="table-header">Tipo</th>
@@ -396,9 +418,9 @@ function PresupuestosPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={10} className="text-center py-12 text-gray-400">Cargando...</td></tr>
+                <tr><td colSpan={11} className="text-center py-12 text-gray-400">Cargando...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={10} className="text-center py-12 text-gray-400">
+                <tr><td colSpan={11} className="text-center py-12 text-gray-400">
                   <FileText size={32} className="mx-auto mb-2 opacity-30" />
                   Sin presupuestos registrados
                 </td></tr>
@@ -410,6 +432,7 @@ function PresupuestosPage() {
                 return (
                   <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                     <td className="table-cell font-mono font-medium">#{p.numero_presupuesto}</td>
+                    <td className="table-cell font-mono text-gray-700">{p.orden_trabajo || '—'}</td>
                     <td className="table-cell text-gray-500">{formatDate(p.fecha)}</td>
                     <td className="table-cell max-w-[180px]">
                       <span className="truncate block" title={p.clientes?.nombre}>{p.clientes?.nombre}</span>
@@ -612,12 +635,27 @@ function PresupuestosPage() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold mb-5">{editId ? 'Editar presupuesto' : 'Nuevo presupuesto'}</h2>
             <div className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="label">Número</label>
                   <div className="input bg-gray-50 text-gray-500 font-mono flex items-center">
                     #{form.numero_presupuesto || '—'}
                     {!editId && <span className="ml-auto text-xs text-gray-400">Auto</span>}
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Orden de trabajo</label>
+                  <div className="input flex items-center gap-1 font-mono px-2">
+                    <span className="text-gray-500">{form.ot_anio}-</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={3}
+                      className="flex-1 min-w-0 bg-transparent outline-none"
+                      placeholder="000"
+                      value={form.ot_num}
+                      onChange={e => setForm(f => ({ ...f, ot_num: e.target.value.replace(/\D/g, '').slice(0, 3) }))}
+                    />
                   </div>
                 </div>
                 <div>
@@ -771,6 +809,9 @@ function PresupuestoDetalle({
           <div className="text-right shrink-0">
             <p className={`uppercase tracking-widest text-white/70 ${fullPage ? 'text-xs' : 'text-[10px]'}`}>Presupuesto</p>
             <p className={`font-bold ${fullPage ? 'text-2xl' : 'text-lg'}`}>#{presupuesto.numero_presupuesto}</p>
+            {presupuesto.orden_trabajo && (
+              <p className={`text-white/80 font-mono ${fullPage ? 'text-sm' : 'text-xs'}`}>OT {presupuesto.orden_trabajo}</p>
+            )}
           </div>
         </div>
 
