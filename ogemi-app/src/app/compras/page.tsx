@@ -14,6 +14,7 @@ import {
 import type { CSSProperties } from 'react'
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
+import { useAuth } from '@/context/AuthContext'
 import QrScanner from '@/components/QrScanner'
 import { withPagePermission } from '@/components/PermissionGuard'
 
@@ -59,6 +60,12 @@ function ComprasPage() {
   const [lineas, setLineas] = useState<LineaPago[]>([{ cuenta_id: '', monto: '', referencia: '' }])
   const [savingPago, setSavingPago] = useState(false)
   const [pagosExistentes, setPagosExistentes] = useState<any[]>([])
+  const [pagoReversados, setPagoReversados] = useState<Set<string>>(new Set())
+
+  // Editar cobro / borrar (solo admin)
+  const [cobroEdit, setCobroEdit] = useState<any | null>(null)
+  const [cobroForm, setCobroForm] = useState({ monto: '', fecha: '', cuenta_id: '', motivo: '' })
+  const [savingCobro, setSavingCobro] = useState(false)
 
   // Modal de detalle (ver compra)
   const [detalle, setDetalle] = useState<Compra | null>(null)
@@ -90,6 +97,9 @@ function ComprasPage() {
   })
 
   const esNotaCredito = (t?: string | null) => !!t && t.toUpperCase().includes('CREDITO')
+
+  const { profile } = useAuth()
+  const isAdmin = profile?.rol_id === 'admin'
 
   const supabase = createClient()
   const { toast, showToast, hideToast } = useToast()
@@ -206,12 +216,13 @@ function ComprasPage() {
     setFechaPago(new Date().toISOString().split('T')[0])
     setLineas([{ cuenta_id: cuentas[0]?.id || '', monto: '', referencia: '' }])
     setShowPagoModal(true)
-    const { data } = await supabase
-      .from('pagos')
-      .select('*, banco_cuentas(nombre, banco)')
-      .eq('compra_id', c.id)
-      .order('fecha', { ascending: false })
+    const [{ data }, { data: reversos }] = await Promise.all([
+      supabase.from('pagos').select('*, banco_cuentas(nombre, banco)')
+        .eq('compra_id', c.id).order('fecha', { ascending: false }),
+      supabase.from('pago_reversos').select('pago_id').eq('compra_id', c.id),
+    ])
     setPagosExistentes(data || [])
+    setPagoReversados(new Set((reversos || []).map(r => r.pago_id)))
   }
 
   const openDetalle = async (c: Compra) => {
@@ -229,6 +240,39 @@ function ComprasPage() {
     setDetallePagos(pagosData || [])
     setDetalleReversados(new Set((reversos || []).map(r => r.pago_id)))
     setLoadingDetalle(false)
+  }
+
+  const handleEliminarCompra = async (c: Compra) => {
+    if (!confirm(`¿Borrar la compra de ${c.proveedores?.nombre || ''} (${formatCurrency(c.total)})? Se eliminarán sus pagos y movimientos de banco. No se puede deshacer.`)) return
+    const { error } = await supabase.rpc('eliminar_compra', { p_id: c.id })
+    if (error) { showToast(`No se pudo borrar: ${error.message}`, 'error'); return }
+    showToast('Compra borrada', 'success')
+    load(); loadVencidas()
+  }
+
+  const openEditCobro = (p: any) => {
+    setCobroEdit(p)
+    setCobroForm({ monto: String(p.monto), fecha: p.fecha, cuenta_id: p.cuenta_id || '', motivo: '' })
+  }
+
+  const handleEditCobro = async () => {
+    if (!cobroEdit) return
+    const monto = parseFloat(cobroForm.monto) || 0
+    if (monto <= 0 || !cobroForm.cuenta_id) return
+    if (cobroForm.motivo.trim().length < 3) { showToast('Indica un motivo (mín. 3 caracteres).', 'error'); return }
+    setSavingCobro(true)
+    const { error } = await supabase.rpc('editar_cobro_compra', {
+      p_pago_id: cobroEdit.id, p_monto: monto, p_fecha: cobroForm.fecha,
+      p_cuenta_id: cobroForm.cuenta_id, p_referencia: cobroEdit.referencia || null,
+      p_motivo: cobroForm.motivo.trim(),
+    })
+    setSavingCobro(false)
+    if (error) { showToast(`No se pudo editar el pago: ${error.message}`, 'error'); return }
+    setCobroEdit(null)
+    setShowPagoModal(false)
+    setSelectedCompra(null)
+    showToast('Pago actualizado', 'success')
+    load(); loadVencidas()
   }
 
   const addLinea = () => setLineas(p => [...p, { cuenta_id: cuentas[0]?.id || '', monto: '', referencia: '' }])
@@ -542,6 +586,13 @@ function ComprasPage() {
                             {(c.monto_pagado || 0) > 0 ? 'Abonar' : 'Pagar'}
                           </button>
                         )}
+                        {isAdmin && (
+                          <button onClick={() => handleEliminarCompra(c)}
+                            className="p-2 rounded-lg text-red-500 border border-gray-200 hover:bg-red-50"
+                            aria-label="Borrar compra (admin)" title="Borrar compra (admin)">
+                            <Trash2 size={15} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -633,6 +684,13 @@ function ComprasPage() {
                               >
                                 <CheckCircle size={12} />
                                 {(c.monto_pagado || 0) > 0 ? 'Abonar' : 'Pagar'}
+                              </button>
+                            )}
+                            {isAdmin && (
+                              <button onClick={() => handleEliminarCompra(c)}
+                                className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50"
+                                title="Borrar compra (admin)">
+                                <Trash2 size={14} />
                               </button>
                             )}
                           </div>
@@ -779,12 +837,26 @@ function ComprasPage() {
               <div className="mb-4">
                 <p className="text-xs font-medium text-gray-500 uppercase mb-2">Pagos anteriores</p>
                 <div className="space-y-1.5">
-                  {pagosExistentes.map(p => (
-                    <div key={p.id} className="flex justify-between text-sm bg-green-50 rounded-lg px-3 py-2">
-                      <span className="text-gray-600">{formatDate(p.fecha)} · {p.banco_cuentas?.nombre}</span>
-                      <span className="font-medium text-green-700">{formatCurrency(p.monto)}</span>
-                    </div>
-                  ))}
+                  {pagosExistentes.map(p => {
+                    const reversado = pagoReversados.has(p.id)
+                    return (
+                      <div key={p.id} className={`flex justify-between items-center text-sm rounded-lg px-3 py-2 ${reversado ? 'bg-gray-100' : 'bg-green-50'}`}>
+                        <span className={reversado ? 'text-gray-400 line-through' : 'text-gray-600'}>{formatDate(p.fecha)} · {p.banco_cuentas?.nombre}</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`font-medium ${reversado ? 'text-gray-400 line-through' : 'text-green-700'}`}>{formatCurrency(p.monto)}</span>
+                          {reversado ? (
+                            <span className="badge bg-gray-200 text-gray-500 text-xs">Reversado</span>
+                          ) : isAdmin ? (
+                            <button onClick={() => openEditCobro(p)}
+                              className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-800 font-medium"
+                              title="Editar este pago (admin)">
+                              <Pencil size={13} /> Editar
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -1116,6 +1188,40 @@ function ComprasPage() {
           @page { margin: 14mm; }
         }
       `}</style>
+
+      {/* Modal: Editar pago de compra (admin) */}
+      {cobroEdit && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 print:hidden">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold mb-1">Editar pago</h2>
+            <p className="text-sm text-gray-500 mb-4">Se reversará el pago actual y se registrará uno nuevo.</p>
+            <div className="space-y-3">
+              <div><label className="label">Monto *</label>
+                <input type="number" step="0.01" className="input" value={cobroForm.monto}
+                  onChange={e => setCobroForm(f => ({ ...f, monto: e.target.value }))} /></div>
+              <div><label className="label">Fecha *</label>
+                <input type="date" className="input" value={cobroForm.fecha}
+                  onChange={e => setCobroForm(f => ({ ...f, fecha: e.target.value }))} /></div>
+              <div><label className="label">Cuenta de banco *</label>
+                <select className="input" value={cobroForm.cuenta_id}
+                  onChange={e => setCobroForm(f => ({ ...f, cuenta_id: e.target.value }))}>
+                  <option value="">Seleccionar cuenta...</option>
+                  {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>)}
+                </select></div>
+              <div><label className="label">Motivo de la edición *</label>
+                <input className="input" placeholder="Ej: monto corregido" value={cobroForm.motivo}
+                  onChange={e => setCobroForm(f => ({ ...f, motivo: e.target.value }))} /></div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button className="btn-secondary flex-1" onClick={() => setCobroEdit(null)}>Cancelar</button>
+              <button className="btn-primary flex-1" onClick={handleEditCobro}
+                disabled={savingCobro || !(parseFloat(cobroForm.monto) > 0) || !cobroForm.cuenta_id || cobroForm.motivo.trim().length < 3}>
+                {savingCobro ? 'Guardando...' : 'Guardar cambios'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }

@@ -6,10 +6,11 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate, tramoColor, classifyTramo } from '@/lib/utils'
 import { Factura, BancoCuenta } from '@/types'
-import { Search, CheckCircle, Filter, X, Plus, Trash2, RefreshCw, Eye, Printer } from 'lucide-react'
+import { Search, CheckCircle, Filter, X, Plus, Trash2, RefreshCw, Eye, Printer, Pencil } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
+import { useAuth } from '@/context/AuthContext'
 import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
 
 type EstadoFilter = 'todos' | 'pendiente' | 'pagada'
@@ -83,6 +84,17 @@ function FacturasPage() {
   const [pagoAReversar, setPagoAReversar] = useState<any | null>(null)
   const [motivoReverso, setMotivoReverso] = useState('')
   const [reversando, setReversando] = useState(false)
+
+  // Editar monto / borrar / editar cobro (solo admin)
+  const [editFactura, setEditFactura] = useState<Factura | null>(null)
+  const [editForm, setEditForm] = useState({ monto: '', itbms: '', fecha: '' })
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [cobroEdit, setCobroEdit] = useState<any | null>(null)
+  const [cobroForm, setCobroForm] = useState({ monto: '', fecha: '', cuenta_id: '', motivo: '' })
+  const [savingCobro, setSavingCobro] = useState(false)
+
+  const { profile } = useAuth()
+  const isAdmin = profile?.rol_id === 'admin'
 
   const { toast, showToast, hideToast } = useToast()
 
@@ -246,6 +258,60 @@ function FacturasPage() {
     setSelectedFactura(null)
     loadData()
     loadResumen()
+  }
+
+  // ── Editar monto / borrar factura / editar cobro (solo admin) ──
+  const openEditFactura = (f: Factura) => {
+    setEditFactura(f)
+    setEditForm({ monto: String(f.monto), itbms: String(f.itbms), fecha: f.fecha })
+  }
+
+  const handleEditFactura = async () => {
+    if (!editFactura) return
+    const monto = parseFloat(editForm.monto) || 0
+    const itbms = parseFloat(editForm.itbms) || 0
+    setSavingEdit(true)
+    const { error } = await supabase.from('facturas')
+      .update({ monto, itbms, total: monto + itbms, fecha: editForm.fecha })
+      .eq('id', editFactura.id)
+    setSavingEdit(false)
+    if (error) { showToast(`No se pudo editar: ${error.message}`, 'error'); return }
+    setEditFactura(null)
+    showToast('Factura actualizada', 'success')
+    loadData(); loadResumen()
+  }
+
+  const handleEliminarFactura = async (f: Factura) => {
+    if (!confirm(`¿Borrar la factura #${f.numero_factura}? Se eliminarán sus cobros y movimientos de banco. No se puede deshacer.`)) return
+    const { error } = await supabase.rpc('eliminar_factura', { p_id: f.id })
+    if (error) { showToast(`No se pudo borrar: ${error.message}`, 'error'); return }
+    showToast('Factura borrada', 'success')
+    loadData(); loadResumen()
+  }
+
+  const openEditCobro = (p: any) => {
+    setCobroEdit(p)
+    setCobroForm({ monto: String(p.monto), fecha: p.fecha, cuenta_id: p.cuenta_id || '', motivo: '' })
+  }
+
+  const handleEditCobro = async () => {
+    if (!cobroEdit) return
+    const monto = parseFloat(cobroForm.monto) || 0
+    if (monto <= 0 || !cobroForm.cuenta_id) return
+    if (cobroForm.motivo.trim().length < 3) { showToast('Indica un motivo (mín. 3 caracteres).', 'error'); return }
+    setSavingCobro(true)
+    const { error } = await supabase.rpc('editar_cobro_factura', {
+      p_pago_id: cobroEdit.id, p_monto: monto, p_fecha: cobroForm.fecha,
+      p_cuenta_id: cobroForm.cuenta_id, p_referencia: cobroEdit.referencia || null,
+      p_motivo: cobroForm.motivo.trim(),
+    })
+    setSavingCobro(false)
+    if (error) { showToast(`No se pudo editar el cobro: ${error.message}`, 'error'); return }
+    setCobroEdit(null)
+    setShowModal(false)
+    setSelectedFactura(null)
+    showToast('Cobro actualizado', 'success')
+    loadData(); loadResumen()
   }
 
   const addLinea = () => {
@@ -509,6 +575,20 @@ function FacturasPage() {
                               {montoPagado > 0 ? 'Abonar' : 'Cobrar'}
                             </button>
                           )}
+                          {isAdmin && (
+                            <>
+                              <button onClick={() => openEditFactura(f)}
+                                className="flex items-center gap-1 text-xs text-gray-400 hover:text-brand-600"
+                                title="Editar monto (admin)">
+                                <Pencil size={14} /> Editar
+                              </button>
+                              <button onClick={() => handleEliminarFactura(f)}
+                                className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700"
+                                title="Borrar factura (admin)">
+                                <Trash2 size={14} /> Borrar
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -598,15 +678,26 @@ function FacturasPage() {
                           {reversado ? (
                             <span className="badge bg-gray-200 text-gray-500 text-xs">Reversado</span>
                           ) : (
-                            <PermissionGuard modulo="facturas" accion="borrar" silent>
-                              <button
-                                onClick={() => { setPagoAReversar(p); setMotivoReverso('') }}
-                                className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium"
-                                title="Reversar este pago"
-                              >
-                                <RefreshCw size={13} /> Reversar
-                              </button>
-                            </PermissionGuard>
+                            <>
+                              {isAdmin && !p.anticipo_id && (
+                                <button
+                                  onClick={() => openEditCobro(p)}
+                                  className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-800 font-medium"
+                                  title="Editar este cobro (admin)"
+                                >
+                                  <Pencil size={13} /> Editar
+                                </button>
+                              )}
+                              <PermissionGuard modulo="facturas" accion="borrar" silent>
+                                <button
+                                  onClick={() => { setPagoAReversar(p); setMotivoReverso('') }}
+                                  className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium"
+                                  title="Reversar este pago"
+                                >
+                                  <RefreshCw size={13} /> Reversar
+                                </button>
+                              </PermissionGuard>
+                            </>
                           )}
                         </div>
                       </div>
@@ -831,6 +922,76 @@ function FacturasPage() {
               ) : (
                 <FacturaDetalle factura={detalle} pagos={detallePagos} reversados={detalleReversados} />
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Editar factura (admin) */}
+      {editFactura && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 print:hidden">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold mb-1">Editar factura #{editFactura.numero_factura}</h2>
+            <p className="text-sm text-gray-500 mb-4">{editFactura.clientes?.nombre}</p>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="label">Monto *</label>
+                  <input type="number" step="0.01" className="input" value={editForm.monto}
+                    onChange={e => setEditForm(f => ({ ...f, monto: e.target.value }))} /></div>
+                <div><label className="label">ITBMS</label>
+                  <input type="number" step="0.01" className="input" value={editForm.itbms}
+                    onChange={e => setEditForm(f => ({ ...f, itbms: e.target.value }))} /></div>
+              </div>
+              <div><label className="label">Fecha</label>
+                <input type="date" className="input" value={editForm.fecha}
+                  onChange={e => setEditForm(f => ({ ...f, fecha: e.target.value }))} /></div>
+              <div className="bg-gray-50 rounded-xl p-3 flex justify-between">
+                <span className="text-sm text-gray-600">Total</span>
+                <span className="text-lg font-bold text-brand-700">
+                  {formatCurrency((parseFloat(editForm.monto) || 0) + (parseFloat(editForm.itbms) || 0))}
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button className="btn-secondary flex-1" onClick={() => setEditFactura(null)}>Cancelar</button>
+              <button className="btn-primary flex-1" onClick={handleEditFactura}
+                disabled={savingEdit || !(parseFloat(editForm.monto) > 0)}>
+                {savingEdit ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Editar cobro (admin) */}
+      {cobroEdit && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 print:hidden">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold mb-1">Editar cobro</h2>
+            <p className="text-sm text-gray-500 mb-4">Se reversará el cobro actual y se registrará uno nuevo.</p>
+            <div className="space-y-3">
+              <div><label className="label">Monto *</label>
+                <input type="number" step="0.01" className="input" value={cobroForm.monto}
+                  onChange={e => setCobroForm(f => ({ ...f, monto: e.target.value }))} /></div>
+              <div><label className="label">Fecha *</label>
+                <input type="date" className="input" value={cobroForm.fecha}
+                  onChange={e => setCobroForm(f => ({ ...f, fecha: e.target.value }))} /></div>
+              <div><label className="label">Cuenta de banco *</label>
+                <select className="input" value={cobroForm.cuenta_id}
+                  onChange={e => setCobroForm(f => ({ ...f, cuenta_id: e.target.value }))}>
+                  <option value="">Seleccionar cuenta...</option>
+                  {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select></div>
+              <div><label className="label">Motivo de la edición *</label>
+                <input className="input" placeholder="Ej: monto corregido" value={cobroForm.motivo}
+                  onChange={e => setCobroForm(f => ({ ...f, motivo: e.target.value }))} /></div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button className="btn-secondary flex-1" onClick={() => setCobroEdit(null)}>Cancelar</button>
+              <button className="btn-primary flex-1" onClick={handleEditCobro}
+                disabled={savingCobro || !(parseFloat(cobroForm.monto) > 0) || !cobroForm.cuenta_id || cobroForm.motivo.trim().length < 3}>
+                {savingCobro ? 'Guardando...' : 'Guardar cambios'}
+              </button>
             </div>
           </div>
         </div>
