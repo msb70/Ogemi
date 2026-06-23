@@ -9,13 +9,14 @@ import type { Modulo } from '@/types/auth'
 import {
   LayoutDashboard, FileText, ClipboardList, ShoppingCart, Users, Truck,
   Wallet, CalendarClock, BarChart3, Upload, Shield, BookOpen, Search,
-  Printer, ChevronRight, AlertCircle, type LucideIcon,
+  Printer, ChevronRight, AlertCircle, CreditCard, type LucideIcon,
 } from 'lucide-react'
 
 const ICONS: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard,
   facturas: FileText,
   presupuestos: ClipboardList,
+  anticipos: CreditCard,
   compras: ShoppingCart,
   clientes: Users,
   proveedores: Truck,
@@ -57,7 +58,11 @@ export default function ManualPage() {
   const [query, setQuery] = useState('')
 
   const visibles = useMemo(
-    () => MANUAL_MODULOS.filter(m => (profile?.rol_id === 'admin' ? true : puedeHacer(m.id as Modulo, 'ver'))),
+    () => MANUAL_MODULOS.filter(m =>
+      profile?.rol_id === 'admin' ? true
+        : m.id === 'anticipos' ? puedeHacer('facturas' as Modulo, 'ver')
+        : puedeHacer(m.id as Modulo, 'ver')
+    ),
     [profile?.rol_id, puedeHacer]
   )
 

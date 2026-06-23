@@ -185,6 +185,46 @@ export const MANUAL_MODULOS: ManualModulo[] = [
     ],
   },
   {
+    id: 'anticipos',
+    titulo: 'Anticipos',
+    icono: 'anticipos',
+    resumen: 'Depósitos anticipados de clientes y su aplicación a facturas o presupuestos.',
+    procesos: [
+      {
+        titulo: 'Registrar un anticipo',
+        pasos: [
+          'Abra Anticipos y pulse "Nuevo anticipo".',
+          'Seleccione el cliente y la cuenta de banco donde entró el depósito.',
+          'Indique el monto y el número de depósito.',
+          'Guarde: el anticipo entra automáticamente como ingreso en Banco.',
+        ],
+      },
+      {
+        titulo: 'Aplicar un anticipo a una factura o presupuesto',
+        pasos: [
+          'Al cobrar una factura o presupuesto, en la línea elija el origen "anticipo".',
+          'Seleccione el anticipo del cliente; el sistema descuenta del saldo disponible.',
+          'No se duplica el ingreso en banco (ya entró al registrar el anticipo).',
+        ],
+      },
+      {
+        titulo: 'Ver saldo, aplicaciones e imprimir recibo',
+        pasos: [
+          'En la lista verá monto, aplicado y saldo de cada anticipo.',
+          'Use "Aplicaciones" para ver a qué documentos se aplicó.',
+          'Use "Recibo" para imprimir el comprobante con logo.',
+        ],
+      },
+      {
+        titulo: 'Anular un anticipo',
+        pasos: [
+          'Pulse "Anular" en el anticipo.',
+          'Se genera el egreso correspondiente en Banco y el anticipo queda anulado.',
+        ],
+      },
+    ],
+  },
+  {
     id: 'compras',
     titulo: 'Compras',
     icono: 'compras',
