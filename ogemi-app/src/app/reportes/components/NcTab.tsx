@@ -6,7 +6,7 @@ import { Download } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { exportCSV } from '../reportes.utils'
+import { exportXLSX, buildKpiSheet } from '../reportes.utils'
 import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
 
 type NcSubTab = 'listado' | 'porcliente'
@@ -42,14 +42,20 @@ export default function NcTab({
         <div className="space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <FiltrosBar {...{ search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }} />
-            <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() =>
-              exportCSV(
-                ['#Documento','Fecha','Cliente','Tipo','Doc.Afectado','Monto','ITBMS','Total'],
-                ncFiltradas.map(f => [f.numero_factura, f.fecha, f.clientes?.nombre, f.tipo_documento, f.documento_afectado, f.monto, f.itbms, f.total]),
-                `notas_credito_${new Date().toISOString().split('T')[0]}.csv`
-              )
-            }>
-              <Download size={14} />Exportar
+            <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() => {
+              const totalMonto = ncFiltradas.reduce((s, f) => s + Math.abs(f.total || 0), 0)
+              exportXLSX(`notas_credito_${new Date().toISOString().split('T')[0]}.xlsx`, [
+                buildKpiSheet('Notas de crédito — Listado', `${fechaDesde} a ${fechaHasta}`, [
+                  ['# Notas de crédito', ncFiltradas.length],
+                  ['Monto total', totalMonto],
+                ]),
+                { name: 'Listado', rows: [
+                  ['#Documento','Fecha','Cliente','Tipo','Doc.Afectado','Monto','ITBMS','Total'],
+                  ...ncFiltradas.map(f => [f.numero_factura, f.fecha, f.clientes?.nombre, f.tipo_documento, f.documento_afectado, f.monto, f.itbms, f.total]),
+                ] },
+              ])
+            }}>
+              <Download size={14} />Exportar Excel
             </button>
           </div>
           <div className="card overflow-hidden">

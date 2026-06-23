@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Download } from 'lucide-react'
-import { isNC, exportCSV } from '../reportes.utils'
+import { isNC, exportXLSX, buildKpiSheet } from '../reportes.utils'
 import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
 
 type LibroSubTab = 'venta' | 'compra'
@@ -50,17 +50,27 @@ export default function LibrosTab({
               fechaHasta={fechaHasta} setFechaHasta={setFechaHasta}
               showSearch={false}
             />
-            <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() =>
-              exportCSV(
-                ['N°', 'Fecha', 'Cliente', 'Tipo Documento', 'Doc. Afectado', 'Monto Gravable', 'ITBMS', 'Total'],
-                libroVentaFiltrado.map((f, i) => [
-                  i + 1, f.fecha, f.clientes?.nombre, f.tipo_documento,
-                  f.documento_afectado || '', f.monto, f.itbms, f.total,
+            <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() => {
+              const totVentas = ventasFiltradas.reduce((s, f) => s + (f.total || 0), 0)
+              const totNC = ncFiltradas.reduce((s, f) => s + Math.abs(f.total || 0), 0)
+              const itbms = ventasFiltradas.reduce((s, f) => s + (f.itbms || 0), 0)
+              exportXLSX(`libro_venta_${fechaDesde}_${fechaHasta}.xlsx`, [
+                buildKpiSheet('Libro de Venta', `${fechaDesde} a ${fechaHasta}`, [
+                  ['Total ventas', totVentas],
+                  ['Total NC', totNC],
+                  ['ITBMS recaudado', itbms],
+                  ['Neto (Ventas - NC)', totVentas - totNC],
                 ]),
-                `libro_venta_${fechaDesde}_${fechaHasta}.csv`
-              )
-            }>
-              <Download size={14} />Exportar CSV
+                { name: 'Libro de Venta', rows: [
+                  ['N°', 'Fecha', 'Cliente', 'Tipo Documento', 'Doc. Afectado', 'Monto Gravable', 'ITBMS', 'Total'],
+                  ...libroVentaFiltrado.map((f, i) => [
+                    i + 1, f.fecha, f.clientes?.nombre, f.tipo_documento,
+                    f.documento_afectado || '', f.monto, f.itbms, f.total,
+                  ]),
+                ] },
+              ])
+            }}>
+              <Download size={14} />Exportar Excel
             </button>
           </div>
 
@@ -158,17 +168,28 @@ export default function LibrosTab({
               fechaHasta={fechaHasta} setFechaHasta={setFechaHasta}
               showSearch={false}
             />
-            <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() =>
-              exportCSV(
-                ['N°', 'Fecha', 'Proveedor', 'Concepto', 'Referencia', 'Monto Gravable', 'ITBMS', 'Total', 'Estado'],
-                libroCompraFiltrado.map((c, i) => [
-                  i + 1, c.fecha, c.proveedores?.nombre, c.concepto || '',
-                  c.referencia || '', c.monto, c.itbms, c.total, c.estado,
+            <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() => {
+              const totCompras = libroCompraFiltrado.reduce((s, c) => s + (c.total || 0), 0)
+              const itbms = libroCompraFiltrado.reduce((s, c) => s + (c.itbms || 0), 0)
+              const pagadas = libroCompraFiltrado.filter(c => c.estado === 'pagada').reduce((s, c) => s + (c.total || 0), 0)
+              const pendientes = libroCompraFiltrado.filter(c => c.estado === 'pendiente').reduce((s, c) => s + (c.total || 0), 0)
+              exportXLSX(`libro_compra_${fechaDesde}_${fechaHasta}.xlsx`, [
+                buildKpiSheet('Libro de Compra', `${fechaDesde} a ${fechaHasta}`, [
+                  ['Total compras', totCompras],
+                  ['ITBMS acreditable', itbms],
+                  ['Pagadas', pagadas],
+                  ['Pendientes', pendientes],
                 ]),
-                `libro_compra_${fechaDesde}_${fechaHasta}.csv`
-              )
-            }>
-              <Download size={14} />Exportar CSV
+                { name: 'Libro de Compra', rows: [
+                  ['N°', 'Fecha', 'Proveedor', 'Concepto', 'Referencia', 'Monto Gravable', 'ITBMS', 'Total', 'Estado'],
+                  ...libroCompraFiltrado.map((c, i) => [
+                    i + 1, c.fecha, c.proveedores?.nombre, c.concepto || '',
+                    c.referencia || '', c.monto, c.itbms, c.total, c.estado,
+                  ]),
+                ] },
+              ])
+            }}>
+              <Download size={14} />Exportar Excel
             </button>
           </div>
 

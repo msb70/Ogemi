@@ -8,7 +8,7 @@ import {
 } from 'recharts'
 import {
   TRAMOS, TRAMO_LABELS, TRAMO_COLORS_HEX,
-  exportCSV, getNextFridays, buildVencimientoSemanal,
+  exportXLSX, buildKpiSheet, getNextFridays, buildVencimientoSemanal,
 } from '../reportes.utils'
 import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
 
@@ -87,14 +87,24 @@ export default function ComprasTab({
         <div className="space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <FiltrosBar {...{ search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }} />
-            <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() =>
-              exportCSV(
-                ['Fecha','Proveedor','Concepto','Referencia','Monto','ITBMS','Total','Estado','Vencimiento'],
-                comprasFiltradas.map(c => [c.fecha, c.proveedores?.nombre, c.concepto, c.referencia, c.monto, c.itbms, c.total, c.estado, c.vencimiento]),
-                `compras_${new Date().toISOString().split('T')[0]}.csv`
-              )
-            }>
-              <Download size={14} />Exportar
+            <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() => {
+              const total = comprasFiltradas.reduce((s, c) => s + (c.total || 0), 0)
+              const pagado = comprasFiltradas.filter(c => c.estado === 'pagada').reduce((s, c) => s + (c.total || 0), 0)
+              const pendiente = comprasFiltradas.filter(c => c.estado === 'pendiente').reduce((s, c) => s + (c.total || 0), 0)
+              exportXLSX(`compras_${new Date().toISOString().split('T')[0]}.xlsx`, [
+                buildKpiSheet('Compras — Listado', `${fechaDesde} a ${fechaHasta}`, [
+                  ['Total compras', total],
+                  ['Pagado', pagado],
+                  ['Pendiente', pendiente],
+                  ['# Compras', comprasFiltradas.length],
+                ]),
+                { name: 'Listado', rows: [
+                  ['Fecha','Proveedor','Concepto','Referencia','Monto','ITBMS','Total','Estado','Vencimiento'],
+                  ...comprasFiltradas.map(c => [c.fecha, c.proveedores?.nombre, c.concepto, c.referencia, c.monto, c.itbms, c.total, c.estado, c.vencimiento]),
+                ] },
+              ])
+            }}>
+              <Download size={14} />Exportar Excel
             </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">

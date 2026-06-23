@@ -7,7 +7,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from 'recharts'
-import { exportCSV } from '../reportes.utils'
+import { exportXLSX, buildKpiSheet } from '../reportes.utils'
 
 type BancoSubTab = 'movimientos' | 'flujo' | 'cierres'
 
@@ -146,12 +146,23 @@ export default function BancoTab({
                 onChange={e => setFechaHasta(e.target.value)} />
             </div>
             <button className="btn-secondary text-sm py-1.5 flex items-center gap-1"
-              onClick={() => exportCSV(
-                ['Fecha', 'Tipo', 'Concepto', 'Referencia', 'Monto', 'Saldo'],
-                movimientos.map(m => [m.fecha, m.tipo, m.concepto, m.referencia, m.monto, m.saldo]),
-                `movimientos_${new Date().toISOString().split('T')[0]}.csv`
-              )}>
-              <Download size={14} />Exportar
+              onClick={() => {
+                const cuenta = cuentas.find(c => c.id === cuentaSeleccionada)
+                exportXLSX(`movimientos_${new Date().toISOString().split('T')[0]}.xlsx`, [
+                  buildKpiSheet(`Banco — Movimientos (${cuenta?.nombre || ''})`, `${fechaDesde} a ${fechaHasta}`, [
+                    ['# Ingresos', movIng.length],
+                    ['# Egresos', movEgr.length],
+                    ['Monto ingresos', movIngMonto],
+                    ['Monto egresos', movEgrMonto],
+                    ['Saldo de la cuenta', saldos[cuentaSeleccionada] || 0],
+                  ]),
+                  { name: 'Movimientos', rows: [
+                    ['Fecha', 'Tipo', 'Concepto', 'Referencia', 'Monto', 'Saldo'],
+                    ...movimientos.map(m => [m.fecha, m.tipo, m.concepto, m.referencia, m.monto, m.saldo]),
+                  ] },
+                ])
+              }}>
+              <Download size={14} />Exportar Excel
             </button>
           </div>
 

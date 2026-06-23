@@ -9,7 +9,7 @@ import {
 } from 'recharts'
 import { CarteraVencida } from '@/types'
 import {
-  TRAMOS, TRAMO_LABELS, TRAMO_COLORS_HEX, PIE_COLORS, exportCSV,
+  TRAMOS, TRAMO_LABELS, TRAMO_COLORS_HEX, PIE_COLORS, exportXLSX, buildKpiSheet,
 } from '../reportes.utils'
 import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
 import PivotTab from './PivotTab'
@@ -60,14 +60,24 @@ export default function VentasTab({
         <div className="space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <FiltrosBar {...{ search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }} />
-            <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() =>
-              exportCSV(
-                ['#Factura','Fecha','Cliente','Tipo Doc','Monto','ITBMS','Total','Estado','Vencimiento'],
-                ventasFiltradas.map(f => [f.numero_factura, f.fecha, f.clientes?.nombre, f.tipo_documento, f.monto, f.itbms, f.total, f.estado, f.fecha_pago]),
-                `ventas_${new Date().toISOString().split('T')[0]}.csv`
-              )
-            }>
-              <Download size={14} />Exportar
+            <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() => {
+              const total = ventasFiltradas.reduce((s, f) => s + (f.total || 0), 0)
+              const cobrado = ventasFiltradas.filter(f => f.estado === 'pagada').reduce((s, f) => s + (f.total || 0), 0)
+              const pendiente = ventasFiltradas.filter(f => f.estado === 'pendiente').reduce((s, f) => s + (f.total || 0), 0)
+              exportXLSX(`ventas_${new Date().toISOString().split('T')[0]}.xlsx`, [
+                buildKpiSheet('Ventas — Listado', `${fechaDesde} a ${fechaHasta}`, [
+                  ['Total facturado', total],
+                  ['Cobrado', cobrado],
+                  ['Pendiente', pendiente],
+                  ['# Facturas', ventasFiltradas.length],
+                ]),
+                { name: 'Listado', rows: [
+                  ['#Factura','Fecha','Cliente','Tipo Doc','Monto','ITBMS','Total','Estado','Vencimiento'],
+                  ...ventasFiltradas.map(f => [f.numero_factura, f.fecha, f.clientes?.nombre, f.tipo_documento, f.monto, f.itbms, f.total, f.estado, f.fecha_pago]),
+                ] },
+              ])
+            }}>
+              <Download size={14} />Exportar Excel
             </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">

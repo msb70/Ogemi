@@ -6,7 +6,7 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { CarteraVencida } from '@/types'
 import {
-  FileText, ShoppingCart, CreditCard, Building2, BookOpen, ClipboardList,
+  FileText, ShoppingCart, CreditCard, Building2, BookOpen, ClipboardList, Printer,
 } from 'lucide-react'
 import { withPagePermission } from '@/components/PermissionGuard'
 import { isNC } from './reportes.utils'
@@ -17,6 +17,7 @@ import ComprasTab     from './components/ComprasTab'
 import NcTab          from './components/NcTab'
 import BancoTab       from './components/BancoTab'
 import LibrosTab      from './components/LibrosTab'
+import ReporteImprimible from './components/ReporteImprimible'
 
 type ReporteTab = 'ventas' | 'presupuestos' | 'compras' | 'nc' | 'banco' | 'libros'
 
@@ -255,7 +256,13 @@ function ReportesPage() {
 
   return (
     <AppLayout>
-      <Header title="Reportes" subtitle="Análisis financiero y contable" />
+      <Header title="Reportes" subtitle="Análisis financiero y contable"
+        actions={
+          <button onClick={() => window.print()} className="btn-primary flex items-center gap-2">
+            <Printer size={16} /> Reporte PDF
+          </button>
+        }
+      />
 
       <div className="bg-white border-b border-gray-200 px-6">
         <div className="flex gap-1 overflow-x-auto">
@@ -352,6 +359,39 @@ function ReportesPage() {
           />
         )}
       </div>
+
+      {/* Reporte imprimible (oculto en pantalla; visible solo al imprimir / Guardar como PDF) */}
+      <div className="hidden print:block p-6">
+        <ReporteImprimible
+          fechaDesde={fechaDesde}
+          fechaHasta={fechaHasta}
+          ventasFiltradas={ventasFiltradas}
+          ncFiltradas={ncFiltradas}
+          comprasFiltradas={comprasFiltradas}
+          presupuestosFiltrados={presupuestosFiltrados}
+          cartera={cartera}
+          cxp={cxp}
+          carteraPresupuestos={carteraPresupuestos}
+          cuentas={cuentas}
+          saldos={saldos}
+          ventasPorMes={ventasPorMes}
+          comprasPorMes={comprasPorMes}
+          presupuestosPorMes={presupuestosPorMes}
+          topClientesVentas={topClientesVentas}
+          topProveedores={topProveedores}
+          topClientesPresupuestos={topClientesPresupuestos}
+          ncPorCliente={ncPorCliente}
+        />
+      </div>
+
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #reporte-print, #reporte-print * { visibility: visible !important; }
+          #reporte-print { position: absolute; left: 0; top: 0; width: 100%; }
+          @page { margin: 12mm; }
+        }
+      `}</style>
     </AppLayout>
   )
 }

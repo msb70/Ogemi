@@ -6,6 +6,7 @@
  *   Facturas de 91-120 días vencidas se mostraban sin etiqueta y sin color.
  */
 
+import * as XLSX from 'xlsx'
 import { CarteraVencida } from '@/types'
 import { formatDateObj } from '@/lib/utils'
 
@@ -66,6 +67,43 @@ export function exportCSV(headers: string[], rows: unknown[][], filename: string
   a.href = URL.createObjectURL(blob)
   a.download = filename
   a.click()
+}
+
+// ── Export XLSX (hoja de cálculo) ──────────────────────────────────────────────
+
+type XlsxCell = string | number | null | undefined
+export type XlsxSheet = { name: string; rows: XlsxCell[][] }
+
+/**
+ * Exporta un libro de Excel con una o más hojas.
+ * Cada hoja es una matriz de filas (array de arrays).
+ */
+export function exportXLSX(filename: string, sheets: XlsxSheet[]): void {
+  const wb = XLSX.utils.book_new()
+  for (const s of sheets) {
+    const ws = XLSX.utils.aoa_to_sheet(s.rows.map(r => r.map(c => (c ?? ''))))
+    XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 31))
+  }
+  XLSX.writeFile(wb, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`)
+}
+
+/** Atajo: una hoja de KPIs (lista de [etiqueta, valor]) + una hoja de listado. */
+export function buildKpiSheet(
+  titulo: string,
+  rango: string,
+  kpis: [string, XlsxCell][],
+): XlsxSheet {
+  return {
+    name: 'KPIs',
+    rows: [
+      ['Reporte', titulo],
+      ['Rango', rango],
+      ['Generado', new Date().toLocaleString('es-PA')],
+      [],
+      ['Indicador', 'Valor'],
+      ...kpis.map(([k, v]) => [k, v] as XlsxCell[]),
+    ],
+  }
 }
 
 // ── Vencimiento semanal ───────────────────────────────────────────────────────

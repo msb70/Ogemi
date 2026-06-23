@@ -9,7 +9,7 @@ import {
 } from 'recharts'
 import {
   TRAMOS, TRAMO_LABELS, TRAMO_COLORS_HEX, PIE_COLORS,
-  exportCSV, getNextFridays, buildVencimientoSemanal,
+  exportXLSX, buildKpiSheet, getNextFridays, buildVencimientoSemanal,
 } from '../reportes.utils'
 import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
 
@@ -87,14 +87,24 @@ export default function PresupuestosTab({
         <div className="space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <FiltrosBar {...{ search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }} />
-            <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() =>
-              exportCSV(
-                ['#Presupuesto','Fecha','Cliente','Tipo Doc','Monto','ITBMS','Total','Estado','Vencimiento'],
-                presupuestosFiltrados.map(p => [p.numero_presupuesto, p.fecha, p.clientes?.nombre, p.tipo_documento, p.monto, p.itbms, p.total, p.estado, p.fecha_pago]),
-                `presupuestos_${new Date().toISOString().split('T')[0]}.csv`
-              )
-            }>
-              <Download size={14} />Exportar
+            <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() => {
+              const total = presupuestosFiltrados.reduce((s, p) => s + (p.total || 0), 0)
+              const cobrado = presupuestosFiltrados.filter(p => p.estado === 'pagada').reduce((s, p) => s + (p.total || 0), 0)
+              const pendiente = presupuestosFiltrados.filter(p => p.estado === 'pendiente').reduce((s, p) => s + (p.total || 0), 0)
+              exportXLSX(`presupuestos_${new Date().toISOString().split('T')[0]}.xlsx`, [
+                buildKpiSheet('Presupuestos — Listado', `${fechaDesde} a ${fechaHasta}`, [
+                  ['Total presupuestado', total],
+                  ['Cobrado', cobrado],
+                  ['Pendiente', pendiente],
+                  ['# Presupuestos', presupuestosFiltrados.length],
+                ]),
+                { name: 'Listado', rows: [
+                  ['#Presupuesto','Orden trabajo','Fecha','Cliente','Tipo Doc','Monto','ITBMS','Total','Estado','Vencimiento'],
+                  ...presupuestosFiltrados.map(p => [p.numero_presupuesto, p.orden_trabajo || '', p.fecha, p.clientes?.nombre, p.tipo_documento, p.monto, p.itbms, p.total, p.estado, p.fecha_pago]),
+                ] },
+              ])
+            }}>
+              <Download size={14} />Exportar Excel
             </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
