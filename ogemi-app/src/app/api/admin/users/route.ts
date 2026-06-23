@@ -1,12 +1,28 @@
 import { randomBytes } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-api'
-import { sendWelcomeEmail } from '@/lib/email'
+import { sendWelcomeEmail, sendManualEmail } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 
 function normalizeEmail(value: unknown) {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
+}
+
+// Devuelve los módulos visibles y el nombre del rol para incluir el manual en los correos.
+async function getRoleContext(
+  admin: ReturnType<typeof import('@/lib/supabase-admin').createAdminClient>,
+  rolId: string
+): Promise<{ modulosVisibles: string[]; rolNombre?: string }> {
+  if (!rolId) return { modulosVisibles: [] }
+  const [{ data: permisos }, { data: rol }] = await Promise.all([
+    admin.from('rol_permisos').select('modulo').eq('rol_id', rolId).eq('puede_ver', true),
+    admin.from('roles').select('nombre').eq('id', rolId).maybeSingle(),
+  ])
+  return {
+    modulosVisibles: (permisos || []).map(p => p.modulo as string),
+    rolNombre: rol?.nombre || undefined,
+  }
 }
 
 function generateTempPassword(length = 14): string {
@@ -185,10 +201,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: profileError.message }, { status: 500 })
   }
 
+  const roleCtx = await getRoleContext(admin, rolId)
   const emailStatus = await sendWelcomeEmail({
     to: email,
     name: nombre || email.split('@')[0],
     tempPassword,
+    modulosVisibles: roleCtx.modulosVisibles,
+    rolNombre: roleCtx.rolNombre,
   })
 
   return NextResponse.json({ usuario: profile, emailStatus })
@@ -205,9 +224,31 @@ export async function PATCH(request: NextRequest) {
   const nombre = typeof body?.nombre === 'string' ? body.nombre.trim() : undefined
   const activo = typeof body?.activo === 'boolean' ? body.activo : undefined
   const resetPassword = body?.reset_password === true
+  const sendManual = body?.send_manual === true
 
   if (!userId) {
     return NextResponse.json({ error: 'ID de usuario obligatorio.' }, { status: 400 })
+  }
+
+  // Reenviar el manual (instrucciones) al correo del usuario, sin tocar credenciales
+  if (sendManual) {
+    const { data: profile } = await admin
+      .from('user_profiles')
+      .select('email,nombre,rol_id')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (!profile?.email) {
+      return NextResponse.json({ error: 'No se encontró el correo del usuario.' }, { status: 404 })
+    }
+    const roleCtx = await getRoleContext(admin, profile.rol_id)
+    const emailStatus = await sendManualEmail({
+      to: normalizeEmail(profile.email),
+      name: profile.nombre || normalizeEmail(profile.email).split('@')[0],
+      modulosVisibles: roleCtx.modulosVisibles,
+      rolNombre: roleCtx.rolNombre,
+    })
+    return NextResponse.json({ ok: true, emailStatus })
   }
 
   if (userId === user?.id && activo === false) {
@@ -234,15 +275,18 @@ export async function PATCH(request: NextRequest) {
 
     const { data: profile } = await admin
       .from('user_profiles')
-      .select('email,nombre')
+      .select('email,nombre,rol_id')
       .eq('id', userId)
       .maybeSingle()
 
+    const roleCtx = profile?.rol_id ? await getRoleContext(admin, profile.rol_id) : { modulosVisibles: [], rolNombre: undefined }
     const emailStatus = profile?.email
       ? await sendWelcomeEmail({
           to: normalizeEmail(profile.email),
           name: profile.nombre || normalizeEmail(profile.email).split('@')[0],
           tempPassword: newPassword,
+          modulosVisibles: roleCtx.modulosVisibles,
+          rolNombre: roleCtx.rolNombre,
         })
       : { sent: false, provider: 'none' as const, error: 'No se encontró el correo del usuario.' }
 

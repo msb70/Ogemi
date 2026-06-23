@@ -1,3 +1,5 @@
+import { buildManualHtml, buildManualText } from './manual'
+
 type EmailResult =
   | { sent: true; provider: 'resend'; id?: string }
   | { sent: false; provider: 'resend' | 'none'; error: string }
@@ -6,6 +8,15 @@ type WelcomeEmailInput = {
   to: string
   name: string
   tempPassword: string
+  modulosVisibles?: string[]
+  rolNombre?: string
+}
+
+type ManualEmailInput = {
+  to: string
+  name: string
+  modulosVisibles?: string[]
+  rolNombre?: string
 }
 
 function escapeHtml(value: string) {
@@ -25,7 +36,12 @@ function getAppUrl() {
   ).replace(/\/$/, '')
 }
 
-export async function sendWelcomeEmail({ to, name, tempPassword }: WelcomeEmailInput): Promise<EmailResult> {
+async function sendViaResend(input: {
+  to: string
+  subject: string
+  html: string
+  text: string
+}): Promise<EmailResult> {
   const apiKey = process.env.RESEND_API_KEY
   const from = process.env.OGEMI_EMAIL_FROM
 
@@ -37,14 +53,46 @@ export async function sendWelcomeEmail({ to, name, tempPassword }: WelcomeEmailI
     }
   }
 
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from,
+      to: input.to,
+      subject: input.subject,
+      html: input.html,
+      text: input.text,
+      reply_to: process.env.OGEMI_EMAIL_REPLY_TO || undefined,
+    }),
+  })
+
+  const payload = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    return {
+      sent: false,
+      provider: 'resend',
+      error: payload?.message || payload?.error || 'No se pudo enviar el correo.',
+    }
+  }
+
+  return { sent: true, provider: 'resend', id: payload?.id }
+}
+
+export async function sendWelcomeEmail({ to, name, tempPassword, modulosVisibles, rolNombre }: WelcomeEmailInput): Promise<EmailResult> {
   const safeName = escapeHtml(name || to)
   const safeEmail = escapeHtml(to)
   const safePassword = escapeHtml(tempPassword)
   const loginUrl = `${getAppUrl()}/login`
   const safeLoginUrl = escapeHtml(loginUrl)
+  const manualHtml = buildManualHtml({ nombre: name, rolNombre, modulosVisibles })
+  const manualText = buildManualText({ nombre: name, rolNombre, modulosVisibles })
 
   const html = `
-    <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5; max-width: 560px;">
+    <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5; max-width: 620px;">
       <h1 style="font-size: 22px; margin: 0 0 16px;">Bienvenido a Ogemi</h1>
       <p>Hola ${safeName},</p>
       <p>Ogemi lo está invitando al sistema de gestión de cartera de Impresos Comerciales SA.</p>
@@ -59,6 +107,8 @@ export async function sendWelcomeEmail({ to, name, tempPassword }: WelcomeEmailI
           Entrar a Ogemi
         </a>
       </p>
+      <hr style="border:none; border-top:1px solid #e5e7eb; margin:24px 0;" />
+      ${manualHtml}
       <p style="font-size: 12px; color: #6b7280; margin-top: 24px;">
         Si usted no esperaba esta invitación, ignore este correo.
       </p>
@@ -75,33 +125,32 @@ export async function sendWelcomeEmail({ to, name, tempPassword }: WelcomeEmailI
     '',
     'Al entrar por primera vez, el sistema le pedirá cambiar esta clave.',
     `Entrar a Ogemi: ${loginUrl}`,
+    '',
+    '----------------------------------------',
+    '',
+    manualText,
   ].join('\n')
 
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from,
-      to,
-      subject: 'Bienvenido a Ogemi',
-      html,
-      text,
-      reply_to: process.env.OGEMI_EMAIL_REPLY_TO || undefined,
-    }),
-  })
+  return sendViaResend({ to, subject: 'Bienvenido a Ogemi', html, text })
+}
 
-  const payload = await response.json().catch(() => ({}))
+export async function sendManualEmail({ to, name, modulosVisibles, rolNombre }: ManualEmailInput): Promise<EmailResult> {
+  const manualHtml = buildManualHtml({ nombre: name, rolNombre, modulosVisibles })
+  const manualText = buildManualText({ nombre: name, rolNombre, modulosVisibles })
+  const loginUrl = `${getAppUrl()}/login`
+  const safeLoginUrl = escapeHtml(loginUrl)
 
-  if (!response.ok) {
-    return {
-      sent: false,
-      provider: 'resend',
-      error: payload?.message || payload?.error || 'No se pudo enviar el correo de bienvenida.',
-    }
-  }
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5; max-width: 620px;">
+      ${manualHtml}
+      <p style="margin-top:18px;">
+        <a href="${safeLoginUrl}" style="display: inline-block; background: #0f5f86; color: #ffffff; text-decoration: none; padding: 10px 16px; border-radius: 6px;">
+          Entrar a Ogemi
+        </a>
+      </p>
+    </div>
+  `
+  const text = [manualText, '', `Entrar a Ogemi: ${loginUrl}`].join('\n')
 
-  return { sent: true, provider: 'resend', id: payload?.id }
+  return sendViaResend({ to, subject: 'Manual del sistema Ogemi', html, text })
 }

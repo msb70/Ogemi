@@ -9,6 +9,7 @@ import { formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
 import { Toast } from '@/components/Toast'
 import {
+  BookOpen,
   KeyRound,
   Lock,
   Plus,
@@ -71,6 +72,7 @@ function UsuariosPage() {
   const [deletingUser, setDeletingUser] = useState<string | null>(null)
   const [creatingUser, setCreatingUser] = useState(false)
   const [resettingPassword, setResettingPassword] = useState<string | null>(null)
+  const [sendingManual, setSendingManual] = useState<string | null>(null)
   const [savingRole, setSavingRole] = useState(false)
   const [deletingRole, setDeletingRole] = useState(false)
   const [selectedRoleId, setSelectedRoleId] = useState('')
@@ -193,6 +195,26 @@ function UsuariosPage() {
       showToast(error instanceof Error ? error.message : 'No se pudo resetear la contraseña.', 'error')
     } finally {
       setResettingPassword(null)
+    }
+  }
+
+  async function sendManual(user: UserProfile) {
+    setSendingManual(user.id)
+    try {
+      const result = await fetchJson('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: user.id, send_manual: true }),
+      })
+      if (result.emailStatus?.sent) {
+        showToast('Instrucciones enviadas al correo del usuario.')
+      } else {
+        showToast(`No se enviaron las instrucciones: ${result.emailStatus?.error || 'error desconocido'}`, 'error')
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'No se pudieron enviar las instrucciones.', 'error')
+    } finally {
+      setSendingManual(null)
     }
   }
 
@@ -389,7 +411,7 @@ function UsuariosPage() {
                 <tbody className="divide-y divide-gray-100">
                   {usuarios.map(user => {
                     const isMe = user.id === myProfile?.id
-                    const isBusy = saving === user.id || deletingUser === user.id || resettingPassword === user.id
+                    const isBusy = saving === user.id || deletingUser === user.id || resettingPassword === user.id || sendingManual === user.id
                     return (
                       <tr key={user.id} className={`hover:bg-gray-50 ${!user.activo ? 'opacity-50' : ''}`}>
                         <td className="table-cell">
@@ -461,6 +483,16 @@ function UsuariosPage() {
                                 <Trash2 size={15} />
                               </button>
                             )}
+
+                            <button
+                              onClick={() => sendManual(user)}
+                              disabled={isBusy || !canEditUsers}
+                              title="Enviar instrucciones (manual del sistema)"
+                              aria-label={`Enviar instrucciones a ${user.email}`}
+                              className="p-1.5 rounded-lg text-brand-600 transition-colors hover:bg-brand-50 disabled:opacity-40"
+                            >
+                              <BookOpen size={15} />
+                            </button>
 
                             {!isMe && (
                               <button
