@@ -134,7 +134,7 @@ export default function ComprasTab({
               <tbody className="divide-y divide-gray-100">
                 {comprasFiltradas.length === 0 ? (
                   <tr><td colSpan={7} className="text-center py-8 text-gray-400">Sin resultados</td></tr>
-                ) : comprasFiltradas.slice(0, 200).map((c: any) => (
+                ) : comprasFiltradas.map((c: any) => (
                   <tr key={c.id} className="hover:bg-gray-50">
                     <td className="table-cell text-sm">{formatDate(c.fecha)}</td>
                     <td className="table-cell font-medium">{c.proveedores?.nombre}</td>

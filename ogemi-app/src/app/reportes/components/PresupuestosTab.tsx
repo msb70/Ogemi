@@ -134,7 +134,7 @@ export default function PresupuestosTab({
               <tbody className="divide-y divide-gray-100">
                 {presupuestosFiltrados.length === 0 ? (
                   <tr><td colSpan={7} className="text-center py-8 text-gray-400">Sin resultados</td></tr>
-                ) : presupuestosFiltrados.slice(0, 200).map((p: any) => (
+                ) : presupuestosFiltrados.map((p: any) => (
                   <tr key={p.id} className="hover:bg-gray-50">
                     <td className="table-cell font-mono text-sm text-gray-500">#{p.numero_presupuesto}</td>
                     <td className="table-cell text-sm">{formatDate(p.fecha)}</td>

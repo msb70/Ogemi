@@ -87,6 +87,25 @@ export function exportXLSX(filename: string, sheets: XlsxSheet[]): void {
   XLSX.writeFile(wb, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`)
 }
 
+/**
+ * Exporta a Excel las tablas visibles dentro de un contenedor del DOM
+ * (la vista de reporte activa). Cada <table> se convierte en una hoja.
+ */
+export function xlsxFromReporteArea(filename: string, scopeId = 'reporte-print'): boolean {
+  if (typeof document === 'undefined') return false
+  const area = document.getElementById(scopeId)
+  if (!area) return false
+  const tables = Array.from(area.querySelectorAll('table')) as HTMLTableElement[]
+  if (tables.length === 0) return false
+  const wb = XLSX.utils.book_new()
+  tables.forEach((t, i) => {
+    const ws = XLSX.utils.table_to_sheet(t, { raw: true })
+    XLSX.utils.book_append_sheet(wb, ws, `Tabla ${i + 1}`)
+  })
+  XLSX.writeFile(wb, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`)
+  return true
+}
+
 /** Atajo: una hoja de KPIs (lista de [etiqueta, valor]) + una hoja de listado. */
 export function buildKpiSheet(
   titulo: string,

@@ -107,7 +107,7 @@ export default function VentasTab({
               <tbody className="divide-y divide-gray-100">
                 {ventasFiltradas.length === 0 ? (
                   <tr><td colSpan={7} className="text-center py-8 text-gray-400">Sin resultados</td></tr>
-                ) : ventasFiltradas.slice(0, 200).map((f: any) => (
+                ) : ventasFiltradas.map((f: any) => (
                   <tr key={f.id} className="hover:bg-gray-50">
                     <td className="table-cell font-mono text-sm text-gray-500">#{f.numero_factura}</td>
                     <td className="table-cell text-sm">{formatDate(f.fecha)}</td>

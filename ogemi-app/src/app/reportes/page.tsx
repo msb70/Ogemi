@@ -6,10 +6,10 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { CarteraVencida } from '@/types'
 import {
-  FileText, ShoppingCart, CreditCard, Building2, BookOpen, ClipboardList, Printer,
+  FileText, ShoppingCart, CreditCard, Building2, BookOpen, ClipboardList, Printer, FileSpreadsheet,
 } from 'lucide-react'
 import { withPagePermission } from '@/components/PermissionGuard'
-import { isNC } from './reportes.utils'
+import { isNC, xlsxFromReporteArea } from './reportes.utils'
 
 import VentasTab      from './components/VentasTab'
 import PresupuestosTab from './components/PresupuestosTab'
@@ -17,7 +17,6 @@ import ComprasTab     from './components/ComprasTab'
 import NcTab          from './components/NcTab'
 import BancoTab       from './components/BancoTab'
 import LibrosTab      from './components/LibrosTab'
-import ReporteImprimible from './components/ReporteImprimible'
 
 type ReporteTab = 'ventas' | 'presupuestos' | 'compras' | 'nc' | 'banco' | 'libros'
 
@@ -258,9 +257,19 @@ function ReportesPage() {
     <AppLayout>
       <Header title="Reportes" subtitle="Análisis financiero y contable"
         actions={
-          <button onClick={() => window.print()} className="btn-primary flex items-center gap-2">
-            <Printer size={16} /> Reporte PDF
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2">
+              <Printer size={16} /> Reporte PDF
+            </button>
+            <button
+              onClick={() => {
+                const ok = xlsxFromReporteArea(`reporte_${tab}_${new Date().toISOString().split('T')[0]}.xlsx`)
+                if (!ok) alert('No hay tablas para exportar en esta vista.')
+              }}
+              className="btn-primary flex items-center gap-2">
+              <FileSpreadsheet size={16} /> Reporte Excel
+            </button>
+          </div>
         }
       />
 
@@ -284,7 +293,22 @@ function ReportesPage() {
         <div className="p-8 text-center text-sm text-gray-400">Cargando datos...</div>
       )}
 
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto" id="reporte-print">
+        {/* Encabezado solo visible al imprimir / Guardar como PDF */}
+        <div className="hidden print:block px-6 pt-6 mb-2">
+          <div className="flex items-center gap-3 border-b-2 pb-3" style={{ borderColor: '#0f766e' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.jpeg" alt="Ogemi" style={{ width: 48, height: 48, objectFit: 'contain' }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>Reporte de {tabs.find(t => t.key === tab)?.label}</div>
+              <div style={{ fontSize: 11, color: '#6b7280' }}>Impresos Comerciales S.A. · Sistema Ogemi</div>
+            </div>
+            <div style={{ textAlign: 'right', fontSize: 10, color: '#6b7280' }}>
+              <div>Período: {fechaDesde} a {fechaHasta}</div>
+              <div>Generado: {new Date().toLocaleString('es-PA')}</div>
+            </div>
+          </div>
+        </div>
         {tab === 'ventas' && (
           <VentasTab {...filtrosBarProps}
             ventasFiltradas={ventasFiltradas}
@@ -360,35 +384,17 @@ function ReportesPage() {
         )}
       </div>
 
-      {/* Reporte imprimible (oculto en pantalla; visible solo al imprimir / Guardar como PDF) */}
-      <div className="hidden print:block p-6">
-        <ReporteImprimible
-          fechaDesde={fechaDesde}
-          fechaHasta={fechaHasta}
-          ventasFiltradas={ventasFiltradas}
-          ncFiltradas={ncFiltradas}
-          comprasFiltradas={comprasFiltradas}
-          presupuestosFiltrados={presupuestosFiltrados}
-          cartera={cartera}
-          cxp={cxp}
-          carteraPresupuestos={carteraPresupuestos}
-          cuentas={cuentas}
-          saldos={saldos}
-          ventasPorMes={ventasPorMes}
-          comprasPorMes={comprasPorMes}
-          presupuestosPorMes={presupuestosPorMes}
-          topClientesVentas={topClientesVentas}
-          topProveedores={topProveedores}
-          topClientesPresupuestos={topClientesPresupuestos}
-          ncPorCliente={ncPorCliente}
-        />
-      </div>
-
       <style>{`
         @media print {
           body * { visibility: hidden !important; }
           #reporte-print, #reporte-print * { visibility: visible !important; }
-          #reporte-print { position: absolute; left: 0; top: 0; width: 100%; }
+          #reporte-print { position: absolute; left: 0; top: 0; width: 100%; overflow: visible !important; }
+          /* Ocultar controles y gráficas en el PDF (solo KPIs y listados) */
+          #reporte-print input,
+          #reporte-print select,
+          #reporte-print [class*="btn-"],
+          #reporte-print .recharts-responsive-container,
+          #reporte-print .recharts-wrapper { display: none !important; }
           @page { margin: 12mm; }
         }
       `}</style>
