@@ -6,9 +6,9 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate, tramoColor } from '@/lib/utils'
 import { BancoCuenta, Cliente } from '@/types'
-import { Search, CheckCircle, Filter, X, Plus, Trash2, FileText, Download, Eye, Printer } from 'lucide-react'
+import { Search, CheckCircle, Filter, X, Plus, Trash2, FileText, Download, Eye, Printer, RefreshCw, Pencil } from 'lucide-react'
 import type { CSSProperties } from 'react'
-import { withPagePermission } from '@/components/PermissionGuard'
+import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
 
 type EstadoFilter = 'todos' | 'pendiente' | 'pagada'
 
@@ -76,7 +76,16 @@ function PresupuestosPage() {
   // Modal de detalle (ver presupuesto)
   const [detalle, setDetalle] = useState<Presupuesto | null>(null)
   const [detallePagos, setDetallePagos] = useState<any[]>([])
+  const [detalleReversados, setDetalleReversados] = useState<Set<string>>(new Set())
   const [loadingDetalle, setLoadingDetalle] = useState(false)
+
+  // Editar cobro (reversa + nuevo) y reversar cobro
+  const [cobroEdit, setCobroEdit] = useState<any | null>(null)
+  const [cobroForm, setCobroForm] = useState({ monto: '', fecha: '', cuenta_id: '', motivo: '' })
+  const [savingCobro, setSavingCobro] = useState(false)
+  const [cobroReversar, setCobroReversar] = useState<any | null>(null)
+  const [motivoReverso, setMotivoReverso] = useState('')
+  const [reversando, setReversando] = useState(false)
 
   // Modal nuevo/editar
   const [showForm, setShowForm] = useState(false)
@@ -164,13 +173,74 @@ function PresupuestosPage() {
     setDetalle(p)
     setLoadingDetalle(true)
     setDetallePagos([])
-    const { data } = await supabase
-      .from('pagos')
-      .select('id, fecha, monto, referencia, anticipo_id, banco_cuentas(nombre, banco, numero_cuenta), anticipos(numero_deposito)')
-      .eq('presupuesto_id', p.id)
-      .order('fecha', { ascending: true })
+    setDetalleReversados(new Set())
+    const [{ data }, { data: reversos }] = await Promise.all([
+      supabase
+        .from('pagos')
+        .select('id, fecha, monto, referencia, anticipo_id, cuenta_id, banco_cuentas(nombre, banco, numero_cuenta), anticipos(numero_deposito)')
+        .eq('presupuesto_id', p.id)
+        .order('fecha', { ascending: true }),
+      supabase.from('pago_reversos').select('pago_id').eq('presupuesto_id', p.id),
+    ])
     setDetallePagos(data || [])
+    setDetalleReversados(new Set((reversos || []).map(r => r.pago_id)))
     setLoadingDetalle(false)
+  }
+
+  const handleEliminarPresupuesto = async (p: Presupuesto) => {
+    if (!confirm(`¿Borrar el presupuesto #${p.numero_presupuesto}${p.orden_trabajo ? ` (OT ${p.orden_trabajo})` : ''}? Se eliminarán sus cobros y movimientos de banco asociados. Esta acción no se puede deshacer.`)) return
+    const { error } = await supabase.rpc('eliminar_presupuesto', { p_id: p.id })
+    if (error) { alert(`No se pudo borrar: ${error.message}`); return }
+    loadData()
+  }
+
+  const openEditCobro = (pago: any) => {
+    setCobroEdit(pago)
+    setCobroForm({
+      monto: String(pago.monto),
+      fecha: pago.fecha,
+      cuenta_id: pago.cuenta_id || '',
+      motivo: '',
+    })
+  }
+
+  const handleEditCobro = async () => {
+    if (!cobroEdit || !detalle) return
+    const monto = parseFloat(cobroForm.monto) || 0
+    if (monto <= 0 || !cobroForm.cuenta_id) return
+    if (cobroForm.motivo.trim().length < 3) { alert('Indica un motivo (mín. 3 caracteres) para la edición.'); return }
+    setSavingCobro(true)
+    const { error } = await supabase.rpc('editar_cobro_presupuesto', {
+      p_pago_id: cobroEdit.id,
+      p_monto: monto,
+      p_fecha: cobroForm.fecha,
+      p_cuenta_id: cobroForm.cuenta_id,
+      p_referencia: cobroEdit.referencia || null,
+      p_motivo: cobroForm.motivo.trim(),
+    })
+    setSavingCobro(false)
+    if (error) { alert(`No se pudo editar el cobro: ${error.message}`); return }
+    setCobroEdit(null)
+    const pres = detalle
+    await openDetalle(pres)
+    loadData()
+  }
+
+  const handleReversarCobro = async () => {
+    if (!cobroReversar || !detalle) return
+    if (motivoReverso.trim().length < 3) { alert('El motivo debe tener al menos 3 caracteres.'); return }
+    setReversando(true)
+    const { error } = await supabase.rpc('reversar_pago', {
+      p_pago_id: cobroReversar.id,
+      p_motivo: motivoReverso.trim(),
+    })
+    setReversando(false)
+    if (error) { alert(`No se pudo reversar: ${error.message}`); return }
+    setCobroReversar(null)
+    setMotivoReverso('')
+    const pres = detalle
+    await openDetalle(pres)
+    loadData()
   }
 
   const addLinea = () => setLineas(prev => [...prev, emptyLinea(cuentas[0]?.id || '')])
@@ -477,6 +547,13 @@ function PresupuestosPage() {
                         )}
                         <button onClick={() => openForm(p)}
                           className="text-xs text-gray-400 hover:text-brand-600">Editar</button>
+                        <PermissionGuard modulo="presupuestos" accion="borrar" silent>
+                          <button onClick={() => handleEliminarPresupuesto(p)}
+                            className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700"
+                            title="Borrar presupuesto">
+                            <Trash2 size={14} /> Borrar
+                          </button>
+                        </PermissionGuard>
                       </div>
                     </td>
                   </tr>
@@ -744,6 +821,120 @@ function PresupuestosPage() {
               ) : (
                 <PresupuestoDetalle presupuesto={detalle} pagos={detallePagos} />
               )}
+
+              {/* Gestión de cobros (solo pantalla) */}
+              {!loadingDetalle && detallePagos.length > 0 && (
+                <div className="mt-5 border-t border-gray-100 pt-4">
+                  <p className="text-sm font-semibold text-gray-700 mb-2">Cobros registrados</p>
+                  <div className="space-y-2">
+                    {detallePagos.map(p => {
+                      const reversado = detalleReversados.has(p.id)
+                      const esAnticipo = !!p.anticipo_id
+                      return (
+                        <div key={p.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
+                          <div className="min-w-0">
+                            <span className={`text-sm ${reversado ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                              {formatDate(p.fecha)} · {p.banco_cuentas?.nombre || (esAnticipo ? 'Anticipo' : '—')}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className={`font-semibold text-sm ${reversado ? 'text-gray-400 line-through' : 'text-green-700'}`}>
+                              {formatCurrency(p.monto)}
+                            </span>
+                            {reversado ? (
+                              <span className="badge bg-gray-200 text-gray-500 text-xs">Reversado</span>
+                            ) : esAnticipo ? (
+                              <span className="badge bg-blue-100 text-blue-700 text-xs">Anticipo</span>
+                            ) : (
+                              <>
+                                <PermissionGuard modulo="presupuestos" accion="editar" silent>
+                                  <button onClick={() => openEditCobro(p)}
+                                    className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-800 font-medium"
+                                    title="Editar cobro (reversa + nuevo)">
+                                    <Pencil size={13} /> Editar
+                                  </button>
+                                </PermissionGuard>
+                                <PermissionGuard modulo="presupuestos" accion="borrar" silent>
+                                  <button onClick={() => { setCobroReversar(p); setMotivoReverso('') }}
+                                    className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium"
+                                    title="Reversar cobro">
+                                    <RefreshCw size={13} /> Reversar
+                                  </button>
+                                </PermissionGuard>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-2">Editar un cobro lo reversa y crea uno nuevo (queda historial). Bloqueado si el mes ya está cerrado.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Editar cobro */}
+      {cobroEdit && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 print:hidden">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold mb-1">Editar cobro</h2>
+            <p className="text-sm text-gray-500 mb-4">Se reversará el cobro actual y se registrará uno nuevo con estos datos.</p>
+            <div className="space-y-3">
+              <div>
+                <label className="label">Monto *</label>
+                <input type="number" step="0.01" className="input" value={cobroForm.monto}
+                  onChange={e => setCobroForm(f => ({ ...f, monto: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Fecha *</label>
+                <input type="date" className="input" value={cobroForm.fecha}
+                  onChange={e => setCobroForm(f => ({ ...f, fecha: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Cuenta de banco *</label>
+                <select className="input" value={cobroForm.cuenta_id}
+                  onChange={e => setCobroForm(f => ({ ...f, cuenta_id: e.target.value }))}>
+                  <option value="">Seleccionar cuenta...</option>
+                  {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Motivo de la edición *</label>
+                <input className="input" placeholder="Ej: monto corregido" value={cobroForm.motivo}
+                  onChange={e => setCobroForm(f => ({ ...f, motivo: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button className="btn-secondary flex-1" onClick={() => setCobroEdit(null)}>Cancelar</button>
+              <button className="btn-primary flex-1" onClick={handleEditCobro}
+                disabled={savingCobro || !(parseFloat(cobroForm.monto) > 0) || !cobroForm.cuenta_id || cobroForm.motivo.trim().length < 3}>
+                {savingCobro ? 'Guardando...' : 'Guardar cambios'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Reversar cobro */}
+      {cobroReversar && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 print:hidden">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold mb-1">Reversar cobro</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Se registrará un egreso en banco por {formatCurrency(cobroReversar.monto)} y el presupuesto volverá a pendiente.
+            </p>
+            <label className="label">Motivo *</label>
+            <input className="input" placeholder="Motivo del reverso" value={motivoReverso}
+              onChange={e => setMotivoReverso(e.target.value)} />
+            <div className="flex gap-3 mt-5">
+              <button className="btn-secondary flex-1" onClick={() => { setCobroReversar(null); setMotivoReverso('') }}>Cancelar</button>
+              <button className="btn-primary flex-1" onClick={handleReversarCobro}
+                disabled={reversando || motivoReverso.trim().length < 3}>
+                {reversando ? 'Reversando...' : 'Reversar'}
+              </button>
             </div>
           </div>
         </div>
