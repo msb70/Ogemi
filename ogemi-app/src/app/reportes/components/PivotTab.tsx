@@ -38,6 +38,7 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
 
   // Antigüedad expand state
   const [antExpandidos, setAntExpandidos] = useState<Record<string, boolean>>({})
+  const [antMostrarTodas, setAntMostrarTodas] = useState(false)
 
   const weekDateObjs = weekDates.map(d => new Date(d + 'T00:00:00'))
   const vencViernes = buildVencimientoViernes(facturas, weekDateObjs)
@@ -242,6 +243,15 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
             </div>
           </div>
 
+          <div className="flex justify-end">
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+              <input type="checkbox" className="w-4 h-4 accent-brand-600 cursor-pointer"
+                checked={antMostrarTodas}
+                onChange={e => setAntMostrarTodas(e.target.checked)} />
+              Mostrar todas las facturas
+            </label>
+          </div>
+
           {pivotAnt.clientes.length === 0 ? (
             <div className="card p-12 text-center text-gray-400">No hay cartera pendiente</div>
           ) : (
@@ -264,7 +274,7 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
                 <tbody>
                   {pivotAnt.clientes.map((cliente: string) => {
                     const clienteTotal = BUCKETS.reduce((s, b) => s + (pivotAnt.data[cliente]?.[b.key] || 0), 0)
-                    const expandido = antExpandidos[cliente] ?? false
+                    const expandido = antMostrarTodas || (antExpandidos[cliente] ?? false)
                     return (
                       <>
                         <tr key={`c-${cliente}`}
