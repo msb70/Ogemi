@@ -10,6 +10,8 @@ import { useToast } from '@/hooks/useToast'
 import { Toast } from '@/components/Toast'
 import {
   BookOpen,
+  Check,
+  Copy,
   KeyRound,
   Lock,
   Plus,
@@ -19,6 +21,7 @@ import {
   UserCheck,
   UserPlus,
   UserX,
+  X,
 } from 'lucide-react'
 import type { Modulo, RoleRecord, RolPermiso, UserProfile } from '@/types/auth'
 
@@ -73,6 +76,8 @@ function UsuariosPage() {
   const [creatingUser, setCreatingUser] = useState(false)
   const [resettingPassword, setResettingPassword] = useState<string | null>(null)
   const [sendingManual, setSendingManual] = useState<string | null>(null)
+  const [resetInfo, setResetInfo] = useState<{ email: string; nombre: string; password: string; sent: boolean } | null>(null)
+  const [copied, setCopied] = useState(false)
   const [savingRole, setSavingRole] = useState(false)
   const [deletingRole, setDeletingRole] = useState(false)
   const [selectedRoleId, setSelectedRoleId] = useState('')
@@ -184,17 +189,34 @@ function UsuariosPage() {
 
   async function resetPassword(user: UserProfile) {
     setResettingPassword(user.id)
+    setCopied(false)
     try {
       const result = await fetchJson('/api/admin/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: user.id, reset_password: true }),
       })
-      showToast(result.emailStatus?.sent ? 'Contraseña reseteada y correo enviado.' : 'Contraseña reseteada.')
+      setResetInfo({
+        email: user.email,
+        nombre: user.nombre || user.email,
+        password: result.tempPassword || '',
+        sent: !!result.emailStatus?.sent,
+      })
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'No se pudo resetear la contraseña.', 'error')
     } finally {
       setResettingPassword(null)
+    }
+  }
+
+  async function copyResetPassword() {
+    if (!resetInfo) return
+    try {
+      await navigator.clipboard.writeText(resetInfo.password)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    } catch {
+      showToast('No se pudo copiar. Copie la clave manualmente.', 'error')
     }
   }
 
@@ -625,6 +647,48 @@ function UsuariosPage() {
           </form>
         </section>
       </div>
+
+      {/* Modal: clave temporal tras reseteo */}
+      {resetInfo && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-start justify-between mb-1">
+              <h2 className="text-lg font-semibold">Clave temporal generada</h2>
+              <button onClick={() => setResetInfo(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">
+              Usuario: <strong>{resetInfo.nombre}</strong> ({resetInfo.email})
+            </p>
+
+            <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 text-center mb-3">
+              <p className="text-[11px] uppercase tracking-wide text-teal-700 mb-1">Clave temporal</p>
+              <p className="font-mono text-2xl font-bold text-teal-800 tracking-wider break-all">{resetInfo.password}</p>
+            </div>
+
+            <button
+              onClick={copyResetPassword}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-medium transition-colors ${
+                copied ? 'bg-green-600 text-white' : 'btn-primary'
+              }`}
+            >
+              {copied ? <><Check size={16} /> Copiada</> : <><Copy size={16} /> Copiar clave</>}
+            </button>
+
+            <p className={`text-xs mt-3 ${resetInfo.sent ? 'text-green-600' : 'text-amber-600'}`}>
+              {resetInfo.sent
+                ? 'También se envió por correo al usuario.'
+                : 'El correo no se envió. Entregue esta clave al usuario directamente.'}
+            </p>
+            <p className="text-[11px] text-gray-400 mt-2">
+              El usuario deberá cambiar esta clave en su primer ingreso. Por seguridad, esta ventana no vuelve a mostrar la clave.
+            </p>
+
+            <button onClick={() => setResetInfo(null)} className="btn-secondary w-full mt-4">Cerrar</button>
+          </div>
+        </div>
+      )}
 
       {toast && <Toast {...toast} onClose={hideToast} />}
     </AppLayout>

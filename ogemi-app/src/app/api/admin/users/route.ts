@@ -287,7 +287,8 @@ export async function PATCH(request: NextRequest) {
         })
       : { sent: false, provider: 'none' as const, error: 'No se encontró el correo del usuario.' }
 
-    return NextResponse.json({ ok: true, emailStatus })
+    // Devolvemos la clave temporal para que el admin pueda entregarla manualmente si el correo no llega.
+    return NextResponse.json({ ok: true, emailStatus, tempPassword: newPassword, email: profile?.email || null })
   }
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
