@@ -31,6 +31,26 @@ function Icono({ id, size = 18, className = '' }: { id: string; size?: number; c
   return <Cmp size={size} className={className} />
 }
 
+// Captura de pantalla del módulo. Si el archivo /manual/<id>.png no existe, se oculta sola.
+function Screenshot({ id, titulo }: { id: string; titulo: string }) {
+  const [ok, setOk] = useState(true)
+  if (!ok) return null
+  return (
+    <div className="card overflow-hidden">
+      <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-500">
+        Pantalla de {titulo}
+      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`/manual/${id}.png`}
+        alt={`Pantalla de ${titulo}`}
+        className="w-full block"
+        onError={() => setOk(false)}
+      />
+    </div>
+  )
+}
+
 export default function ManualPage() {
   const { profile, puedeHacer } = useAuth()
   const [activo, setActivo] = useState<string>('')
@@ -105,14 +125,15 @@ export default function ManualPage() {
       <div className="p-4 md:p-6 space-y-5">
         {/* Banner */}
         <div className="rounded-2xl p-5 text-white flex items-center justify-between gap-4" style={{ background: 'linear-gradient(135deg, #0f766e 0%, #115e59 100%)' }}>
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <BookOpen size={20} />
+          <div className="flex items-center gap-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.jpeg" alt="Ogemi" className="w-14 h-14 rounded-xl bg-white object-contain p-1 shrink-0" />
+            <div>
               <h2 className="text-lg font-bold">Manual de Ogemi</h2>
+              <p className="text-white/85 text-sm">
+                {visibles.length} módulos · {totalProcesos} procesos disponibles para su rol{profile?.rol_id ? ` (${profile.rol_id})` : ''}.
+              </p>
             </div>
-            <p className="text-white/85 text-sm">
-              {visibles.length} módulos · {totalProcesos} procesos disponibles para su rol{profile?.rol_id ? ` (${profile.rol_id})` : ''}.
-            </p>
           </div>
           <div className="hidden md:block bg-white/10 rounded-xl px-4 py-3 text-center">
             <p className="text-2xl font-bold">{visibles.length}</p>
@@ -187,6 +208,7 @@ export default function ManualPage() {
                       </div>
                     </div>
                   </div>
+                  <Screenshot id={moduloActivo.id} titulo={moduloActivo.titulo} />
                   {moduloActivo.procesos.map((pr, i) => <Proceso key={i} pr={pr} n={i + 1} />)}
                 </>
               )}

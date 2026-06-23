@@ -1,4 +1,4 @@
-import { buildManualHtml, buildManualText } from './manual'
+import { MANUAL_MODULOS } from './manual'
 
 type EmailResult =
   | { sent: true; provider: 'resend'; id?: string }
@@ -213,22 +213,55 @@ export async function sendResetPasswordEmail({ to, name, tempPassword }: Welcome
 }
 
 export async function sendManualEmail({ to, name, modulosVisibles, rolNombre }: ManualEmailInput): Promise<EmailResult> {
-  const manualHtml = buildManualHtml({ nombre: name, rolNombre, modulosVisibles })
-  const manualText = buildManualText({ nombre: name, rolNombre, modulosVisibles })
-  const loginUrl = `${getAppUrl()}/login`
-  const safeLoginUrl = escapeHtml(loginUrl)
+  const safeName = escapeHtml(name || to)
+  const manualUrl = `${getAppUrl()}/manual`
+  const safeManualUrl = escapeHtml(manualUrl)
+
+  const visibles = (!modulosVisibles || modulosVisibles.length === 0)
+    ? MANUAL_MODULOS
+    : MANUAL_MODULOS.filter(m => modulosVisibles.includes(m.id))
+
+  const rolLinea = rolNombre
+    ? `<p style="margin:0 0 16px; text-align:center; color:#6b7280; font-size:13px;">Su rol: <strong style="color:#374151;">${escapeHtml(rolNombre)}</strong></p>`
+    : ''
+
+  const chips = visibles.map(m =>
+    `<span style="display:inline-block; background:#f0fdfa; color:#0f766e; border:1px solid #99f6e4; border-radius:999px; padding:5px 12px; font-size:13px; margin:0 6px 8px 0;">${escapeHtml(m.titulo)}</span>`
+  ).join('')
 
   const html = `
-    <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5; max-width: 620px;">
-      ${manualHtml}
-      <p style="margin-top:18px;">
-        <a href="${safeLoginUrl}" style="display: inline-block; background: #0f5f86; color: #ffffff; text-decoration: none; padding: 10px 16px; border-radius: 6px;">
-          Entrar a Ogemi
+    <div style="font-family: Arial, sans-serif; color:#1f2937; line-height:1.6; max-width:520px; margin:0 auto;">
+      ${brandHeaderHtml()}
+      <h1 style="font-size:20px; margin:0 0 14px; color:#111827; text-align:center;">Manual del sistema</h1>
+      <p style="margin:0 0 12px;">Hola ${safeName},</p>
+      <p style="margin:0 0 16px;">Le compartimos el manual interactivo de Ogemi, con el paso a paso de cada módulo y proceso. Ábralo directamente en la aplicación:</p>
+      ${rolLinea}
+
+      <div style="text-align:center; margin:0 0 22px;">
+        <a href="${safeManualUrl}" style="display:inline-block; background:#0f766e; color:#ffffff; text-decoration:none; padding:14px 30px; border-radius:8px; font-size:16px; font-weight:bold;">
+          Abrir el manual del sistema
         </a>
-      </p>
+      </div>
+
+      <div style="background:#f9fafb; border-radius:10px; padding:16px 18px; margin:0 0 18px;">
+        <p style="margin:0 0 10px; font-weight:bold; color:#374151;">Módulos disponibles para usted</p>
+        <div>${chips}</div>
+      </div>
+
+      <p style="font-size:13px; color:#6b7280; margin:0;">Dentro del manual encontrará una guía visual, búsqueda de procesos y la opción de imprimir.</p>
+      <p style="font-size:12px; color:#9ca3af; margin:16px 0 0;">Impresos Comerciales S.A. · Sistema Ogemi de gestión de cartera.</p>
     </div>
   `
-  const text = [manualText, '', `Entrar a Ogemi: ${loginUrl}`].join('\n')
 
-  return sendViaResend({ to, subject: 'Manual del sistema Ogemi', html, text })
+  const text = [
+    `Hola ${name || to},`,
+    '',
+    'Le compartimos el manual del sistema Ogemi. Ábralo en la aplicación:',
+    manualUrl,
+    '',
+    rolNombre ? `Su rol: ${rolNombre}` : '',
+    `Módulos disponibles: ${visibles.map(m => m.titulo).join(', ')}`,
+  ].filter(Boolean).join('\n')
+
+  return sendViaResend({ to, subject: 'Manual del sistema · Ogemi', html, text })
 }
