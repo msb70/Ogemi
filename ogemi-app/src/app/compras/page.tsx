@@ -15,6 +15,7 @@ import type { CSSProperties } from 'react'
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
 import { useAuth } from '@/context/AuthContext'
+import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 import QrScanner from '@/components/QrScanner'
 import { withPagePermission } from '@/components/PermissionGuard'
 
@@ -366,41 +367,49 @@ function ComprasPage() {
     }
   }
 
-  const exportCSV = () => {
-    // Escape CSV: encierra en comillas y duplica comillas internas. Sin esto, los
-    // proveedores/conceptos con comas (ej. "FABIO MOLES, S. A.") parten la fila y
-    // descuadran los datos respecto a los títulos.
-    const cell = (v: unknown) => {
-      const s = v == null ? '' : String(v)
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  const exportExcel = () => {
+    const fecha = new Date().toISOString().split('T')[0]
+    if (tab === 'vencidas') {
+      const total = vencidas.reduce((s: number, c: any) => s + (c.saldo_pendiente ?? c.total ?? 0), 0)
+      exportXLSX(`cuentas_por_pagar_${fecha}.xlsx`, [
+        kpiSheet('Compras — Cuentas por pagar', 'Pendientes', [
+          ['Total por pagar', total],
+          ['# Cuentas', vencidas.length],
+          ...resumenTramos.map(t => [`${t.label}`, t.monto] as [string, number]),
+        ]),
+        { name: 'Cuentas por pagar', rows: [
+          ['Fecha', 'Proveedor', 'Concepto', 'Vencimiento', 'Días', 'Total', 'Saldo', 'Tramo'],
+          ...vencidas.map((c: any) => [
+            c.fecha, c.proveedor, c.concepto || '', c.vencimiento, c.dias_vencida,
+            c.total, c.saldo_pendiente ?? c.total, TRAMO_LABELS[c.tramo] || c.tramo,
+          ]),
+        ] },
+      ])
+      return
     }
-    const headers = [
-      'Fecha', 'Proveedor', 'Concepto', 'Referencia', 'Tipo documento', 'Documento afectado',
-      'Monto', 'ITBMS', 'Total', 'Pagado', 'Saldo', 'Estado', 'Vencimiento',
-    ]
-    const rows = filtered.map(c => [
-      c.fecha,
-      (c.proveedores as any)?.nombre || '',
-      c.concepto || '',
-      c.referencia || '',
-      c.tipo_documento || 'FACTURA',
-      c.documento_afectado || '',
-      c.monto,
-      c.itbms,
-      c.total,
-      c.monto_pagado || 0,
-      c.total - (c.monto_pagado || 0),
-      c.estado,
-      c.vencimiento || '',
+    const total = filtered.reduce((s, c) => s + (c.total || 0), 0)
+    const pagado = filtered.filter(c => c.estado === 'pagada').reduce((s, c) => s + (c.total || 0), 0)
+    const pendiente = filtered.filter(c => c.estado === 'pendiente').reduce((s, c) => s + (c.total || 0), 0)
+    exportXLSX(`compras_${fecha}.xlsx`, [
+      kpiSheet('Compras — Listado', 'Filtros activos', [
+        ['# Compras', filtered.length],
+        ['Pendientes', filtered.filter(c => c.estado === 'pendiente').length],
+        ['Pagadas', filtered.filter(c => c.estado === 'pagada').length],
+        ['Monto total', total],
+        ['Pagado', pagado],
+        ['Pendiente', pendiente],
+      ]),
+      { name: 'Listado', rows: [
+        ['Fecha', 'Proveedor', 'Concepto', 'Referencia', 'Tipo documento', 'Documento afectado',
+         'Monto', 'ITBMS', 'Total', 'Pagado', 'Saldo', 'Estado', 'Vencimiento'],
+        ...filtered.map(c => [
+          c.fecha, (c.proveedores as any)?.nombre || '', c.concepto || '', c.referencia || '',
+          c.tipo_documento || 'FACTURA', c.documento_afectado || '',
+          c.monto, c.itbms, c.total, c.monto_pagado || 0, c.total - (c.monto_pagado || 0),
+          c.estado, c.vencimiento || '',
+        ]),
+      ] },
     ])
-    const csv = [headers, ...rows].map(r => r.map(cell).join(',')).join('\r\n')
-    // BOM para que Excel respete UTF-8 (ñ, acentos)
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `compras_${new Date().toISOString().split('T')[0]}.csv`
-    a.click()
-    URL.revokeObjectURL(a.href)
   }
 
   const filtered = compras.filter(c => {
@@ -435,8 +444,8 @@ function ComprasPage() {
         subtitle={`${countPendiente} compras pendientes · ${formatCurrency(totalPendiente)}`}
         actions={
           <div className="flex items-center gap-2">
-            <button className="btn-secondary flex items-center gap-2" onClick={exportCSV}>
-              <Download size={16} />Exportar
+            <button className="btn-secondary flex items-center gap-2" onClick={exportExcel}>
+              <Download size={16} />Exportar Excel
             </button>
             <button className="btn-secondary flex items-center gap-2" onClick={() => { setQrUrl(''); setQrError(''); setQrMode('camera'); setScannerActive(true); setShowQrModal(true) }}>
               <QrCode size={16} />Escanear QR

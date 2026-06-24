@@ -6,11 +6,12 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate, tramoColor, classifyTramo } from '@/lib/utils'
 import { Factura, BancoCuenta } from '@/types'
-import { Search, CheckCircle, Filter, X, Plus, Trash2, RefreshCw, Eye, Printer, Pencil } from 'lucide-react'
+import { Search, CheckCircle, Filter, X, Plus, Trash2, RefreshCw, Eye, Printer, Pencil, Download } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
 import { useAuth } from '@/context/AuthContext'
+import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
 
 type EstadoFilter = 'todos' | 'pendiente' | 'pagada'
@@ -95,6 +96,7 @@ function FacturasPage() {
 
   const { profile } = useAuth()
   const isAdmin = profile?.rol_id === 'admin'
+  const [exporting, setExporting] = useState(false)
 
   const { toast, showToast, hideToast } = useToast()
 
@@ -185,6 +187,55 @@ function FacturasPage() {
 
   useEffect(() => { loadData() }, [loadData])
   useEffect(() => { loadResumen() }, [loadResumen])
+
+  const exportExcel = async () => {
+    setExporting(true)
+    try {
+      // Re-consulta TODAS las filas que cumplen los filtros (sin paginar)
+      let clienteIds: string[] | null = null
+      if (search && !/^\d+$/.test(search.trim())) {
+        const { data } = await supabase.from('clientes').select('id').ilike('nombre', `%${search.trim()}%`)
+        clienteIds = data?.map(c => c.id) || []
+      }
+      let q = supabase.from('facturas')
+        .select('*, clientes(nombre), banco_cuentas(nombre)')
+        .order('fecha', { ascending: false }).order('numero_factura', { ascending: false })
+      if (estadoFilter !== 'todos') q = q.eq('estado', estadoFilter)
+      if (fechaDesde) q = q.gte('fecha', fechaDesde)
+      if (fechaHasta) q = q.lte('fecha', fechaHasta)
+      if (search.trim()) {
+        if (/^\d+$/.test(search.trim())) q = q.eq('numero_factura', parseInt(search.trim()))
+        else if (clienteIds) q = q.in('cliente_id', clienteIds.length ? clienteIds : ['00000000-0000-0000-0000-000000000000'])
+      }
+      const { data } = await q
+      const rows = (data || []) as any[]
+      const etiqueta = estadoFilter === 'todos' ? 'Todas' : estadoFilter === 'pagada' ? 'Pagadas' : 'Pendientes'
+      const kpis: [string, number][] = resumen ? [
+        ['# Facturas', resumen.num_facturas],
+        ['Pagadas', resumen.num_pagadas],
+        ['Pendientes', resumen.num_pendientes],
+        ['Monto total', resumen.monto_total],
+        ['Monto pagado', resumen.monto_pagado],
+        ['Monto pendiente', resumen.monto_pendiente],
+        ['# Notas de crédito', resumen.num_notas_credito],
+        ['Total N. crédito', resumen.total_notas_credito],
+      ] : [['# Facturas', rows.length]]
+      exportXLSX(`facturas_${etiqueta.toLowerCase()}_${new Date().toISOString().split('T')[0]}.xlsx`, [
+        kpiSheet(`Facturas — ${etiqueta}`, etiqueta, kpis),
+        { name: 'Listado', rows: [
+          ['#Factura', 'Fecha', 'Cliente', 'Tipo', 'Monto', 'ITBMS', 'Total', 'Pagado', 'Saldo', 'Estado', 'Vence'],
+          ...rows.map(f => [
+            f.numero_factura, f.fecha, f.clientes?.nombre || '', f.tipo_documento,
+            f.monto, f.itbms, f.total, f.monto_pagado || 0, f.total - (f.monto_pagado || 0), f.estado, f.fecha_pago || '',
+          ]),
+        ] },
+      ])
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudo exportar.', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const openPagoModal = async (f: Factura) => {
     setSelectedFactura(f)
@@ -394,6 +445,12 @@ function FacturasPage() {
       <Header
         title="Facturas"
         subtitle={`${totalCount.toLocaleString('es-PA')} registros`}
+        actions={
+          <button onClick={exportExcel} disabled={exporting}
+            className="btn-secondary flex items-center gap-2">
+            <Download size={16} /> {exporting ? 'Exportando...' : 'Exportar Excel'}
+          </button>
+        }
       />
 
       {/* Resumen */}

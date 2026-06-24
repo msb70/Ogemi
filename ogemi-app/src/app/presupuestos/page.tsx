@@ -9,6 +9,7 @@ import { BancoCuenta, Cliente } from '@/types'
 import { Search, CheckCircle, Filter, X, Plus, Trash2, FileText, Download, Eye, Printer, RefreshCw, Pencil } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
+import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 
 type EstadoFilter = 'todos' | 'pendiente' | 'pagada'
 
@@ -362,20 +363,27 @@ function PresupuestosPage() {
     loadData()
   }
 
-  const exportCSV = () => {
-    const rows = filtered.map(p => [
-      p.numero_presupuesto, p.orden_trabajo || '', p.fecha, p.clientes?.nombre || '', p.tipo_documento,
-      p.monto, p.itbms, p.total, p.estado, p.fecha_pago || '', p.fecha_cobro || ''
+  const exportExcel = () => {
+    const total = filtered.reduce((s, p) => s + (p.total || 0), 0)
+    const cobrado = filtered.filter(p => p.estado === 'pagada').reduce((s, p) => s + (p.total || 0), 0)
+    const pendiente = filtered.filter(p => p.estado === 'pendiente').reduce((s, p) => s + (p.total || 0), 0)
+    exportXLSX(`presupuestos_${new Date().toISOString().split('T')[0]}.xlsx`, [
+      kpiSheet('Presupuestos', estadoFilter === 'todos' ? 'Todos' : estadoFilter, [
+        ['# Presupuestos', filtered.length],
+        ['Pendientes', filtered.filter(p => p.estado === 'pendiente').length],
+        ['Pagados', filtered.filter(p => p.estado === 'pagada').length],
+        ['Monto total', total],
+        ['Cobrado', cobrado],
+        ['Pendiente', pendiente],
+      ]),
+      { name: 'Listado', rows: [
+        ['#', 'Orden trabajo', 'Fecha', 'Cliente', 'Tipo', 'Monto', 'ITBMS', 'Total', 'Estado', 'Vence', 'Cobrado'],
+        ...filtered.map(p => [
+          p.numero_presupuesto, p.orden_trabajo || '', p.fecha, p.clientes?.nombre || '', p.tipo_documento,
+          p.monto, p.itbms, p.total, p.estado, p.fecha_pago || '', p.fecha_cobro || '',
+        ]),
+      ] },
     ])
-    const csv = [
-      ['#', 'Orden trabajo', 'Fecha', 'Cliente', 'Tipo', 'Monto', 'ITBMS', 'Total', 'Estado', 'Vence', 'Cobrado'],
-      ...rows
-    ].map(r => r.map(v => `"${v ?? ''}"`).join(',')).join('\n')
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `presupuestos_${new Date().toISOString().split('T')[0]}.csv`
-    a.click()
   }
 
   const totalPendiente = filtered.filter(p => p.estado === 'pendiente').reduce((s, p) => s + p.total, 0)
@@ -388,8 +396,8 @@ function PresupuestosPage() {
         subtitle={`${filtered.length} registros · ${filtered.filter(p => p.estado === 'pendiente').length} pendientes`}
         actions={
           <div className="flex items-center gap-2">
-            <button className="btn-secondary flex items-center gap-2" onClick={exportCSV}>
-              <Download size={16} />Exportar
+            <button className="btn-secondary flex items-center gap-2" onClick={exportExcel}>
+              <Download size={16} />Exportar Excel
             </button>
             <button className="btn-primary flex items-center gap-2" onClick={() => openForm()}>
               <Plus size={16} />Nuevo presupuesto
