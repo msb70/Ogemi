@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'operador' | 'lectura';
 export type PresupuestoEstado = 'pendiente' | 'pagada';
-export type FacturaEstado = 'pendiente' | 'pagada';
+export type FacturaEstado = 'pendiente' | 'pagada' | 'falta_retencion';
 export type CompraEstado = 'pendiente' | 'pagada';
 export type MovimientoTipo = 'ingreso' | 'egreso';
 export type TramoCartera = 'corriente' | '1-30' | '31-60' | '61-90' | '91-120' | '+120';
@@ -39,6 +39,10 @@ export interface Factura {
   banco_cuenta_id: string | null;
   notas: string | null;
   monto_pagado: number;
+  retencion_pct: number;
+  retencion_monto: number;
+  retencion_comprobante_entregado: boolean;
+  retencion_comprobante_fecha: string | null;
   created_at: string;
   updated_at: string;
   // Joins

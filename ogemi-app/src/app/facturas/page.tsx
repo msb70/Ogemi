@@ -6,7 +6,7 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate, tramoColor, classifyTramo } from '@/lib/utils'
 import { Factura, BancoCuenta } from '@/types'
-import { Search, CheckCircle, Filter, X, Plus, Trash2, RefreshCw, Eye, Printer, Pencil, Download } from 'lucide-react'
+import { Search, CheckCircle, Filter, X, Plus, Trash2, RefreshCw, Eye, Printer, Pencil, Download, Percent } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
@@ -14,7 +14,26 @@ import { useAuth } from '@/context/AuthContext'
 import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
 
-type EstadoFilter = 'todos' | 'pendiente' | 'pagada'
+type EstadoFilter = 'todos' | 'pendiente' | 'pagada' | 'falta_retencion'
+
+const ESTADO_FILTRO_LABEL: Record<EstadoFilter, string> = {
+  todos: 'Todos',
+  pendiente: 'Pendiente',
+  pagada: 'Pagada',
+  falta_retencion: 'Falta retención',
+}
+
+/** Monto en efectivo a cobrar (total menos la retención) y su saldo. */
+const cobrableFactura = (f: { total: number; retencion_monto?: number | null }) =>
+  f.total - (f.retencion_monto || 0)
+
+/** Badge de estado para la tabla y el detalle. */
+function estadoBadge(f: Factura): { cls: string; txt: string } {
+  if (f.estado === 'pagada') return { cls: 'bg-green-100 text-green-700', txt: 'pagada' }
+  if (f.estado === 'falta_retencion') return { cls: 'bg-amber-100 text-amber-700', txt: 'falta retención' }
+  if ((f.monto_pagado || 0) > 0) return { cls: 'bg-blue-100 text-blue-700', txt: 'abono' }
+  return { cls: 'bg-yellow-100 text-yellow-700', txt: 'pendiente' }
+}
 
 type FacturasResumen = {
   num_facturas: number
@@ -93,6 +112,11 @@ function FacturasPage() {
   const [cobroEdit, setCobroEdit] = useState<any | null>(null)
   const [cobroForm, setCobroForm] = useState({ monto: '', fecha: '', cuenta_id: '', motivo: '' })
   const [savingCobro, setSavingCobro] = useState(false)
+
+  // Modal de retención
+  const [retFactura, setRetFactura] = useState<Factura | null>(null)
+  const [retForm, setRetForm] = useState({ pct: '', comprobante: false, fecha: '' })
+  const [savingRet, setSavingRet] = useState(false)
 
   const { profile } = useAuth()
   const isAdmin = profile?.rol_id === 'admin'
@@ -223,11 +247,18 @@ function FacturasPage() {
       exportXLSX(`facturas_${etiqueta.toLowerCase()}_${new Date().toISOString().split('T')[0]}.xlsx`, [
         kpiSheet(`Facturas — ${etiqueta}`, etiqueta, kpis),
         { name: 'Listado', rows: [
-          ['#Factura', 'Fecha', 'Cliente', 'Tipo', 'Monto', 'ITBMS', 'Total', 'Pagado', 'Saldo', 'Estado', 'Vence'],
-          ...rows.map(f => [
-            f.numero_factura, f.fecha, f.clientes?.nombre || '', f.tipo_documento,
-            f.monto, f.itbms, f.total, f.monto_pagado || 0, f.total - (f.monto_pagado || 0), f.estado, f.fecha_pago || '',
-          ]),
+          ['#Factura', 'Fecha', 'Cliente', 'Tipo', 'Monto', 'ITBMS', 'Total', 'Retención %', 'Retención', 'A cobrar', 'Pagado', 'Saldo', 'Estado', 'Vence'],
+          ...rows.map(f => {
+            const ret = f.retencion_monto || 0
+            const aCobrar = f.total - ret
+            const estadoLabel = f.estado === 'pagada' ? 'pagada'
+              : f.estado === 'falta_retencion' ? 'falta retención' : 'pendiente'
+            return [
+              f.numero_factura, f.fecha, f.clientes?.nombre || '', f.tipo_documento,
+              f.monto, f.itbms, f.total, f.retencion_pct || 0, ret, aCobrar,
+              f.monto_pagado || 0, aCobrar - (f.monto_pagado || 0), estadoLabel, f.fecha_pago || '',
+            ]
+          }),
         ] },
       ])
     } catch (e) {
@@ -240,7 +271,11 @@ function FacturasPage() {
   const openPagoModal = async (f: Factura) => {
     setSelectedFactura(f)
     setFechaPago(new Date().toISOString().split('T')[0])
-    setLineas([emptyLinea(cuentas[0]?.id || '')])
+    // Pre-cargar el saldo a cobrar en efectivo (total - retención - ya pagado)
+    const saldo = cobrableFactura(f) - (f.monto_pagado || 0)
+    const linea0 = emptyLinea(cuentas[0]?.id || '')
+    if (saldo > 0) linea0.monto = saldo.toFixed(2)
+    setLineas([linea0])
     setAnticipos([])
     setShowModal(true)
 
@@ -365,6 +400,33 @@ function FacturasPage() {
     loadData(); loadResumen()
   }
 
+  // ── Retención de ITBMS ──
+  const openRetencion = (f: Factura) => {
+    setRetFactura(f)
+    setRetForm({
+      pct: f.retencion_pct ? String(f.retencion_pct) : '',
+      comprobante: !!f.retencion_comprobante_entregado,
+      fecha: f.retencion_comprobante_fecha || new Date().toISOString().split('T')[0],
+    })
+  }
+
+  const handleGuardarRetencion = async () => {
+    if (!retFactura) return
+    const pct = parseFloat(retForm.pct) || 0
+    if (pct < 0 || pct > 100) { showToast('El % de retención debe estar entre 0 y 100.', 'error'); return }
+    setSavingRet(true)
+    const { error } = await supabase.from('facturas').update({
+      retencion_pct: pct,
+      retencion_comprobante_entregado: retForm.comprobante,
+      retencion_comprobante_fecha: retForm.comprobante ? (retForm.fecha || null) : null,
+    }).eq('id', retFactura.id)
+    setSavingRet(false)
+    if (error) { showToast(`No se pudo guardar la retención: ${error.message}`, 'error'); return }
+    setRetFactura(null)
+    showToast('Retención actualizada', 'success')
+    loadData(); loadResumen()
+  }
+
   const addLinea = () => {
     setLineas(prev => [...prev, emptyLinea(cuentas[0]?.id || '')])
   }
@@ -379,8 +441,9 @@ function FacturasPage() {
 
   const totalLineas = lineas.reduce((s, l) => s + (parseFloat(l.monto) || 0), 0)
 
+  // Saldo a cobrar en efectivo = (total - retención) - ya pagado
   const saldoPendiente = selectedFactura
-    ? (selectedFactura.total - (selectedFactura.monto_pagado || 0))
+    ? (cobrableFactura(selectedFactura) - (selectedFactura.monto_pagado || 0))
     : 0
 
   const handleRegistrarAbono = async () => {
@@ -536,7 +599,7 @@ function FacturasPage() {
         </div>
         <div className="flex items-center gap-2">
           <Filter size={16} className="text-gray-400" />
-          {(['todos', 'pendiente', 'pagada'] as EstadoFilter[]).map(e => (
+          {(['todos', 'pendiente', 'pagada', 'falta_retencion'] as EstadoFilter[]).map(e => (
             <button
               key={e}
               onClick={() => setEstadoFilter(e)}
@@ -546,7 +609,7 @@ function FacturasPage() {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {e.charAt(0).toUpperCase() + e.slice(1)}
+              {ESTADO_FILTRO_LABEL[e]}
             </button>
           ))}
         </div>
@@ -581,7 +644,8 @@ function FacturasPage() {
                   const tramo = f.estado === 'pendiente' ? getTramo(dias) : null
                   const tipoCorto = f.tipo_documento.includes('CREDITO') ? 'N. CRÉDITO' : 'FACTURA'
                   const montoPagado = f.monto_pagado || 0
-                  const saldo = f.total - montoPagado
+                  const saldo = cobrableFactura(f) - montoPagado
+                  const badge = estadoBadge(f)
                   return (
                     <tr key={f.id} className="hover:bg-gray-50 transition-colors">
                       <td className="table-cell font-mono font-medium">#{f.numero_factura}</td>
@@ -599,7 +663,11 @@ function FacturasPage() {
                         {montoPagado > 0 ? formatCurrency(montoPagado) : '—'}
                       </td>
                       <td className="table-cell text-right font-semibold text-orange-600">
-                        {f.estado === 'pagada' ? <span className="text-green-600 text-sm">Saldada</span> : formatCurrency(saldo)}
+                        {f.estado === 'pagada'
+                          ? <span className="text-green-600 text-sm">Saldada</span>
+                          : f.estado === 'falta_retencion'
+                            ? <span className="text-amber-600 text-sm" title={`Retención pendiente de comprobante: ${formatCurrency(f.retencion_monto || 0)}`}>Falta comprobante</span>
+                            : formatCurrency(saldo)}
                       </td>
                       <td className="table-cell">
                         <div className="flex flex-col">
@@ -610,9 +678,7 @@ function FacturasPage() {
                         </div>
                       </td>
                       <td className="table-cell">
-                        <span className={`badge ${f.estado === 'pagada' ? 'bg-green-100 text-green-700' : montoPagado > 0 ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                          {f.estado === 'pagada' ? 'pagada' : montoPagado > 0 ? 'abono' : 'pendiente'}
-                        </span>
+                        <span className={`badge ${badge.cls}`}>{badge.txt}</span>
                       </td>
                       <td className="table-cell">
                         <div className="flex items-center gap-3">
@@ -631,6 +697,21 @@ function FacturasPage() {
                               <CheckCircle size={15} />
                               {montoPagado > 0 ? 'Abonar' : 'Cobrar'}
                             </button>
+                          )}
+                          {tipoCorto === 'FACTURA' && (
+                            <PermissionGuard modulo="facturas" accion="editar" silent>
+                              <button
+                                onClick={() => openRetencion(f)}
+                                className={`flex items-center gap-1 text-sm font-medium ${
+                                  f.estado === 'falta_retencion'
+                                    ? 'text-amber-600 hover:text-amber-800'
+                                    : 'text-gray-400 hover:text-brand-600'
+                                }`}
+                                title="Retención de ITBMS"
+                              >
+                                <Percent size={14} /> {f.estado === 'falta_retencion' ? 'Comprobante' : 'Retención'}
+                              </button>
+                            </PermissionGuard>
                           )}
                           {isAdmin && (
                             <>
@@ -699,6 +780,12 @@ function FacturasPage() {
                 <span className="text-gray-500">Total factura</span>
                 <span className="font-semibold">{formatCurrency(selectedFactura.total)}</span>
               </div>
+              {(selectedFactura.retencion_monto || 0) > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Retención ({selectedFactura.retencion_pct}% del ITBMS)</span>
+                  <span className="text-amber-600">− {formatCurrency(selectedFactura.retencion_monto || 0)}</span>
+                </div>
+              )}
               {(selectedFactura.monto_pagado || 0) > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Ya pagado</span>
@@ -706,7 +793,7 @@ function FacturasPage() {
                 </div>
               )}
               <div className="flex justify-between text-sm font-semibold border-t pt-1.5 mt-1.5">
-                <span>Saldo pendiente</span>
+                <span>Saldo a cobrar</span>
                 <span className="text-orange-600">{formatCurrency(saldoPendiente)}</span>
               </div>
             </div>
@@ -1054,6 +1141,68 @@ function FacturasPage() {
         </div>
       )}
 
+      {/* Modal: Retención de ITBMS */}
+      {retFactura && (() => {
+        const pct = parseFloat(retForm.pct) || 0
+        const retMonto = Math.round((pct / 100) * (retFactura.itbms || 0) * 100) / 100
+        const aCobrar = retFactura.total - retMonto
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 print:hidden">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+              <h2 className="text-lg font-semibold mb-1 flex items-center gap-2">
+                <Percent size={18} className="text-amber-600" /> Retención de ITBMS
+              </h2>
+              <p className="text-sm text-gray-500 mb-4">
+                Factura #{retFactura.numero_factura} · {retFactura.clientes?.nombre}
+              </p>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="label">% de retención (sobre el ITBMS)</label>
+                  <input type="number" step="0.01" min="0" max="100" className="input"
+                    placeholder="0" value={retForm.pct}
+                    onChange={e => setRetForm(f => ({ ...f, pct: e.target.value }))} />
+                </div>
+
+                <div className="bg-gray-50 rounded-xl p-3 space-y-1.5 text-sm">
+                  <div className="flex justify-between"><span className="text-gray-500">ITBMS</span><span className="font-medium">{formatCurrency(retFactura.itbms || 0)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Retención</span><span className="font-medium text-amber-600">− {formatCurrency(retMonto)}</span></div>
+                  <div className="flex justify-between border-t pt-1.5"><span className="text-gray-600 font-semibold">A cobrar (efectivo)</span><span className="font-bold text-brand-700">{formatCurrency(aCobrar)}</span></div>
+                </div>
+
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" className="h-4 w-4 rounded border-gray-300"
+                    checked={retForm.comprobante}
+                    onChange={e => setRetForm(f => ({ ...f, comprobante: e.target.checked }))} />
+                  <span>Comprobante de retención entregado por el cliente</span>
+                </label>
+
+                {retForm.comprobante && (
+                  <div>
+                    <label className="label">Fecha de entrega del comprobante</label>
+                    <input type="date" className="input" value={retForm.fecha}
+                      onChange={e => setRetForm(f => ({ ...f, fecha: e.target.value }))} />
+                  </div>
+                )}
+
+                {pct > 0 && !retForm.comprobante && (
+                  <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                    Mientras no se marque el comprobante, una factura cobrada al neto quedará en estado <b>“falta retención”</b>.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-3 mt-5">
+                <button className="btn-secondary flex-1" onClick={() => setRetFactura(null)}>Cancelar</button>
+                <button className="btn-primary flex-1" onClick={handleGuardarRetencion} disabled={savingRet}>
+                  {savingRet ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       <style>{`
         @media print {
           body * { visibility: hidden !important; }
@@ -1077,8 +1226,12 @@ function FacturaDetalle({
 }: { factura: Factura; pagos: any[]; reversados: Set<string>; fullPage?: boolean }) {
   const exact = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as CSSProperties
   const montoPagado = factura.monto_pagado || 0
-  const saldo = factura.total - montoPagado
+  const retMonto = factura.retencion_monto || 0
+  const aCobrar = factura.total - retMonto
+  const saldo = aCobrar - montoPagado
   const tipoLabel = factura.tipo_documento?.includes('CREDITO') ? 'Nota de crédito' : 'Factura'
+  const estadoLabel = factura.estado === 'pagada' ? 'Pagada'
+    : factura.estado === 'falta_retencion' ? 'Falta retención' : 'Pendiente'
 
   return (
     <div className={`font-sans text-gray-900 ${fullPage ? 'w-full' : ''}`}>
@@ -1104,11 +1257,17 @@ function FacturaDetalle({
           {/* Datos de la factura */}
           <div className={`grid grid-cols-2 gap-x-6 gap-y-3 mb-6 ${fullPage ? 'text-base' : 'text-sm'}`}>
             <Campo label="Cliente" valor={factura.clientes?.nombre || '—'} />
-            <Campo label="Estado" valor={factura.estado === 'pagada' ? 'Pagada' : 'Pendiente'} />
+            <Campo label="Estado" valor={estadoLabel} />
             <Campo label="Fecha de emisión" valor={formatDate(factura.fecha)} />
             <Campo label="Vencimiento" valor={formatDate(factura.fecha_pago)} />
             <Campo label="Tipo de documento" valor={factura.tipo_documento} />
             {factura.estado === 'pagada' && <Campo label="Fecha de cobro" valor={formatDate(factura.fecha_cobro)} />}
+            {retMonto > 0 && (
+              <Campo label="Comprobante retención"
+                valor={factura.retencion_comprobante_entregado
+                  ? `Entregado${factura.retencion_comprobante_fecha ? ' · ' + formatDate(factura.retencion_comprobante_fecha) : ''}`
+                  : 'Pendiente'} />
+            )}
           </div>
 
           {/* Montos */}
@@ -1116,6 +1275,8 @@ function FacturaDetalle({
             <Fila label="Neto" valor={formatCurrency(factura.monto)} />
             <Fila label="ITBMS" valor={formatCurrency(factura.itbms)} />
             <Fila label="Total" valor={formatCurrency(factura.total)} bold />
+            {retMonto > 0 && <Fila label={`Retención (${factura.retencion_pct}% ITBMS)`} valor={`− ${formatCurrency(retMonto)}`} className="text-amber-600" />}
+            {retMonto > 0 && <Fila label="A cobrar (efectivo)" valor={formatCurrency(aCobrar)} bold />}
             <Fila label="Pagado" valor={formatCurrency(montoPagado)} className="text-green-700" />
             <Fila label="Saldo pendiente" valor={formatCurrency(saldo)} bold className={saldo > 0 ? 'text-orange-600' : 'text-green-700'} />
           </div>

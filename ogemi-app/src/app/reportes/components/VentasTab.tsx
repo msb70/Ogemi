@@ -72,8 +72,12 @@ export default function VentasTab({
                   ['# Facturas', ventasFiltradas.length],
                 ]),
                 { name: 'Listado', rows: [
-                  ['#Factura','Fecha','Cliente','Tipo Doc','Monto','ITBMS','Total','Estado','Vencimiento'],
-                  ...ventasFiltradas.map(f => [f.numero_factura, f.fecha, f.clientes?.nombre, f.tipo_documento, f.monto, f.itbms, f.total, f.estado, f.fecha_pago]),
+                  ['#Factura','Fecha','Cliente','Tipo Doc','Monto','ITBMS','Total','Retención','A cobrar','Estado','Vencimiento'],
+                  ...ventasFiltradas.map(f => {
+                    const ret = (f as any).retencion_monto || 0
+                    const estadoLabel = f.estado === 'pagada' ? 'Cobrada' : f.estado === 'falta_retencion' ? 'Falta retención' : 'Pendiente'
+                    return [f.numero_factura, f.fecha, f.clientes?.nombre, f.tipo_documento, f.monto, f.itbms, f.total, ret, f.total - ret, estadoLabel, f.fecha_pago]
+                  }),
                 ] },
               ])
             }}>
@@ -115,8 +119,8 @@ export default function VentasTab({
                     <td className="table-cell text-xs text-gray-400">{f.tipo_documento}</td>
                     <td className="table-cell text-right font-semibold">{formatCurrency(f.total)}</td>
                     <td className="table-cell">
-                      <span className={`badge ${f.estado === 'pagada' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                        {f.estado === 'pagada' ? 'Cobrada' : 'Pendiente'}
+                      <span className={`badge ${f.estado === 'pagada' ? 'bg-green-100 text-green-700' : f.estado === 'falta_retencion' ? 'bg-amber-100 text-amber-700' : 'bg-orange-100 text-orange-700'}`}>
+                        {f.estado === 'pagada' ? 'Cobrada' : f.estado === 'falta_retencion' ? 'Falta retención' : 'Pendiente'}
                       </span>
                     </td>
                     <td className="table-cell text-sm text-gray-400">{formatDate(f.fecha_pago)}</td>

@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx'
+import { finalizeSheet } from '@/lib/xlsxHelpers'
 
 type Cell = string | number | null | undefined
 export type XlsxSheet = { name: string; rows: Cell[][] }
@@ -8,6 +9,7 @@ export function exportXLSX(filename: string, sheets: XlsxSheet[]): void {
   const wb = XLSX.utils.book_new()
   for (const s of sheets) {
     const ws = XLSX.utils.aoa_to_sheet(s.rows.map(r => r.map(c => (c ?? ''))))
+    finalizeSheet(ws)   // montos como número + auto-ancho de columnas
     XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 31))
   }
   XLSX.writeFile(wb, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`)

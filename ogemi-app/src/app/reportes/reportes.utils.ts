@@ -9,6 +9,7 @@
 import * as XLSX from 'xlsx'
 import { CarteraVencida } from '@/types'
 import { formatDateObj } from '@/lib/utils'
+import { finalizeSheet } from '@/lib/xlsxHelpers'
 
 // ── Constantes de tramos ──────────────────────────────────────────────────────
 
@@ -82,6 +83,7 @@ export function exportXLSX(filename: string, sheets: XlsxSheet[]): void {
   const wb = XLSX.utils.book_new()
   for (const s of sheets) {
     const ws = XLSX.utils.aoa_to_sheet(s.rows.map(r => r.map(c => (c ?? ''))))
+    finalizeSheet(ws)   // montos como número + auto-ancho de columnas
     XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 31))
   }
   XLSX.writeFile(wb, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`)
@@ -100,6 +102,7 @@ export function xlsxFromReporteArea(filename: string, scopeId = 'reporte-print')
   const wb = XLSX.utils.book_new()
   tables.forEach((t, i) => {
     const ws = XLSX.utils.table_to_sheet(t, { raw: true })
+    finalizeSheet(ws)   // convierte "US$..." a número sumable + auto-ancho
     XLSX.utils.book_append_sheet(wb, ws, `Tabla ${i + 1}`)
   })
   XLSX.writeFile(wb, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`)
