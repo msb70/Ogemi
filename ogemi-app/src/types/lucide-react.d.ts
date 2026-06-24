@@ -39,6 +39,7 @@ declare module 'lucide-react' {
   export const Mail: LucideIcon
   export const Minus: LucideIcon
   export const Pencil: LucideIcon
+  export const Percent: LucideIcon
   export const Plus: LucideIcon
   export const Printer: LucideIcon
   export const QrCode: LucideIcon
