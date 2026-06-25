@@ -5,8 +5,9 @@ import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { Cliente } from '@/types'
-import { Plus, Pencil, Search, X, Check } from 'lucide-react'
+import { Plus, Pencil, Search, X, Check, Download } from 'lucide-react'
 import { withPagePermission } from '@/components/PermissionGuard'
+import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 
 function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([])
@@ -90,16 +91,38 @@ function ClientesPage() {
 
   const fmt = (n: number) => new Intl.NumberFormat('es-PA', { style: 'currency', currency: 'USD' }).format(n)
 
+  const exportExcel = () => {
+    exportXLSX(`clientes_${new Date().toISOString().split('T')[0]}.xlsx`, [
+      kpiSheet('Clientes', `${filtered.length} clientes`, [
+        ['# Clientes', clientes.length],
+        ['Activos', clientes.filter(c => c.activo).length],
+      ]),
+      { name: 'Listado', rows: [
+        ['Cliente', 'Días crédito', 'Retención %', 'Pendiente', 'Total histórico', 'Estado'],
+        ...filtered.map(c => [
+          c.nombre, c.dias_credito, c.retencion_pct || 0,
+          clienteStats[c.id]?.pendiente || 0, clienteStats[c.id]?.total || 0,
+          c.activo ? 'Activo' : 'Inactivo',
+        ]),
+      ] },
+    ])
+  }
+
   return (
     <AppLayout>
       <Header
         title="Clientes"
         subtitle={`${filtered.length} clientes`}
         actions={
-          <button className="btn-primary flex items-center gap-2" onClick={() => setShowNew(true)}>
-            <Plus size={16} />
-            Nuevo cliente
-          </button>
+          <div className="flex items-center gap-2">
+            <button className="btn-secondary flex items-center gap-2" onClick={exportExcel}>
+              <Download size={16} /> Exportar Excel
+            </button>
+            <button className="btn-primary flex items-center gap-2" onClick={() => setShowNew(true)}>
+              <Plus size={16} />
+              Nuevo cliente
+            </button>
+          </div>
         }
       />
 

@@ -6,9 +6,10 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { formatDate } from '@/lib/utils'
 import { Proveedor } from '@/types'
-import { Plus, Pencil, Trash2, Truck, Search, X, Check } from 'lucide-react'
+import { Plus, Pencil, Trash2, Truck, Search, X, Check, Download } from 'lucide-react'
 import { withPagePermission } from '@/components/PermissionGuard'
 import { useAuth } from '@/context/AuthContext'
+import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 
 function ProveedoresPage() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
@@ -92,16 +93,35 @@ function ProveedoresPage() {
   const activos = filtered.filter(p => p.activo)
   const inactivos = filtered.filter(p => !p.activo)
 
+  const exportExcel = () => {
+    exportXLSX(`proveedores_${new Date().toISOString().split('T')[0]}.xlsx`, [
+      kpiSheet('Proveedores', `${proveedores.filter(p => p.activo).length} activos`, [
+        ['# Proveedores', proveedores.length],
+        ['Activos', proveedores.filter(p => p.activo).length],
+        ['Inactivos', proveedores.filter(p => !p.activo).length],
+      ]),
+      { name: 'Listado', rows: [
+        ['Nombre', 'Días crédito', 'Estado', 'Creado'],
+        ...filtered.map(p => [p.nombre, p.dias_credito, p.activo ? 'Activo' : 'Inactivo', formatDate(p.created_at)]),
+      ] },
+    ])
+  }
+
   return (
     <AppLayout>
       <Header
         title="Proveedores"
         subtitle={`${proveedores.filter(p => p.activo).length} proveedores activos`}
         actions={
-          <button className="btn-primary flex items-center gap-2" onClick={() => handleOpenForm()}>
-            <Plus size={16} />
-            Nuevo proveedor
-          </button>
+          <div className="flex items-center gap-2">
+            <button className="btn-secondary flex items-center gap-2" onClick={exportExcel}>
+              <Download size={16} /> Exportar Excel
+            </button>
+            <button className="btn-primary flex items-center gap-2" onClick={() => handleOpenForm()}>
+              <Plus size={16} />
+              Nuevo proveedor
+            </button>
+          </div>
         }
       />
 

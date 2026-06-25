@@ -6,10 +6,11 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { NotaCredito, Cliente } from '@/types'
-import { Plus, Search, X, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Search, X, Pencil, Trash2, Download } from 'lucide-react'
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
 import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
+import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 
 type EstadoFilter = 'todas' | 'disponible' | 'aplicada'
 
@@ -56,6 +57,25 @@ function NotasCreditoPage() {
   })
 
   const totalForm = (parseFloat(form.monto) || 0) + (parseFloat(form.itbms) || 0)
+
+  const exportExcel = () => {
+    exportXLSX(`notas_credito_${new Date().toISOString().split('T')[0]}.xlsx`, [
+      kpiSheet('Notas de crédito', `${filtered.length} registros`, [
+        ['# Notas de crédito', filtered.length],
+        ['Total', filtered.reduce((s, n) => s + (n.total || 0), 0)],
+        ['Disponibles', filtered.filter(n => n.estado === 'disponible').length],
+        ['Aplicadas', filtered.filter(n => n.estado === 'aplicada').length],
+      ]),
+      { name: 'Listado', rows: [
+        ['Número', 'Fecha', 'Cliente', 'Neto', 'ITBMS', 'Total', 'Estado', 'Factura aplicada'],
+        ...filtered.map(n => [
+          n.numero || '', n.fecha, n.clientes?.nombre || '', n.monto, n.itbms, n.total,
+          n.estado === 'aplicada' ? 'Aplicada' : 'Disponible',
+          n.factura_aplicada?.numero_factura ? `#${n.factura_aplicada.numero_factura}` : '',
+        ]),
+      ] },
+    ])
+  }
 
   const openNew = () => { setForm(emptyForm()); setShowForm(true) }
 
@@ -123,11 +143,16 @@ function NotasCreditoPage() {
         title="Notas de crédito"
         subtitle={`${filtered.length} registros`}
         actions={
-          <PermissionGuard modulo="notas_credito" accion="agregar" silent>
-            <button className="btn-primary flex items-center gap-2" onClick={openNew}>
-              <Plus size={16} /> Nueva nota de crédito
+          <div className="flex items-center gap-2">
+            <button className="btn-secondary flex items-center gap-2" onClick={exportExcel}>
+              <Download size={16} /> Exportar Excel
             </button>
-          </PermissionGuard>
+            <PermissionGuard modulo="notas_credito" accion="agregar" silent>
+              <button className="btn-primary flex items-center gap-2" onClick={openNew}>
+                <Plus size={16} /> Nueva nota de crédito
+              </button>
+            </PermissionGuard>
+          </div>
         }
       />
 
