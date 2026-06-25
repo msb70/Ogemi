@@ -93,6 +93,9 @@ function FacturasPage() {
   const [anticipos, setAnticipos] = useState<AnticipoDisp[]>([])
   const [pagosExistentes, setPagosExistentes] = useState<any[]>([])
   const [reversadosIds, setReversadosIds] = useState<Set<string>>(new Set())
+  // Notas de crédito disponibles para aplicar como pago (manual + importadas)
+  const [creditos, setCreditos] = useState<{ tipo: 'manual' | 'factura'; id: string; etiqueta: string; monto: number }[]>([])
+  const [aplicandoCredito, setAplicandoCredito] = useState<string | null>(null)
 
   // Modal de detalle (ver factura)
   const [detalle, setDetalle] = useState<Factura | null>(null)
@@ -279,8 +282,12 @@ function FacturasPage() {
     setAnticipos([])
     setShowModal(true)
 
-    // Cargar pagos existentes + reversos + anticipos disponibles del cliente (en paralelo)
-    const [{ data }, { data: reversos }, { data: anticData }] = await Promise.all([
+    await refreshPagoModal(f)
+  }
+
+  // (Re)carga pagos, reversos, anticipos y notas de crédito disponibles para la factura
+  const refreshPagoModal = async (f: Factura) => {
+    const [{ data }, { data: reversos }, { data: anticData }, { data: ncManual }, { data: ncFactura }] = await Promise.all([
       supabase
         .from('pagos')
         .select('*, banco_cuentas(nombre, banco)')
@@ -297,10 +304,51 @@ function FacturasPage() {
         .eq('estado', 'activo')
         .gt('saldo', 0)
         .order('fecha'),
+      // NC manuales disponibles del cliente
+      supabase
+        .from('notas_credito')
+        .select('id, numero, total')
+        .eq('cliente_id', f.cliente_id)
+        .eq('estado', 'disponible')
+        .order('fecha'),
+      // NC importadas (facturas tipo CRÉDITO no aplicadas) del cliente
+      supabase
+        .from('facturas')
+        .select('id, numero_factura, total, tipo_documento, factura_aplicada_id')
+        .eq('cliente_id', f.cliente_id)
+        .ilike('tipo_documento', '%CREDITO%')
+        .is('factura_aplicada_id', null)
+        .lt('total', 0),
     ])
     setPagosExistentes(data || [])
     setReversadosIds(new Set((reversos || []).map(r => r.pago_id)))
     setAnticipos((anticData || []) as AnticipoDisp[])
+    const creds: { tipo: 'manual' | 'factura'; id: string; etiqueta: string; monto: number }[] = [
+      ...((ncManual || []) as any[]).map(n => ({ tipo: 'manual' as const, id: n.id, etiqueta: `NC ${n.numero || ''}`.trim(), monto: Number(n.total) || 0 })),
+      ...((ncFactura || []) as any[]).map(n => ({ tipo: 'factura' as const, id: n.id, etiqueta: `NC #${n.numero_factura}`, monto: Math.abs(Number(n.total) || 0) })),
+    ]
+    setCreditos(creds)
+  }
+
+  const aplicarCredito = async (c: { tipo: 'manual' | 'factura'; id: string; monto: number }) => {
+    if (!selectedFactura) return
+    setAplicandoCredito(c.id)
+    const rpc = c.tipo === 'manual' ? 'aplicar_nota_credito' : 'aplicar_nc_factura'
+    const args = c.tipo === 'manual'
+      ? { p_nota_id: c.id, p_factura_id: selectedFactura.id, p_fecha: fechaPago }
+      : { p_nc_factura_id: c.id, p_factura_id: selectedFactura.id, p_fecha: fechaPago }
+    const { error } = await supabase.rpc(rpc, args)
+    setAplicandoCredito(null)
+    if (error) { showToast(`No se pudo aplicar la NC: ${error.message}`, 'error'); return }
+    showToast('Nota de crédito aplicada', 'success')
+    // refrescar la factura seleccionada y el modal
+    const { data: fresh } = await supabase
+      .from('facturas')
+      .select('*, clientes(nombre, dias_credito), banco_cuentas(nombre, banco)')
+      .eq('id', selectedFactura.id).single()
+    if (fresh) setSelectedFactura(fresh as Factura)
+    await refreshPagoModal((fresh as Factura) || selectedFactura)
+    loadData(); loadResumen()
   }
 
   const openDetalle = async (f: Factura) => {
@@ -310,7 +358,7 @@ function FacturasPage() {
     const [{ data: pagosData }, { data: reversos }] = await Promise.all([
       supabase
         .from('pagos')
-        .select('id, fecha, monto, referencia, anticipo_id, banco_cuentas(nombre, banco, numero_cuenta), anticipos(numero_deposito)')
+        .select('id, fecha, monto, referencia, anticipo_id, nota_credito_id, credito_factura_id, banco_cuentas(nombre, banco, numero_cuenta), anticipos(numero_deposito)')
         .eq('factura_id', f.id)
         .order('fecha', { ascending: true }),
       supabase.from('pago_reversos').select('pago_id').eq('factura_id', f.id),
@@ -813,7 +861,7 @@ function FacturasPage() {
                         }`}
                       >
                         <span className={reversado ? 'text-gray-400 line-through' : 'text-gray-600'}>
-                          {formatDate(p.fecha)} · {p.banco_cuentas?.nombre}
+                          {formatDate(p.fecha)} · {(p.nota_credito_id || p.credito_factura_id) ? 'Nota de crédito' : p.anticipo_id ? 'Anticipo' : p.banco_cuentas?.nombre}
                         </span>
                         <div className="flex items-center gap-2">
                           <span className={`font-medium ${reversado ? 'text-gray-400 line-through' : 'text-green-700'}`}>
@@ -823,7 +871,7 @@ function FacturasPage() {
                             <span className="badge bg-gray-200 text-gray-500 text-xs">Reversado</span>
                           ) : (
                             <>
-                              {isAdmin && !p.anticipo_id && (
+                              {isAdmin && !p.anticipo_id && !p.nota_credito_id && !p.credito_factura_id && (
                                 <button
                                   onClick={() => openEditCobro(p)}
                                   className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-800 font-medium"
@@ -844,6 +892,31 @@ function FacturasPage() {
                             </>
                           )}
                         </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Notas de crédito disponibles */}
+            {creditos.length > 0 && (
+              <div className="mb-4">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-2">Aplicar nota de crédito</p>
+                <div className="space-y-1.5">
+                  {creditos.map(c => {
+                    const excede = c.monto > saldoPendiente + 0.01
+                    return (
+                      <div key={`${c.tipo}-${c.id}`} className="flex items-center justify-between text-sm rounded-lg px-3 py-2 bg-amber-50">
+                        <span className="text-gray-700">{c.etiqueta} · {formatCurrency(c.monto)}</span>
+                        <button
+                          onClick={() => aplicarCredito(c)}
+                          disabled={aplicandoCredito === c.id || excede}
+                          title={excede ? 'La NC excede el saldo de la factura' : 'Aplicar como pago'}
+                          className="text-xs font-medium text-amber-700 hover:text-amber-900 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {aplicandoCredito === c.id ? 'Aplicando...' : excede ? 'Excede saldo' : 'Aplicar'}
+                        </button>
                       </div>
                     )
                   })}
@@ -1302,9 +1375,11 @@ function FacturaDetalle({
                   return (
                     <tr key={p.id} className={rev ? 'text-gray-400 line-through' : ''}>
                       <td className="px-3 py-2">{formatDate(p.fecha)}</td>
-                      <td className="px-3 py-2">{p.anticipo_id ? 'Anticipo' : 'Cobro'}{rev ? ' (reversado)' : ''}</td>
+                      <td className="px-3 py-2">{(p.nota_credito_id || p.credito_factura_id) ? 'Nota de crédito' : p.anticipo_id ? 'Anticipo' : 'Cobro'}{rev ? ' (reversado)' : ''}</td>
                       <td className="px-3 py-2">
-                        {p.anticipo_id
+                        {(p.nota_credito_id || p.credito_factura_id)
+                          ? 'Nota de crédito'
+                          : p.anticipo_id
                           ? `Anticipo${p.anticipos?.numero_deposito ? ' · ' + p.anticipos.numero_deposito : ''}`
                           : `${p.banco_cuentas?.nombre || '—'}${p.banco_cuentas?.banco ? ' · ' + p.banco_cuentas.banco : ''}${p.banco_cuentas?.numero_cuenta ? ' · ' + p.banco_cuentas.numero_cuenta : ''}`}
                       </td>

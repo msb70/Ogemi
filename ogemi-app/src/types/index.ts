@@ -51,6 +51,26 @@ export interface Factura {
   banco_cuentas?: BancoCuenta;
 }
 
+export type NotaCreditoEstado = 'disponible' | 'aplicada';
+
+export interface NotaCredito {
+  id: string;
+  numero: string | null;
+  cliente_id: string;
+  fecha: string;
+  monto: number;
+  itbms: number;
+  total: number;
+  estado: NotaCreditoEstado;
+  factura_aplicada_id: string | null;
+  pago_id: string | null;
+  notas: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joins
+  clientes?: Cliente;
+}
+
 export interface Presupuesto {
   id: string;
   numero_presupuesto: number;

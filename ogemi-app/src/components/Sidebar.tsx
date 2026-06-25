@@ -14,6 +14,7 @@ import {
 const navItems: { href: string; label: string; icon: React.ElementType; modulo: Modulo }[] = [
   { href: '/dashboard',    label: 'Dashboard',     icon: LayoutDashboard, modulo: 'dashboard'    },
   { href: '/facturas',     label: 'Facturas',       icon: FileText,        modulo: 'facturas'     },
+  { href: '/notas-credito', label: 'Notas de crédito', icon: FileText,     modulo: 'notas_credito' },
   { href: '/presupuestos', label: 'Presupuestos',   icon: ClipboardList,   modulo: 'presupuestos' },
   { href: '/clientes',     label: 'Clientes',       icon: Users,           modulo: 'clientes'     },
   { href: '/anticipos',    label: 'Anticipos',      icon: Wallet,          modulo: 'facturas'     },

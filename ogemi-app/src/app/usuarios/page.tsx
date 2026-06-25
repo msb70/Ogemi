@@ -28,6 +28,7 @@ import type { Modulo, RoleRecord, RolPermiso, UserProfile } from '@/types/auth'
 const MODULES: { id: Modulo; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'facturas', label: 'Facturas' },
+  { id: 'notas_credito', label: 'Notas de crédito' },
   { id: 'presupuestos', label: 'Presupuestos' },
   { id: 'compras', label: 'Compras' },
   { id: 'clientes', label: 'Clientes' },
