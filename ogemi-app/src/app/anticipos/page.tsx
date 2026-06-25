@@ -7,8 +7,9 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Anticipo, Cliente, BancoCuenta } from '@/types'
-import { Plus, Printer, Search, X, CheckCircle, AlertCircle } from 'lucide-react'
+import { Plus, Printer, Search, X, CheckCircle, AlertCircle, Download } from 'lucide-react'
 import { withPagePermission } from '@/components/PermissionGuard'
+import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 
 function AnticiposPage() {
   const [anticipos, setAnticipos] = useState<Anticipo[]>([])
@@ -135,6 +136,24 @@ function AnticiposPage() {
     .filter(a => a.estado === 'activo')
     .reduce((s, a) => s + a.monto, 0)
 
+  const exportExcel = () => {
+    exportXLSX(`anticipos_${new Date().toISOString().split('T')[0]}.xlsx`, [
+      kpiSheet('Anticipos', `${filtered.length} registros`, [
+        ['# Anticipos', anticipos.length],
+        ['Anticipos activos (monto)', totalActivos],
+        ['Saldo disponible total', anticipos.reduce((s, a) => s + (saldos[a.id]?.saldo ?? (a.estado === 'anulado' ? 0 : a.monto)), 0)],
+      ]),
+      { name: 'Listado', rows: [
+        ['Fecha', 'Cliente', 'Cuenta', 'Banco', 'N° Depósito', 'Monto', 'Aplicado', 'Saldo', 'Estado', 'Notas'],
+        ...filtered.map(a => [
+          a.fecha, a.clientes?.nombre || '', a.banco_cuentas?.nombre || '', a.banco_cuentas?.banco || '',
+          a.numero_deposito || '', a.monto, saldos[a.id]?.aplicado ?? 0, saldos[a.id]?.saldo ?? a.monto,
+          a.estado, a.notas || '',
+        ]),
+      ] },
+    ])
+  }
+
   const estadoBadge = (estado: string) => {
     switch (estado) {
       case 'activo': return 'bg-green-100 text-green-700'
@@ -157,9 +176,14 @@ function AnticiposPage() {
         title="Anticipos"
         subtitle="Depósitos anticipados de clientes"
         actions={
-          <button className="btn-primary flex items-center gap-2" onClick={() => setShowForm(true)}>
-            <Plus size={16} />Nuevo anticipo
-          </button>
+          <div className="flex items-center gap-2">
+            <button className="btn-secondary flex items-center gap-2" onClick={exportExcel}>
+              <Download size={16} /> Exportar Excel
+            </button>
+            <button className="btn-primary flex items-center gap-2" onClick={() => setShowForm(true)}>
+              <Plus size={16} />Nuevo anticipo
+            </button>
+          </div>
         }
       />
 
