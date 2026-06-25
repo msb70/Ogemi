@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Download } from 'lucide-react'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
 } from 'recharts'
 import { exportXLSX, buildKpiSheet } from '../reportes.utils'
 import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
@@ -17,7 +17,7 @@ interface NcTabProps extends FiltrosBarProps {
 }
 
 export default function NcTab({
-  ncFiltradas, ncPorCliente,
+  ncFiltradas,
   search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta,
 }: NcTabProps) {
   const [ncTab, setNcTab] = useState<NcSubTab>('listado')
@@ -57,6 +57,16 @@ export default function NcTab({
             }}>
               <Download size={14} />Exportar Excel
             </button>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="card p-4">
+              <p className="text-xs font-semibold uppercase text-gray-500">Número de notas de crédito</p>
+              <p className="text-2xl font-bold text-gray-900">{ncFiltradas.length.toLocaleString('es-PA')}</p>
+            </div>
+            <div className="card p-4">
+              <p className="text-xs font-semibold uppercase text-gray-500">Total notas de crédito</p>
+              <p className="text-2xl font-bold text-amber-700">{formatCurrency(ncFiltradas.reduce((s, f) => s + Math.abs(f.total || 0), 0))}</p>
+            </div>
           </div>
           <div className="card overflow-hidden">
             <table className="w-full">
@@ -162,19 +172,27 @@ export default function NcTab({
                     </table>
                   </div>
                 </div>
-                <div className="card p-5">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Notas de crédito por cliente</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={ncPorCliente.slice(0, 15).map(([n, v]) => ({ name: n.substring(0, 20), monto: v }))}
-                      layout="vertical" margin={{ left: 10, right: 30 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
-                      <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={140} />
-                      <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                      <Bar dataKey="monto" name="NC" fill="#d97706" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                {(() => {
+                  const chartRows = rows.slice(0, 15).map(r => ({ name: r.nombre.length > 22 ? r.nombre.substring(0, 22) + '…' : r.nombre, monto: r.monto }))
+                  const chartH = Math.max(300, chartRows.length * 34 + 40)
+                  return (
+                    <div className="card p-5">
+                      <h3 className="text-sm font-semibold text-gray-700 mb-3">Notas de crédito por cliente (top 15)</h3>
+                      <ResponsiveContainer width="100%" height={chartH}>
+                        <BarChart data={chartRows} layout="vertical" margin={{ left: 10, right: 70, top: 4, bottom: 4 }}>
+                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                          <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                          <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={160} />
+                          <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                          <Bar dataKey="monto" name="NC" fill="#d97706" radius={[0, 4, 4, 0]}>
+                            <LabelList dataKey="monto" position="right" style={{ fontSize: 11, fill: '#92400e' }}
+                              formatter={(v) => formatCurrency(Number(v))} />
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )
+                })()}
               </>
             )
           })()}
