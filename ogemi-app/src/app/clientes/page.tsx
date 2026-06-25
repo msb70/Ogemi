@@ -14,9 +14,11 @@ function ClientesPage() {
   const [search, setSearch] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDias, setEditDias] = useState<number>(30)
+  const [editRet, setEditRet] = useState<number>(0)
   const [showNew, setShowNew] = useState(false)
   const [newNombre, setNewNombre] = useState('')
   const [newDias, setNewDias] = useState(30)
+  const [newRet, setNewRet] = useState(0)
   const [saving, setSaving] = useState(false)
 
   const supabase = createClient()
@@ -38,8 +40,9 @@ function ClientesPage() {
   )
 
   const handleSaveDias = async (id: string) => {
+    const ret = Math.min(100, Math.max(0, editRet || 0))
     setSaving(true)
-    await supabase.from('clientes').update({ dias_credito: editDias }).eq('id', id)
+    await supabase.from('clientes').update({ dias_credito: editDias, retencion_pct: ret }).eq('id', id)
     setEditingId(null)
     setSaving(false)
     loadData()
@@ -47,11 +50,13 @@ function ClientesPage() {
 
   const handleCreate = async () => {
     if (!newNombre.trim()) return
+    const ret = Math.min(100, Math.max(0, newRet || 0))
     setSaving(true)
-    await supabase.from('clientes').insert({ nombre: newNombre.trim(), dias_credito: newDias })
+    await supabase.from('clientes').insert({ nombre: newNombre.trim(), dias_credito: newDias, retencion_pct: ret })
     setShowNew(false)
     setNewNombre('')
     setNewDias(30)
+    setNewRet(0)
     setSaving(false)
     loadData()
   }
@@ -130,6 +135,7 @@ function ClientesPage() {
               />
             </div>
             <div className="w-36">
+              <label className="block text-[11px] text-gray-500 mb-0.5">Días crédito</label>
               <input
                 type="number"
                 className="input"
@@ -139,7 +145,20 @@ function ClientesPage() {
                 onChange={(e) => setNewDias(parseInt(e.target.value) || 0)}
               />
             </div>
-            <button className="btn-primary" onClick={handleCreate} disabled={saving || !newNombre.trim()}>
+            <div className="w-32">
+              <label className="block text-[11px] text-gray-500 mb-0.5">Retención %</label>
+              <input
+                type="number"
+                className="input"
+                placeholder="0"
+                value={newRet}
+                min={0}
+                max={100}
+                step="0.01"
+                onChange={(e) => setNewRet(parseFloat(e.target.value) || 0)}
+              />
+            </div>
+            <button className="btn-primary self-end" onClick={handleCreate} disabled={saving || !newNombre.trim()}>
               {saving ? '...' : 'Guardar'}
             </button>
             <button className="btn-secondary" onClick={() => setShowNew(false)}>Cancelar</button>
@@ -152,6 +171,7 @@ function ClientesPage() {
               <tr className="border-b border-gray-200">
                 <th className="table-header">Cliente</th>
                 <th className="table-header">Días crédito</th>
+                <th className="table-header">Retención</th>
                 <th className="table-header text-right">Pendiente</th>
                 <th className="table-header text-right">Total histórico</th>
                 <th className="table-header">Estado</th>
@@ -160,7 +180,7 @@ function ClientesPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={6} className="text-center py-12 text-gray-400">Cargando...</td></tr>
+                <tr><td colSpan={7} className="text-center py-12 text-gray-400">Cargando...</td></tr>
               ) : filtered.map(c => (
                 <tr key={c.id} className={`hover:bg-gray-50 ${!c.activo ? 'opacity-50' : ''}`}>
                   <td className="table-cell font-medium max-w-[280px]">
@@ -188,6 +208,23 @@ function ClientesPage() {
                       <span className="badge bg-blue-50 text-blue-700">{c.dias_credito} días</span>
                     )}
                   </td>
+                  <td className="table-cell">
+                    {editingId === c.id ? (
+                      <input
+                        type="number"
+                        className="input w-20 py-1"
+                        value={editRet}
+                        min={0}
+                        max={100}
+                        step="0.01"
+                        onChange={(e) => setEditRet(parseFloat(e.target.value) || 0)}
+                      />
+                    ) : (
+                      (c.retencion_pct || 0) > 0
+                        ? <span className="badge bg-amber-50 text-amber-700">{c.retencion_pct}%</span>
+                        : <span className="text-gray-400 text-sm">—</span>
+                    )}
+                  </td>
                   <td className="table-cell text-right font-medium text-orange-600">
                     {fmt(clienteStats[c.id]?.pendiente || 0)}
                   </td>
@@ -202,9 +239,9 @@ function ClientesPage() {
                   <td className="table-cell">
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => { setEditingId(c.id); setEditDias(c.dias_credito) }}
+                        onClick={() => { setEditingId(c.id); setEditDias(c.dias_credito); setEditRet(c.retencion_pct || 0) }}
                         className="text-gray-400 hover:text-brand-600"
-                        title="Editar días de crédito"
+                        title="Editar días de crédito y retención"
                       >
                         <Pencil size={15} />
                       </button>

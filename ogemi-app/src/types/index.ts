@@ -9,6 +9,7 @@ export interface Cliente {
   id: string;
   nombre: string;
   dias_credito: number;
+  retencion_pct: number;
   activo: boolean;
   created_at: string;
   updated_at: string;
