@@ -38,7 +38,7 @@ function NotasCreditoPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     const [{ data: ncData }, { data: cliData }] = await Promise.all([
-      supabase.from('notas_credito').select('*, clientes(nombre)').order('fecha', { ascending: false }),
+      supabase.from('notas_credito').select('*, clientes(nombre), factura_aplicada:facturas!factura_aplicada_id(numero_factura)').order('fecha', { ascending: false }),
       supabase.from('clientes').select('*').eq('activo', true).order('nombre'),
     ])
     setNotas((ncData || []) as NotaCredito[])
@@ -58,9 +58,30 @@ function NotasCreditoPage() {
   const totalForm = (parseFloat(form.monto) || 0) + (parseFloat(form.itbms) || 0)
 
   const openNew = () => { setForm(emptyForm()); setShowForm(true) }
-  const openEdit = (n: NotaCredito) => {
+
+  // Des-aplica una NC: reversa su pago, lo que la devuelve a 'disponible' y
+  // restaura el saldo de la factura. Devuelve true si quedó libre.
+  const desaplicarNC = async (n: NotaCredito): Promise<boolean> => {
+    if (n.estado !== 'aplicada' || !n.pago_id) return true
+    const { error } = await supabase.rpc('reversar_pago', {
+      p_pago_id: n.pago_id,
+      p_motivo: 'Edición/borrado de nota de crédito',
+    })
+    if (error) { showToast(`No se pudo liberar la NC: ${error.message}`, 'error'); return false }
+    return true
+  }
+
+  const openEdit = async (n: NotaCredito) => {
+    if (n.estado === 'aplicada') {
+      const fnum = n.factura_aplicada?.numero_factura
+      if (!confirm(`Esta NC está aplicada a la factura #${fnum ?? ''}. Para editarla se liberará ese pago (la factura volverá a quedar con saldo). ¿Continuar?`)) return
+      const ok = await desaplicarNC(n)
+      if (!ok) return
+      showToast('NC liberada. Ahora puedes editarla.', 'success')
+    }
     setForm({ id: n.id, cliente_id: n.cliente_id, numero: n.numero || '', fecha: n.fecha, monto: String(n.monto), itbms: String(n.itbms) })
     setShowForm(true)
+    loadData()
   }
 
   const handleSave = async () => {
@@ -81,8 +102,14 @@ function NotasCreditoPage() {
   }
 
   const handleDelete = async (n: NotaCredito) => {
-    if (n.estado === 'aplicada') { showToast('No se puede borrar: la NC ya fue aplicada. Reversa el cobro primero.', 'error'); return }
-    if (!confirm(`¿Borrar la nota de crédito ${n.numero || ''} de ${formatCurrency(n.total)}?`)) return
+    if (n.estado === 'aplicada') {
+      const fnum = n.factura_aplicada?.numero_factura
+      if (!confirm(`La NC ${n.numero || ''} está aplicada a la factura #${fnum ?? ''}. Al borrarla se liberará ese pago (la factura volverá a quedar con saldo) y se eliminará la NC. ¿Continuar?`)) return
+      const ok = await desaplicarNC(n)
+      if (!ok) return
+    } else {
+      if (!confirm(`¿Borrar la nota de crédito ${n.numero || ''} de ${formatCurrency(n.total)}?`)) return
+    }
     const { error } = await supabase.from('notas_credito').delete().eq('id', n.id)
     if (error) { showToast(`No se pudo borrar: ${error.message}`, 'error'); return }
     showToast('Nota de crédito borrada', 'success')
@@ -157,18 +184,17 @@ function NotasCreditoPage() {
                     </span>
                   </td>
                   <td className="table-cell">
-                    {n.estado === 'disponible' ? (
-                      <div className="flex items-center gap-3">
-                        <PermissionGuard modulo="notas_credito" accion="editar" silent>
-                          <button onClick={() => openEdit(n)} className="flex items-center gap-1 text-sm text-brand-600 hover:text-brand-800"><Pencil size={14} /> Editar</button>
-                        </PermissionGuard>
-                        <PermissionGuard modulo="notas_credito" accion="borrar" silent>
-                          <button onClick={() => handleDelete(n)} className="flex items-center gap-1 text-sm text-red-500 hover:text-red-700"><Trash2 size={14} /> Borrar</button>
-                        </PermissionGuard>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-gray-400">Aplicada a una factura</span>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {n.estado === 'aplicada' && (
+                        <span className="text-xs text-gray-500">Aplicada a factura #{n.factura_aplicada?.numero_factura ?? '—'}</span>
+                      )}
+                      <PermissionGuard modulo="notas_credito" accion="editar" silent>
+                        <button onClick={() => openEdit(n)} className="flex items-center gap-1 text-sm text-brand-600 hover:text-brand-800"><Pencil size={14} /> Editar</button>
+                      </PermissionGuard>
+                      <PermissionGuard modulo="notas_credito" accion="borrar" silent>
+                        <button onClick={() => handleDelete(n)} className="flex items-center gap-1 text-sm text-red-500 hover:text-red-700"><Trash2 size={14} /> Borrar</button>
+                      </PermissionGuard>
+                    </div>
                   </td>
                 </tr>
               ))}

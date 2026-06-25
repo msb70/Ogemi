@@ -69,6 +69,7 @@ export interface NotaCredito {
   updated_at: string;
   // Joins
   clientes?: Cliente;
+  factura_aplicada?: { numero_factura: number } | null;
 }
 
 export interface Presupuesto {
