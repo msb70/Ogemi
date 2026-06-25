@@ -186,7 +186,7 @@ export default function NcTab({
                           <Tooltip formatter={(v: number) => formatCurrency(v)} />
                           <Bar dataKey="monto" name="NC" fill="#d97706" radius={[0, 4, 4, 0]}>
                             <LabelList dataKey="monto" position="right" style={{ fontSize: 11, fill: '#92400e' }}
-                              formatter={(v) => formatCurrency(Number(v))} />
+                              formatter={(v: any) => formatCurrency(Number(v))} />
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>
