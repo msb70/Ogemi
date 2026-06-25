@@ -49,9 +49,11 @@ type FacturasResumen = {
 const PAGE_SIZE = 50
 
 interface LineaPago {
-  origen: 'cuenta' | 'anticipo'
+  origen: 'cuenta' | 'anticipo' | 'nota_credito'
   cuenta_id: string
   anticipo_id: string
+  nota_credito_id: string
+  nota_credito_tipo: 'manual' | 'factura' | ''
   monto: string
   referencia: string
 }
@@ -66,7 +68,7 @@ type AnticipoDisp = {
 }
 
 const emptyLinea = (cuentaId = ''): LineaPago => ({
-  origen: 'cuenta', cuenta_id: cuentaId, anticipo_id: '', monto: '', referencia: '',
+  origen: 'cuenta', cuenta_id: cuentaId, anticipo_id: '', nota_credito_id: '', nota_credito_tipo: '', monto: '', referencia: '',
 })
 
 function FacturasPage() {
@@ -95,7 +97,6 @@ function FacturasPage() {
   const [reversadosIds, setReversadosIds] = useState<Set<string>>(new Set())
   // Notas de crédito disponibles para aplicar como pago (manual + importadas)
   const [creditos, setCreditos] = useState<{ tipo: 'manual' | 'factura'; id: string; etiqueta: string; monto: number }[]>([])
-  const [aplicandoCredito, setAplicandoCredito] = useState<string | null>(null)
 
   // Modal de detalle (ver factura)
   const [detalle, setDetalle] = useState<Factura | null>(null)
@@ -330,27 +331,6 @@ function FacturasPage() {
     setCreditos(creds)
   }
 
-  const aplicarCredito = async (c: { tipo: 'manual' | 'factura'; id: string; monto: number }) => {
-    if (!selectedFactura) return
-    setAplicandoCredito(c.id)
-    const rpc = c.tipo === 'manual' ? 'aplicar_nota_credito' : 'aplicar_nc_factura'
-    const args = c.tipo === 'manual'
-      ? { p_nota_id: c.id, p_factura_id: selectedFactura.id, p_fecha: fechaPago }
-      : { p_nc_factura_id: c.id, p_factura_id: selectedFactura.id, p_fecha: fechaPago }
-    const { error } = await supabase.rpc(rpc, args)
-    setAplicandoCredito(null)
-    if (error) { showToast(`No se pudo aplicar la NC: ${error.message}`, 'error'); return }
-    showToast('Nota de crédito aplicada', 'success')
-    // refrescar la factura seleccionada y el modal
-    const { data: fresh } = await supabase
-      .from('facturas')
-      .select('*, clientes(nombre, dias_credito), banco_cuentas(nombre, banco)')
-      .eq('id', selectedFactura.id).single()
-    if (fresh) setSelectedFactura(fresh as Factura)
-    await refreshPagoModal((fresh as Factura) || selectedFactura)
-    loadData(); loadResumen()
-  }
-
   const openDetalle = async (f: Factura) => {
     setDetalle(f)
     setLoadingDetalle(true)
@@ -497,7 +477,9 @@ function FacturasPage() {
   const handleRegistrarAbono = async () => {
     if (!selectedFactura) return
     const lineasValidas = lineas.filter(l =>
-      parseFloat(l.monto) > 0 && (l.origen === 'cuenta' ? l.cuenta_id : l.anticipo_id)
+      parseFloat(l.monto) > 0 && (
+        l.origen === 'cuenta' ? l.cuenta_id : l.origen === 'anticipo' ? l.anticipo_id : l.nota_credito_id
+      )
     )
     if (lineasValidas.length === 0) return
 
@@ -514,20 +496,39 @@ function FacturasPage() {
 
     setSaving(true)
 
-    // Cada línea es un pago. Si es anticipo, se aplica el crédito (cuenta del anticipo, sin mover banco).
-    const pagosInsert = lineasValidas.map(l => {
-      const ant = l.origen === 'anticipo' ? anticipos.find(a => a.id === l.anticipo_id) : null
-      return {
-        factura_id: selectedFactura.id,
-        cuenta_id: l.origen === 'anticipo' ? (ant?.cuenta_id || null) : l.cuenta_id,
-        anticipo_id: l.origen === 'anticipo' ? l.anticipo_id : null,
-        monto: parseFloat(l.monto),
-        fecha: fechaPago,
-        referencia: l.referencia || (l.origen === 'anticipo' ? 'Aplicación de anticipo' : null),
+    // 1) Notas de crédito: se aplican vía RPC (uso único + validación de saldo)
+    const lineasNC = lineasValidas.filter(l => l.origen === 'nota_credito' && l.nota_credito_id)
+    for (const l of lineasNC) {
+      const rpc = l.nota_credito_tipo === 'manual' ? 'aplicar_nota_credito' : 'aplicar_nc_factura'
+      const args = l.nota_credito_tipo === 'manual'
+        ? { p_nota_id: l.nota_credito_id, p_factura_id: selectedFactura.id, p_fecha: fechaPago }
+        : { p_nc_factura_id: l.nota_credito_id, p_factura_id: selectedFactura.id, p_fecha: fechaPago }
+      const { error: eNC } = await supabase.rpc(rpc, args)
+      if (eNC) {
+        setSaving(false)
+        showToast(`No se pudo aplicar la nota de crédito: ${eNC.message}`, 'error')
+        return
       }
-    })
+    }
 
-    const { error } = await supabase.from('pagos').insert(pagosInsert)
+    // 2) Cuenta bancaria / anticipo: pagos normales
+    const pagosInsert = lineasValidas
+      .filter(l => l.origen !== 'nota_credito')
+      .map(l => {
+        const ant = l.origen === 'anticipo' ? anticipos.find(a => a.id === l.anticipo_id) : null
+        return {
+          factura_id: selectedFactura.id,
+          cuenta_id: l.origen === 'anticipo' ? (ant?.cuenta_id || null) : l.cuenta_id,
+          anticipo_id: l.origen === 'anticipo' ? l.anticipo_id : null,
+          monto: parseFloat(l.monto),
+          fecha: fechaPago,
+          referencia: l.referencia || (l.origen === 'anticipo' ? 'Aplicación de anticipo' : null),
+        }
+      })
+
+    const { error } = pagosInsert.length > 0
+      ? await supabase.from('pagos').insert(pagosInsert)
+      : { error: null }
 
     setSaving(false)
     if (error) {
@@ -899,31 +900,6 @@ function FacturasPage() {
               </div>
             )}
 
-            {/* Notas de crédito disponibles */}
-            {creditos.length > 0 && (
-              <div className="mb-4">
-                <p className="text-xs font-medium text-gray-500 uppercase mb-2">Aplicar nota de crédito</p>
-                <div className="space-y-1.5">
-                  {creditos.map(c => {
-                    const excede = c.monto > saldoPendiente + 0.01
-                    return (
-                      <div key={`${c.tipo}-${c.id}`} className="flex items-center justify-between text-sm rounded-lg px-3 py-2 bg-amber-50">
-                        <span className="text-gray-700">{c.etiqueta} · {formatCurrency(c.monto)}</span>
-                        <button
-                          onClick={() => aplicarCredito(c)}
-                          disabled={aplicandoCredito === c.id || excede}
-                          title={excede ? 'La NC excede el saldo de la factura' : 'Aplicar como pago'}
-                          className="text-xs font-medium text-amber-700 hover:text-amber-900 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          {aplicandoCredito === c.id ? 'Aplicando...' : excede ? 'Excede saldo' : 'Aplicar'}
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
             {/* Fecha de pago */}
             <div className="mb-4">
               <label className="label">Fecha de cobro</label>
@@ -969,6 +945,9 @@ function FacturasPage() {
                         <option value="anticipo" disabled={anticipos.length === 0}>
                           {anticipos.length === 0 ? 'Anticipo (sin saldo)' : 'Anticipo'}
                         </option>
+                        <option value="nota_credito" disabled={creditos.length === 0}>
+                          {creditos.length === 0 ? 'Nota de crédito (ninguna)' : 'Nota de crédito'}
+                        </option>
                       </select>
                     </div>
                     <div>
@@ -986,7 +965,7 @@ function FacturasPage() {
                             ))}
                           </select>
                         </>
-                      ) : (
+                      ) : linea.origen === 'anticipo' ? (
                         <>
                           <label className="label text-xs">Anticipo</label>
                           <select
@@ -999,6 +978,28 @@ function FacturasPage() {
                               <option key={a.id} value={a.id}>
                                 {formatDate(a.fecha)} · saldo {formatCurrency(a.saldo)}{a.numero_deposito ? ` · ${a.numero_deposito}` : ''}
                               </option>
+                            ))}
+                          </select>
+                        </>
+                      ) : (
+                        <>
+                          <label className="label text-xs">Nota de crédito</label>
+                          <select
+                            className="input text-sm"
+                            value={linea.nota_credito_id}
+                            onChange={e => {
+                              const c = creditos.find(x => x.id === e.target.value)
+                              setLineas(prev => prev.map((l, i) => i === idx ? ({
+                                ...l,
+                                nota_credito_id: e.target.value,
+                                nota_credito_tipo: c?.tipo || '',
+                                monto: c ? c.monto.toFixed(2) : '',
+                              }) : l))
+                            }}
+                          >
+                            <option value="">Seleccionar nota de crédito...</option>
+                            {creditos.map(c => (
+                              <option key={c.id} value={c.id}>{c.etiqueta} · {formatCurrency(c.monto)}</option>
                             ))}
                           </select>
                         </>
@@ -1015,6 +1016,8 @@ function FacturasPage() {
                         className="input text-sm"
                         placeholder="0.00"
                         value={linea.monto}
+                        readOnly={linea.origen === 'nota_credito'}
+                        title={linea.origen === 'nota_credito' ? 'La nota de crédito se aplica por su monto total' : undefined}
                         onChange={e => updateLinea(idx, 'monto', e.target.value)}
                       />
                     </div>
@@ -1053,7 +1056,7 @@ function FacturasPage() {
               <button
                 className="btn-primary flex-1"
                 onClick={handleRegistrarAbono}
-                disabled={saving || lineas.every(l => !l.monto || (l.origen === 'cuenta' ? !l.cuenta_id : !l.anticipo_id))}
+                disabled={saving || lineas.every(l => !l.monto || (l.origen === 'cuenta' ? !l.cuenta_id : l.origen === 'anticipo' ? !l.anticipo_id : !l.nota_credito_id))}
               >
                 {saving ? 'Guardando...' : 'Registrar pago'}
               </button>
