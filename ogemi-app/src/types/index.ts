@@ -266,4 +266,6 @@ export interface ImportResult {
   monto_notas_credito: number;
   /** Ventas netas = ventas + notas de crédito (NC son negativas) */
   monto_neto: number;
+  /** NC importadas aplicadas automáticamente a su factura afectada en esta corrida */
+  ncs_aplicadas?: number;
 }

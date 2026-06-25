@@ -221,5 +221,15 @@ export async function importarLibroVentas(
   result.monto_notas_credito = redondear(result.monto_notas_credito)
   result.monto_neto = redondear(result.monto_ventas + result.monto_notas_credito)
 
+  // 6. Aplicar automáticamente las NC importadas a su factura afectada
+  //    (documento_afectado). Idempotente: salta las ya aplicadas y las que no
+  //    caben en el saldo (quedan disponibles para aplicación manual).
+  try {
+    const { data: ncApp } = await supabase.rpc('auto_aplicar_ncs_importadas')
+    result.ncs_aplicadas = typeof ncApp === 'number' ? ncApp : 0
+  } catch {
+    // No romper la importación si la auto-aplicación falla
+  }
+
   return { result }
 }
