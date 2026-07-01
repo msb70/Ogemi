@@ -536,7 +536,7 @@ function ReciboAnticipo({ anticipo, preview = false, fullPage = false }: { antic
           <div className="text-right shrink-0">
             <p className={`uppercase tracking-widest text-white/70 ${fullPage ? 'text-xs' : 'text-[10px]'}`}>Recibo de</p>
             <p className={`font-bold ${fullPage ? 'text-2xl' : 'text-base'}`}>ANTICIPO</p>
-            <p className={`text-white/70 font-mono mt-0.5 ${fullPage ? 'text-xs' : 'text-[10px]'}`}>N° {reciboNo}</p>
+            <p className={`text-white font-mono font-bold mt-1 ${fullPage ? 'text-2xl' : 'text-lg'}`}>{reciboNo}</p>
           </div>
         </div>
 
