@@ -299,7 +299,7 @@ function FacturasPage() {
 
   // (Re)carga pagos, reversos, anticipos y notas de crédito disponibles para la factura
   const refreshPagoModal = async (f: Factura) => {
-    const [{ data }, { data: reversos }, { data: anticData }, { data: ncManual }, { data: ncFactura }] = await Promise.all([
+    const [{ data }, { data: reversos }, { data: anticData }, { data: ncManual }] = await Promise.all([
       supabase
         .from('pagos')
         .select('*, banco_cuentas(nombre, banco)')
@@ -316,28 +316,19 @@ function FacturasPage() {
         .eq('estado', 'activo')
         .gt('saldo', 0)
         .order('fecha'),
-      // NC manuales disponibles del cliente
+      // NC disponibles del cliente (todas las NC viven en notas_credito)
       supabase
         .from('notas_credito')
         .select('id, numero, total')
         .eq('cliente_id', f.cliente_id)
         .eq('estado', 'disponible')
         .order('fecha'),
-      // NC importadas (facturas tipo CRÉDITO no aplicadas) del cliente
-      supabase
-        .from('facturas')
-        .select('id, numero_factura, total, tipo_documento, factura_aplicada_id')
-        .eq('cliente_id', f.cliente_id)
-        .ilike('tipo_documento', '%CREDITO%')
-        .is('factura_aplicada_id', null)
-        .lt('total', 0),
     ])
     setPagosExistentes(data || [])
     setReversadosIds(new Set((reversos || []).map(r => r.pago_id)))
     setAnticipos((anticData || []) as AnticipoDisp[])
     const creds: { tipo: 'manual' | 'factura'; id: string; etiqueta: string; monto: number }[] = [
       ...((ncManual || []) as any[]).map(n => ({ tipo: 'manual' as const, id: n.id, etiqueta: `NC ${n.numero || ''}`.trim(), monto: Number(n.total) || 0 })),
-      ...((ncFactura || []) as any[]).map(n => ({ tipo: 'factura' as const, id: n.id, etiqueta: `NC #${n.numero_factura}`, monto: Math.abs(Number(n.total) || 0) })),
     ]
     setCreditos(creds)
   }

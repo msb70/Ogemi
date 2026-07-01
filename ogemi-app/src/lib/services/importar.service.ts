@@ -154,10 +154,12 @@ export async function importarLibroVentas(
   }
   const redondear = (n: number) => Math.round(n * 100) / 100
 
-  // 1. Cargar estado actual en paralelo (2 requests)
-  const [{ data: clientesDB }, { data: facturasDB }] = await Promise.all([
+  // 1. Cargar estado actual en paralelo. Las NC ahora viven en notas_credito,
+  //    así que también cargamos las existentes para deduplicar.
+  const [{ data: clientesDB }, { data: facturasDB }, { data: ncDB }] = await Promise.all([
     supabase.from('clientes').select('id, nombre'),
     supabase.from('facturas').select('numero_factura, tipo_documento'),
+    supabase.from('notas_credito').select('cliente_id, fecha, total'),
   ])
 
   const clientesMap: Record<string, string> = {}
@@ -165,6 +167,11 @@ export async function importarLibroVentas(
 
   const existentes = new Set(
     facturasDB?.map(f => `${f.numero_factura}-${f.tipo_documento}`) || []
+  )
+  const ncKey = (clienteId: string, fecha: string, total: number) =>
+    `${clienteId}|${fecha}|${Math.abs(total).toFixed(2)}`
+  const ncExistentes = new Set(
+    ncDB?.map(n => ncKey(n.cliente_id, n.fecha, Number(n.total))) || []
   )
 
   // 2. Fase 1: identificar clientes nuevos
@@ -194,9 +201,14 @@ export async function importarLibroVentas(
   result.duplicadas = duplicadas
   result.errores.push(...errores)
 
-  // 5. Batch insert en chunks (evitar timeout Vercel 30s)
-  for (let i = 0; i < facturasAInsertar.length; i += CHUNK_SIZE) {
-    const chunk = facturasAInsertar.slice(i, i + CHUNK_SIZE)
+  // 5. Separar facturas reales de notas de crédito.
+  //    Las NC ya NO se insertan en facturas: van a notas_credito (disponibles).
+  const realFacturas = facturasAInsertar.filter(f => !esNotaCredito(f))
+  const ncCandidatas = facturasAInsertar.filter(f => esNotaCredito(f))
+
+  // 5a. Insertar facturas reales en chunks (evitar timeout Vercel 30s)
+  for (let i = 0; i < realFacturas.length; i += CHUNK_SIZE) {
+    const chunk = realFacturas.slice(i, i + CHUNK_SIZE)
     const { error: eBatch } = await supabase.from('facturas').insert(chunk)
 
     if (!eBatch) {
@@ -216,20 +228,52 @@ export async function importarLibroVentas(
     }
   }
 
+  // 5b. Insertar NC en notas_credito (disponibles), deduplicando por cliente+fecha+monto.
+  //     total es columna generada (monto+itbms), no se envía.
+  const ncKeysEnLote = new Set<string>()
+  const ncAInsertar = ncCandidatas
+    .filter(f => {
+      const k = ncKey(f.cliente_id, f.fecha, f.total)
+      if (ncExistentes.has(k) || ncKeysEnLote.has(k)) { result.duplicadas++; return false }
+      ncKeysEnLote.add(k)
+      return true
+    })
+    .map(f => ({
+      numero: `NC ${f.numero_factura}`,
+      cliente_id: f.cliente_id,
+      fecha: f.fecha,
+      monto: Math.abs(f.monto),
+      itbms: Math.abs(f.itbms),
+      estado: 'disponible' as const,
+      notas: f.documento_afectado != null
+        ? `Importada del libro de ventas. Doc afectado #${f.documento_afectado}`
+        : 'Importada del libro de ventas',
+    }))
+
+  for (let i = 0; i < ncAInsertar.length; i += CHUNK_SIZE) {
+    const chunk = ncAInsertar.slice(i, i + CHUNK_SIZE)
+    const { error: eNC } = await supabase.from('notas_credito').insert(chunk)
+    if (!eNC) {
+      result.importadas += chunk.length
+      chunk.forEach(n => { result.monto_notas_credito += -(n.monto + n.itbms) })
+    } else {
+      for (const n of chunk) {
+        const { error: eFila } = await supabase.from('notas_credito').insert(n)
+        if (eFila) {
+          result.errores.push(`Error NC ${n.numero}: ${eFila.message}`)
+        } else {
+          result.importadas++
+          result.monto_notas_credito += -(n.monto + n.itbms)
+        }
+      }
+    }
+  }
+  result.ncs_aplicadas = 0
+
   // Redondear a 2 decimales para evitar ruido de coma flotante
   result.monto_ventas = redondear(result.monto_ventas)
   result.monto_notas_credito = redondear(result.monto_notas_credito)
   result.monto_neto = redondear(result.monto_ventas + result.monto_notas_credito)
-
-  // 6. Aplicar automáticamente las NC importadas a su factura afectada
-  //    (documento_afectado). Idempotente: salta las ya aplicadas y las que no
-  //    caben en el saldo (quedan disponibles para aplicación manual).
-  try {
-    const { data: ncApp } = await supabase.rpc('auto_aplicar_ncs_importadas')
-    result.ncs_aplicadas = typeof ncApp === 'number' ? ncApp : 0
-  } catch {
-    // No romper la importación si la auto-aplicación falla
-  }
 
   return { result }
 }

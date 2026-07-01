@@ -232,7 +232,6 @@ function ImportarPage() {
                 { label: 'Importadas', value: result.importadas, color: 'text-green-700' },
                 { label: 'Duplicadas (omitidas)', value: result.duplicadas, color: 'text-yellow-700' },
                 { label: 'Clientes creados', value: result.clientes_creados, color: 'text-brand-700' },
-                { label: 'NC aplicadas', value: result.ncs_aplicadas ?? 0, color: 'text-amber-700' },
               ].map(s => (
                 <div key={s.label} className="bg-gray-50 rounded-xl p-4 text-center">
                   <p className={`text-3xl font-bold ${s.color}`}>{s.value}</p>

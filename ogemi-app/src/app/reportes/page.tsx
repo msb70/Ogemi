@@ -33,6 +33,7 @@ function ReportesPage() {
 
   // Datos crudos
   const [facturas, setFacturas] = useState<any[]>([])
+  const [notasCredito, setNotasCredito] = useState<any[]>([])
   const [compras, setCompras] = useState<any[]>([])
   const [presupuestos, setPresupuestos] = useState<any[]>([])
   const [cartera, setCartera] = useState<CarteraVencida[]>([])
@@ -64,6 +65,7 @@ function ReportesPage() {
       { data: cuentasData },
       { data: presupuestosData },
       { data: carteraPresData },
+      { data: notasCreditoData },
     ] = await Promise.all([
       supabase.from('facturas').select('*, clientes(nombre)').order('fecha', { ascending: false }),
       supabase.from('compras').select('*, proveedores(nombre), banco_cuentas(nombre,banco)').order('fecha', { ascending: false }),
@@ -72,8 +74,10 @@ function ReportesPage() {
       supabase.from('banco_cuentas').select('*').order('nombre'),
       supabase.from('presupuestos').select('*, clientes(nombre)').order('fecha', { ascending: false }),
       supabase.from('cartera_presupuestos').select('*').order('dias_vencida', { ascending: false }),
+      supabase.from('notas_credito').select('*, clientes(nombre), factura_aplicada:facturas!factura_aplicada_id(numero_factura)').order('fecha', { ascending: false }),
     ])
     setFacturas(facturasData || [])
+    setNotasCredito(notasCreditoData || [])
     setCompras(comprasData || [])
     setCartera(carteraData || [])
     setCxp(cxpData || [])
@@ -149,8 +153,20 @@ function ReportesPage() {
   useEffect(() => { if (tab === 'banco') loadFlujo() }, [tab, loadFlujo])
 
   // Derivados
+  // Las ventas salen de facturas; las NC ahora viven en notas_credito.
+  // Se mapean al mismo shape (montos negativos) que consumían NcTab/LibrosTab.
   const ventas = facturas.filter(f => !isNC(f.tipo_documento))
-  const nc = facturas.filter(f => isNC(f.tipo_documento))
+  const nc = notasCredito.map((n: any) => ({
+    id: n.id,
+    numero_factura: n.numero,
+    fecha: n.fecha,
+    clientes: n.clientes,
+    tipo_documento: 'NOTA DE CREDITO',
+    documento_afectado: n.factura_aplicada?.numero_factura ?? null,
+    monto: -Math.abs(n.monto || 0),
+    itbms: -Math.abs(n.itbms || 0),
+    total: -Math.abs(n.total || 0),
+  }))
 
   const ventasFiltradas = ventas.filter(f => {
     const ok1 = !search || (f.clientes?.nombre || '').toLowerCase().includes(search.toLowerCase()) || String(f.numero_factura).includes(search)
