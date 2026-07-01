@@ -186,6 +186,7 @@ export interface UserRoleRecord {
 
 export interface Anticipo {
   id: string;
+  numero_recibo: number;
   cliente_id: string;
   cuenta_id: string;
   fecha: string;

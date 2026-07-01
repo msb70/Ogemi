@@ -128,7 +128,9 @@ function AnticiposPage() {
     const q = search.toLowerCase()
     return (
       (a.clientes?.nombre || '').toLowerCase().includes(q) ||
-      (a.numero_deposito || '').toLowerCase().includes(q)
+      (a.numero_deposito || '').toLowerCase().includes(q) ||
+      `rec-${String(a.numero_recibo).padStart(5, '0')}`.includes(q) ||
+      String(a.numero_recibo).includes(q)
     )
   })
 
@@ -144,8 +146,9 @@ function AnticiposPage() {
         ['Saldo disponible total', anticipos.reduce((s, a) => s + (saldos[a.id]?.saldo ?? (a.estado === 'anulado' ? 0 : a.monto)), 0)],
       ]),
       { name: 'Listado', rows: [
-        ['Fecha', 'Cliente', 'Cuenta', 'Banco', 'N° Depósito', 'Monto', 'Aplicado', 'Saldo', 'Estado', 'Notas'],
+        ['N° Recibo', 'Fecha', 'Cliente', 'Cuenta', 'Banco', 'N° Depósito', 'Monto', 'Aplicado', 'Saldo', 'Estado', 'Notas'],
         ...filtered.map(a => [
+          `REC-${String(a.numero_recibo).padStart(5, '0')}`,
           a.fecha, a.clientes?.nombre || '', a.banco_cuentas?.nombre || '', a.banco_cuentas?.banco || '',
           a.numero_deposito || '', a.monto, saldos[a.id]?.aplicado ?? 0, saldos[a.id]?.saldo ?? a.monto,
           a.estado, a.notas || '',
@@ -206,7 +209,7 @@ function AnticiposPage() {
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               className="input pl-9"
-              placeholder="Buscar por cliente o N° depósito..."
+              placeholder="Buscar por N° recibo, cliente o N° depósito..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -223,6 +226,7 @@ function AnticiposPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
+                <th className="table-header">N° Recibo</th>
                 <th className="table-header">Fecha</th>
                 <th className="table-header">Cliente</th>
                 <th className="table-header">Cuenta</th>
@@ -236,11 +240,12 @@ function AnticiposPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={9} className="text-center py-12 text-gray-400">Cargando...</td></tr>
+                <tr><td colSpan={10} className="text-center py-12 text-gray-400">Cargando...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-12 text-gray-400">Sin anticipos registrados</td></tr>
+                <tr><td colSpan={10} className="text-center py-12 text-gray-400">Sin anticipos registrados</td></tr>
               ) : filtered.map(a => (
                 <tr key={a.id} className="hover:bg-gray-50">
+                  <td className="table-cell font-mono text-sm text-gray-600">REC-{String(a.numero_recibo).padStart(5, '0')}</td>
                   <td className="table-cell text-gray-500">{formatDate(a.fecha)}</td>
                   <td className="table-cell font-medium">{a.clientes?.nombre}</td>
                   <td className="table-cell text-sm text-gray-500">
@@ -503,7 +508,7 @@ function ReciboAnticipo({ anticipo, preview = false, fullPage = false }: { antic
   const hoy = formatDate(new Date().toISOString().split('T')[0])
   // Fuerza la impresión de colores de fondo
   const exact = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as CSSProperties
-  const reciboNo = anticipo.id.slice(0, 8).toUpperCase()
+  const reciboNo = `REC-${String(anticipo.numero_recibo).padStart(5, '0')}`
 
   return (
     <div
