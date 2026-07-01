@@ -27,8 +27,19 @@ const ESTADO_FILTRO_LABEL: Record<EstadoFilter, string> = {
 const cobrableFactura = (f: { total: number; retencion_monto?: number | null }) =>
   f.total - (f.retencion_monto || 0)
 
+/** ¿El documento es una nota de crédito (total negativo o tipo NC)? */
+function esNotaCredito(f: Factura): boolean {
+  return (f.tipo_documento || '').toUpperCase().includes('CREDITO') || (f.total || 0) < 0
+}
+
 /** Badge de estado para la tabla y el detalle. */
 function estadoBadge(f: Factura): { cls: string; txt: string } {
+  // Las NC no son cuentas por cobrar: muestran si ya se asignaron a una factura.
+  if (esNotaCredito(f)) {
+    return f.factura_aplicada_id
+      ? { cls: 'bg-gray-200 text-gray-600', txt: 'asignada' }
+      : { cls: 'bg-purple-100 text-purple-700', txt: 'sin asignar' }
+  }
   if (f.estado === 'pagada') return { cls: 'bg-green-100 text-green-700', txt: 'pagada' }
   if (f.estado === 'falta_retencion') return { cls: 'bg-amber-100 text-amber-700', txt: 'falta retención' }
   if ((f.monto_pagado || 0) > 0) return { cls: 'bg-blue-100 text-blue-700', txt: 'abono' }
@@ -689,8 +700,9 @@ function FacturasPage() {
                 <tr><td colSpan={10} className="text-center py-12 text-gray-400">Sin resultados</td></tr>
               ) : (
                 facturas.map(f => {
-                  const dias = f.estado === 'pendiente' ? getDiasVencida(f) : 0
-                  const tramo = f.estado === 'pendiente' ? getTramo(dias) : null
+                  const esNC = esNotaCredito(f)
+                  const dias = f.estado === 'pendiente' && !esNC ? getDiasVencida(f) : 0
+                  const tramo = f.estado === 'pendiente' && !esNC ? getTramo(dias) : null
                   const tipoCorto = f.tipo_documento.includes('CREDITO') ? 'N. CRÉDITO' : 'FACTURA'
                   const montoPagado = f.monto_pagado || 0
                   const saldo = cobrableFactura(f) - montoPagado

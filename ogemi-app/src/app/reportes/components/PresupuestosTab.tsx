@@ -64,6 +64,10 @@ export default function PresupuestosTab({
   const presGrandProbable = presTotProbable.reduce((s, t) => s + t, 0)
   const presGrandNoPaga = presTotNoPaga.reduce((s, t) => s + t, 0)
 
+  // OT por número de presupuesto (la vista cartera_presupuestos no expone orden_trabajo)
+  const otPorNumero = new Map<any, string>()
+  presupuestos.forEach((p: any) => { if (p.orden_trabajo) otPorNumero.set(p.numero_presupuesto, p.orden_trabajo) })
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex gap-2 flex-wrap">
@@ -184,6 +188,7 @@ export default function PresupuestosTab({
             <table className="w-full">
               <thead><tr className="border-b border-gray-200">
                 <th className="table-header">#Presupuesto</th>
+                <th className="table-header">Orden trabajo</th>
                 <th className="table-header">Fecha</th>
                 <th className="table-header">Cliente</th>
                 <th className="table-header">Vencimiento</th>
@@ -196,6 +201,7 @@ export default function PresupuestosTab({
                 {carteraPresupuestos.map((c: any) => (
                   <tr key={c.id} className="hover:bg-gray-50">
                     <td className="table-cell font-mono">#{c.numero_presupuesto}</td>
+                    <td className="table-cell text-sm text-gray-600">{otPorNumero.get(c.numero_presupuesto) || '—'}</td>
                     <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha)}</td>
                     <td className="table-cell max-w-[200px]"><span className="truncate block">{c.cliente}</span></td>
                     <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha_pago)}</td>
@@ -454,6 +460,7 @@ export default function PresupuestosTab({
                   <tr className="border-b-2 border-gray-300 bg-gray-50">
                     <th className="table-header text-left sticky left-0 bg-gray-50 z-10 min-w-[200px]">Cliente</th>
                     <th className="table-header text-center min-w-[100px]">Nº Presupuesto</th>
+                    <th className="table-header text-center min-w-[110px]">Orden trabajo</th>
                     <th className="table-header text-center min-w-[100px]">F. Presupuesto</th>
                     <th className="table-header text-center min-w-[100px]">F. Vencimiento</th>
                     {presWeekDateObjs.map((fri, i) => (
@@ -474,6 +481,7 @@ export default function PresupuestosTab({
                           <span className="truncate block text-sm">{p.clientes?.nombre || '—'}</span>
                         </td>
                         <td className="table-cell text-center font-mono text-sm text-gray-500">#{p.numero_presupuesto}</td>
+                        <td className="table-cell text-center text-sm text-gray-600">{p.orden_trabajo || '—'}</td>
                         <td className="table-cell text-center text-sm text-gray-400">{formatDate(p.fecha)}</td>
                         <td className="table-cell text-center text-sm font-semibold text-red-600">{formatDate(p.fecha_pago)}</td>
                         {presWeekDateObjs.map((_, i) => (
@@ -494,21 +502,21 @@ export default function PresupuestosTab({
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">
-                    <td colSpan={4} className="table-cell text-right sticky left-0 bg-gray-100 z-10 text-sm text-gray-600">TOTAL VENCIDO</td>
+                    <td colSpan={5} className="table-cell text-right sticky left-0 bg-gray-100 z-10 text-sm text-gray-600">TOTAL VENCIDO</td>
                     {vencPresupuestos.totals.map((t, i) => (
                       <td key={i} className="table-cell text-right text-brand-800">{t > 0 ? formatCurrency(t) : '—'}</td>
                     ))}
                     <td className="table-cell" />
                   </tr>
                   <tr className="bg-green-50 text-xs font-semibold">
-                    <td colSpan={4} className="table-cell text-right sticky left-0 bg-green-50 z-10 text-green-700">↳ Probable Pago</td>
+                    <td colSpan={5} className="table-cell text-right sticky left-0 bg-green-50 z-10 text-green-700">↳ Probable Pago</td>
                     {presTotProbable.map((t, i) => (
                       <td key={i} className="table-cell text-right text-green-700">{t > 0 ? formatCurrency(t) : '—'}</td>
                     ))}
                     <td className="table-cell" />
                   </tr>
                   <tr className="bg-red-50 text-xs font-semibold">
-                    <td colSpan={4} className="table-cell text-right sticky left-0 bg-red-50 z-10 text-red-600">↳ No Pagará</td>
+                    <td colSpan={5} className="table-cell text-right sticky left-0 bg-red-50 z-10 text-red-600">↳ No Pagará</td>
                     {presTotNoPaga.map((t, i) => (
                       <td key={i} className="table-cell text-right text-red-600">{t > 0 ? formatCurrency(t) : '—'}</td>
                     ))}

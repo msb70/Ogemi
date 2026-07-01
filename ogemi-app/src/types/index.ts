@@ -44,6 +44,8 @@ export interface Factura {
   retencion_monto: number;
   retencion_comprobante_entregado: boolean;
   retencion_comprobante_fecha: string | null;
+  /** Si es una nota de crédito (total negativo), id de la factura a la que se aplicó */
+  factura_aplicada_id?: string | null;
   created_at: string;
   updated_at: string;
   // Joins
