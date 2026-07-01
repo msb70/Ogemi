@@ -409,13 +409,19 @@ export default function PresupuestosTab({
             {presWeekDateObjs.map((_, i) => {
               const c = WEEK_COLORS[i]
               const cnt = vencPresupuestos.rows.filter((r: any) => r.fridayIdx === i).length
+              const noPaga = presTotNoPaga[i]
               return (
                 <div key={i} className={`card p-4 border-t-4 ${c.bg} ${c.border}`}>
                   <p className={`text-xs font-semibold uppercase tracking-wide ${c.label}`}>Semana {i + 1}</p>
                   <input type="date" value={presWeekDates[i]}
                     onChange={e => { const nd = [...presWeekDates]; nd[i] = e.target.value; setPresWeekDates(nd) }}
                     className="text-xs text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 mt-0.5 mb-2 w-full bg-white focus:outline-none focus:border-gray-400" />
-                  <p className={`text-lg font-bold ${c.text}`}>{formatCurrency(vencPresupuestos.totals[i])}</p>
+                  <p className={`text-lg font-bold ${c.text}`}>{formatCurrency(presTotProbable[i])}</p>
+                  {noPaga > 0 && (
+                    <p className="text-[11px] text-red-500 mt-0.5">
+                      No pagará: −{formatCurrency(noPaga)} · bruto {formatCurrency(vencPresupuestos.totals[i])}
+                    </p>
+                  )}
                   <p className="text-xs text-gray-400 mt-1">{cnt} {cnt === 1 ? 'presupuesto' : 'presupuestos'}</p>
                 </div>
               )

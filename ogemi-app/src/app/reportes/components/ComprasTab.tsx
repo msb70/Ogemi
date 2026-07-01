@@ -388,13 +388,19 @@ export default function ComprasTab({
             {compWeekDateObjs.map((_, i) => {
               const c = WEEK_COLORS[i]
               const cnt = vencCompras.rows.filter((r: any) => r.fridayIdx === i).length
+              const noPaga = compTotNoPaga[i]
               return (
                 <div key={i} className={`card p-4 border-t-4 ${c.bg} ${c.border}`}>
                   <p className={`text-xs font-semibold uppercase tracking-wide ${c.label}`}>Semana {i + 1}</p>
                   <input type="date" value={compWeekDates[i]}
                     onChange={e => { const nd = [...compWeekDates]; nd[i] = e.target.value; setCompWeekDates(nd) }}
                     className="text-xs text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 mt-0.5 mb-2 w-full bg-white focus:outline-none focus:border-gray-400" />
-                  <p className={`text-lg font-bold ${c.text}`}>{formatCurrency(vencCompras.totals[i])}</p>
+                  <p className={`text-lg font-bold ${c.text}`}>{formatCurrency(compTotProbable[i])}</p>
+                  {noPaga > 0 && (
+                    <p className="text-[11px] text-red-500 mt-0.5">
+                      No pagará: −{formatCurrency(noPaga)} · bruto {formatCurrency(vencCompras.totals[i])}
+                    </p>
+                  )}
                   <p className="text-xs text-gray-400 mt-1">{cnt} {cnt === 1 ? 'compra' : 'compras'}</p>
                 </div>
               )
