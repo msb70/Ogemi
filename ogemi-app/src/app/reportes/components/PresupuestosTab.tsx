@@ -124,6 +124,7 @@ export default function PresupuestosTab({
             <table className="w-full">
               <thead><tr className="border-b border-gray-200">
                 <th className="table-header">#</th>
+                <th className="table-header">Orden trabajo</th>
                 <th className="table-header">Fecha</th>
                 <th className="table-header">Cliente</th>
                 <th className="table-header">Tipo</th>
@@ -133,10 +134,11 @@ export default function PresupuestosTab({
               </tr></thead>
               <tbody className="divide-y divide-gray-100">
                 {presupuestosFiltrados.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">Sin resultados</td></tr>
+                  <tr><td colSpan={8} className="text-center py-8 text-gray-400">Sin resultados</td></tr>
                 ) : presupuestosFiltrados.map((p: any) => (
                   <tr key={p.id} className="hover:bg-gray-50">
                     <td className="table-cell font-mono text-sm text-gray-500">#{p.numero_presupuesto}</td>
+                    <td className="table-cell text-sm text-gray-600">{p.orden_trabajo || '—'}</td>
                     <td className="table-cell text-sm">{formatDate(p.fecha)}</td>
                     <td className="table-cell max-w-[200px]"><span className="truncate block">{p.clientes?.nombre}</span></td>
                     <td className="table-cell text-xs text-gray-400">{p.tipo_documento}</td>
