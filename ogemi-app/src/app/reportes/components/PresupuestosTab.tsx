@@ -55,11 +55,11 @@ export default function PresupuestosTab({
 
   const presTotProbable = presWeekDateObjs.map((_, i) =>
     vencPresupuestos.rows.filter((r: any) => r.fridayIdx === i && !presNoPagaraSet.has(r.id))
-      .reduce((s: number, r: any) => s + (r.total || 0), 0)
+      .reduce((s: number, r: any) => s + (r.saldo ?? r.total ?? 0), 0)
   )
   const presTotNoPaga = presWeekDateObjs.map((_, i) =>
     vencPresupuestos.rows.filter((r: any) => r.fridayIdx === i && presNoPagaraSet.has(r.id))
-      .reduce((s: number, r: any) => s + (r.total || 0), 0)
+      .reduce((s: number, r: any) => s + (r.saldo ?? r.total ?? 0), 0)
   )
   const presGrandProbable = presTotProbable.reduce((s, t) => s + t, 0)
   const presGrandNoPaga = presTotNoPaga.reduce((s, t) => s + t, 0)
@@ -93,8 +93,9 @@ export default function PresupuestosTab({
             <FiltrosBar {...{ search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }} />
             <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() => {
               const total = presupuestosFiltrados.reduce((s, p) => s + (p.total || 0), 0)
-              const cobrado = presupuestosFiltrados.filter(p => p.estado === 'pagada').reduce((s, p) => s + (p.total || 0), 0)
-              const pendiente = presupuestosFiltrados.filter(p => p.estado === 'pendiente').reduce((s, p) => s + (p.total || 0), 0)
+              // Cobrado incluye abonos parciales de presupuestos pendientes
+              const cobrado = presupuestosFiltrados.reduce((s, p) => s + (p.estado === 'pagada' ? (p.total || 0) : (p.monto_pagado || 0)), 0)
+              const pendiente = presupuestosFiltrados.reduce((s, p) => s + (p.estado === 'pendiente' ? (p.total || 0) - (p.monto_pagado || 0) : 0), 0)
               exportXLSX(`presupuestos_${new Date().toISOString().split('T')[0]}.xlsx`, [
                 buildKpiSheet('Presupuestos — Listado', `${fechaDesde} a ${fechaHasta}`, [
                   ['Total presupuestado', total],
@@ -114,8 +115,9 @@ export default function PresupuestosTab({
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: 'Total presupuestado', val: presupuestosFiltrados.reduce((s, p) => s + (p.total || 0), 0), color: 'text-brand-700' },
-              { label: 'Cobrado', val: presupuestosFiltrados.filter(p => p.estado === 'pagada').reduce((s, p) => s + (p.total || 0), 0), color: 'text-green-600' },
-              { label: 'Pendiente', val: presupuestosFiltrados.filter(p => p.estado === 'pendiente').reduce((s, p) => s + (p.total || 0), 0), color: 'text-orange-600' },
+              // Cobrado = pagados completos + abonos parciales; Pendiente = saldo real
+              { label: 'Cobrado', val: presupuestosFiltrados.reduce((s, p) => s + (p.estado === 'pagada' ? (p.total || 0) : (p.monto_pagado || 0)), 0), color: 'text-green-600' },
+              { label: 'Pendiente', val: presupuestosFiltrados.reduce((s, p) => s + (p.estado === 'pendiente' ? (p.total || 0) - (p.monto_pagado || 0) : 0), 0), color: 'text-orange-600' },
               { label: '# Presupuestos', val: presupuestosFiltrados.length, color: 'text-gray-700', isCnt: true },
             ].map(s => (
               <div key={s.label} className="card p-3">
@@ -487,7 +489,14 @@ export default function PresupuestosTab({
                         {presWeekDateObjs.map((_, i) => (
                           <td key={i} className="table-cell text-right text-sm">
                             {p.fridayIdx === i
-                              ? <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>{formatCurrency(p.total)}</span>
+                              ? (
+                                <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>
+                                  {formatCurrency(p.saldo ?? p.total)}
+                                  {(p.monto_pagado || 0) > 0 && (
+                                    <span className="block text-[10px] font-normal text-gray-400">abonado {formatCurrency(p.monto_pagado)}</span>
+                                  )}
+                                </span>
+                              )
                               : <span className="text-gray-200">—</span>}
                           </td>
                         ))}

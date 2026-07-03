@@ -146,18 +146,22 @@ export function getNextFridays(n = 4): Date[] {
   return fridays
 }
 
-/** Agrupa facturas/presupuestos/compras por semana de vencimiento. */
+/**
+ * Agrupa facturas/presupuestos/compras por semana de vencimiento.
+ * Cada fila expone `saldo` = total − monto_pagado (abonos parciales descontados);
+ * los totales semanales suman el saldo, no el total bruto del documento.
+ */
 export function buildVencimientoSemanal(
   items: Record<string, unknown>[],
   dates: Date[],
   dateField: string
 ): {
-  rows: (Record<string, unknown> & { fridayIdx: number })[]
+  rows: (Record<string, unknown> & { fridayIdx: number; saldo: number })[]
   totals: number[]
   grandTotal: number
 } {
   const lastDate = dates[dates.length - 1]
-  const rows: (Record<string, unknown> & { fridayIdx: number })[] = items
+  const rows: (Record<string, unknown> & { fridayIdx: number; saldo: number })[] = items
     .filter(item => {
       if (item.estado !== 'pendiente') return false
       const fd = item[dateField] ? new Date((item[dateField] as string) + 'T00:00:00') : null
@@ -166,12 +170,14 @@ export function buildVencimientoSemanal(
     .map(item => {
       const fd = new Date((item[dateField] as string) + 'T00:00:00')
       const fridayIdx = dates.findIndex(d => fd <= d)
-      return { ...item, fridayIdx }
+      const saldo = ((item.total as number) || 0) - ((item.monto_pagado as number) || 0)
+      return { ...item, fridayIdx, saldo }
     })
+    .filter(r => r.saldo > 0)
     .sort((a, b) => (((a as Record<string, unknown>)[dateField] as string) < ((b as Record<string, unknown>)[dateField] as string) ? -1 : 1))
 
   const totals = dates.map((_, i) =>
-    rows.filter(r => r.fridayIdx === i).reduce((s, r) => s + ((r.total as number) || 0), 0)
+    rows.filter(r => r.fridayIdx === i).reduce((s, r) => s + r.saldo, 0)
   )
   return { rows, totals, grandTotal: totals.reduce((s, t) => s + t, 0) }
 }

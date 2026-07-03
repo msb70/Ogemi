@@ -55,11 +55,11 @@ export default function ComprasTab({
 
   const compTotProbable = compWeekDateObjs.map((_, i) =>
     vencCompras.rows.filter((r: any) => r.fridayIdx === i && !compNoPagaraSet.has(r.id))
-      .reduce((s: number, r: any) => s + (r.total || 0), 0)
+      .reduce((s: number, r: any) => s + (r.saldo ?? r.total ?? 0), 0)
   )
   const compTotNoPaga = compWeekDateObjs.map((_, i) =>
     vencCompras.rows.filter((r: any) => r.fridayIdx === i && compNoPagaraSet.has(r.id))
-      .reduce((s: number, r: any) => s + (r.total || 0), 0)
+      .reduce((s: number, r: any) => s + (r.saldo ?? r.total ?? 0), 0)
   )
   const compGrandProbable = compTotProbable.reduce((s, t) => s + t, 0)
   const compGrandNoPaga = compTotNoPaga.reduce((s, t) => s + t, 0)
@@ -89,18 +89,22 @@ export default function ComprasTab({
             <FiltrosBar {...{ search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }} />
             <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() => {
               const total = comprasFiltradas.reduce((s, c) => s + (c.total || 0), 0)
-              const pagado = comprasFiltradas.filter(c => c.estado === 'pagada').reduce((s, c) => s + (c.total || 0), 0)
-              const pendiente = comprasFiltradas.filter(c => c.estado === 'pendiente').reduce((s, c) => s + (c.total || 0), 0)
+              // Pagado incluye abonos parciales de compras pendientes
+              const pagado = comprasFiltradas.reduce((s, c) => s + (c.estado === 'pagada' ? (c.total || 0) : (c.monto_pagado || 0)), 0)
+              const pendiente = comprasFiltradas.reduce((s, c) => s + (c.estado === 'pendiente' ? (c.total || 0) - (c.monto_pagado || 0) : 0), 0)
               exportXLSX(`compras_${new Date().toISOString().split('T')[0]}.xlsx`, [
                 buildKpiSheet('Compras — Listado', `${fechaDesde} a ${fechaHasta}`, [
                   ['Total compras', total],
-                  ['Pagado', pagado],
-                  ['Pendiente', pendiente],
+                  ['Pagado (incluye abonos)', pagado],
+                  ['Saldo pendiente', pendiente],
                   ['# Compras', comprasFiltradas.length],
                 ]),
                 { name: 'Listado', rows: [
-                  ['Fecha','Proveedor','Concepto','Referencia','Monto','ITBMS','Total','Estado','Vencimiento'],
-                  ...comprasFiltradas.map(c => [c.fecha, c.proveedores?.nombre, c.concepto, c.referencia, c.monto, c.itbms, c.total, c.estado, c.vencimiento]),
+                  ['Fecha','Proveedor','Concepto','Referencia','Monto','ITBMS','Total','Abonado','Saldo','Estado','Vencimiento'],
+                  ...comprasFiltradas.map(c => [c.fecha, c.proveedores?.nombre, c.concepto, c.referencia, c.monto, c.itbms, c.total,
+                    c.monto_pagado || 0,
+                    c.estado === 'pagada' ? 0 : (c.total || 0) - (c.monto_pagado || 0),
+                    c.estado, c.vencimiento]),
                 ] },
               ])
             }}>
@@ -110,8 +114,10 @@ export default function ComprasTab({
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: 'Total compras', val: comprasFiltradas.reduce((s, c) => s + (c.total || 0), 0), color: 'text-brand-700' },
-              { label: 'Pagado', val: comprasFiltradas.filter(c => c.estado === 'pagada').reduce((s, c) => s + (c.total || 0), 0), color: 'text-green-600' },
-              { label: 'Pendiente', val: comprasFiltradas.filter(c => c.estado === 'pendiente').reduce((s, c) => s + (c.total || 0), 0), color: 'text-orange-600' },
+              // Pagado = compras pagadas completas + abonos parciales de pendientes
+              { label: 'Pagado', val: comprasFiltradas.reduce((s, c) => s + (c.estado === 'pagada' ? (c.total || 0) : (c.monto_pagado || 0)), 0), color: 'text-green-600' },
+              // Pendiente = saldo real (total − abonos)
+              { label: 'Pendiente', val: comprasFiltradas.reduce((s, c) => s + (c.estado === 'pendiente' ? (c.total || 0) - (c.monto_pagado || 0) : 0), 0), color: 'text-orange-600' },
               { label: '# Compras', val: comprasFiltradas.length, color: 'text-gray-700', isCnt: true },
             ].map(s => (
               <div key={s.label} className="card p-3">
@@ -129,12 +135,18 @@ export default function ComprasTab({
                 <th className="table-header text-right">Monto</th>
                 <th className="table-header text-right">ITBMS</th>
                 <th className="table-header text-right">Total</th>
+                <th className="table-header text-right">Abonado</th>
+                <th className="table-header text-right">Saldo</th>
                 <th className="table-header">Estado</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-100">
                 {comprasFiltradas.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">Sin resultados</td></tr>
-                ) : comprasFiltradas.map((c: any) => (
+                  <tr><td colSpan={9} className="text-center py-8 text-gray-400">Sin resultados</td></tr>
+                ) : comprasFiltradas.map((c: any) => {
+                  const abonado = c.monto_pagado || 0
+                  const saldo = c.estado === 'pagada' ? 0 : (c.total || 0) - abonado
+                  const abonoParcial = c.estado === 'pendiente' && abonado > 0
+                  return (
                   <tr key={c.id} className="hover:bg-gray-50">
                     <td className="table-cell text-sm">{formatDate(c.fecha)}</td>
                     <td className="table-cell font-medium">{c.proveedores?.nombre}</td>
@@ -142,13 +154,16 @@ export default function ComprasTab({
                     <td className="table-cell text-right">{formatCurrency(c.monto)}</td>
                     <td className="table-cell text-right text-gray-400">{formatCurrency(c.itbms)}</td>
                     <td className="table-cell text-right font-semibold">{formatCurrency(c.total)}</td>
+                    <td className={`table-cell text-right ${abonado > 0 ? 'text-green-600 font-medium' : 'text-gray-300'}`}>{abonado > 0 ? formatCurrency(abonado) : '—'}</td>
+                    <td className={`table-cell text-right font-semibold ${saldo > 0 ? 'text-orange-600' : 'text-gray-300'}`}>{saldo > 0 ? formatCurrency(saldo) : '—'}</td>
                     <td className="table-cell">
-                      <span className={`badge ${c.estado === 'pagada' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                        {c.estado === 'pagada' ? 'Pagada' : 'Pendiente'}
+                      <span className={`badge ${c.estado === 'pagada' ? 'bg-green-100 text-green-700' : abonoParcial ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'}`}>
+                        {c.estado === 'pagada' ? 'Pagada' : abonoParcial ? 'Abono parcial' : 'Pendiente'}
                       </span>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -458,7 +473,14 @@ export default function ComprasTab({
                         {compWeekDateObjs.map((_, i) => (
                           <td key={i} className="table-cell text-right text-sm">
                             {c.fridayIdx === i
-                              ? <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>{formatCurrency(c.total)}</span>
+                              ? (
+                                <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>
+                                  {formatCurrency(c.saldo ?? c.total)}
+                                  {(c.monto_pagado || 0) > 0 && (
+                                    <span className="block text-[10px] font-normal text-gray-400">abonado {formatCurrency(c.monto_pagado)}</span>
+                                  )}
+                                </span>
+                              )
                               : <span className="text-gray-200">—</span>}
                           </td>
                         ))}
