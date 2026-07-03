@@ -3,6 +3,7 @@ export type RolId = string
 export type Modulo =
   | 'dashboard'
   | 'facturas'
+  | 'factura_electronica'
   | 'notas_credito'
   | 'presupuestos'
   | 'compras'

@@ -8,12 +8,13 @@ import type { Modulo } from '@/types/auth'
 import {
   LayoutDashboard, FileText, Users, Building2,
   BarChart3, Upload, ShieldCheck, LogOut, ChevronRight,
-  ShoppingCart, Truck, Wallet, ClipboardList, CalendarClock
+  ShoppingCart, Truck, Wallet, ClipboardList, CalendarClock, QrCode
 } from 'lucide-react'
 
 const navItems: { href: string; label: string; icon: React.ElementType; modulo: Modulo }[] = [
   { href: '/dashboard',    label: 'Dashboard',     icon: LayoutDashboard, modulo: 'dashboard'    },
   { href: '/facturas',     label: 'Facturas',       icon: FileText,        modulo: 'facturas'     },
+  { href: '/factura-electronica', label: 'Factura Electrónica', icon: QrCode, modulo: 'factura_electronica' },
   { href: '/notas-credito', label: 'Notas de crédito', icon: FileText,     modulo: 'notas_credito' },
   { href: '/presupuestos', label: 'Presupuestos',   icon: ClipboardList,   modulo: 'presupuestos' },
   { href: '/clientes',     label: 'Clientes',       icon: Users,           modulo: 'clientes'     },

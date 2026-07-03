@@ -11,6 +11,13 @@ export interface Cliente {
   dias_credito: number;
   retencion_pct: number;
   activo: boolean;
+  // Datos fiscales para factura electrónica
+  ruc: string | null;
+  dv: string | null;
+  tipo_contribuyente: number;
+  tipo_cliente: string;
+  direccion: string | null;
+  email: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -245,6 +252,98 @@ export interface CompraVencida {
   saldo_pendiente: number;
   dias_vencida: number;
   tramo: TramoCartera;
+}
+
+// ============ Factura Electrónica (PAC TheFactory Panamá) ============
+
+export type FeEstado = 'borrador' | 'enviando' | 'aceptado' | 'rechazado';
+
+export interface FeConfig {
+  id: boolean;
+  pin: string | null;
+  usuario: string | null;
+  clave: string | null;
+  codigo_sucursal: string;
+  nro_terminal: string;
+  endpoint_url: string;
+  activo: boolean;
+  updated_at: string;
+}
+
+export interface FeArticulo {
+  id: string;
+  codigo: string;
+  nombre: string;
+  precio: number;
+  prc_impuesto: number;
+  unidad: string;
+  grupo_inv: string;
+  subgr_inv: string;
+  activo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FeDocumentoLinea {
+  id?: string;
+  documento_id?: string;
+  orden: number;
+  articulo_id: string | null;
+  codigo_articulo: string;
+  nombre_articulo: string;
+  precioneto: number;
+  prc_impuesto: number;
+  cantidad: number;
+  unidad: string;
+  grupo_inv: string;
+  subgr_inv: string;
+}
+
+export interface FeDocumentoPago {
+  id?: string;
+  documento_id?: string;
+  codigo: string;
+  nombre: string;
+  monto: number;
+}
+
+export interface FeDocumento {
+  id: string;
+  tipo_doc: string;
+  documento: string;
+  fecha: string;
+  cliente_id: string;
+  nombre_cliente: string;
+  tipo_contribuyente: number;
+  tipo_cliente: string;
+  ruc: string | null;
+  dv: string | null;
+  direccion_cliente: string;
+  email_cliente: string | null;
+  totneto: number;
+  totimpuest: number;
+  totalfinal: number;
+  total_pagado: number;
+  codigo_retencion: string | null;
+  prc_retencion: number;
+  retencion: number;
+  cufe_devol: string | null;
+  fecha_cufe_devol: string | null;
+  fe_referencia_id: string | null;
+  notas: string | null;
+  estado: FeEstado;
+  cufe: string | null;
+  fecha_cufe: string | null;
+  url_dgi: string | null;
+  respuesta_pac: string | null;
+  factura_id: string | null;
+  nota_credito_id: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joins
+  clientes?: Cliente;
+  fe_documento_lineas?: FeDocumentoLinea[];
+  fe_documento_pagos?: FeDocumentoPago[];
 }
 
 export interface ExcelRow {
