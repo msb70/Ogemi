@@ -1,18 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Fragment } from 'react'
 import { formatCurrency, formatDate, formatDateObj } from '@/lib/utils'
 import { Download, Search } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import {
-  TRAMOS, TRAMO_LABELS, TRAMO_COLORS_HEX,
+  TRAMOS, TRAMO_LABELS, TRAMO_COLORS_HEX, BUCKETS,
   exportXLSX, buildKpiSheet, getNextFridays, buildVencimientoSemanal,
 } from '../reportes.utils'
 import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
 
-type ComprasSubTab = 'listado' | 'cxp' | 'porproveedor' | 'pormes' | 'semanal'
+type ComprasSubTab = 'listado' | 'cxp' | 'antiguedad' | 'porproveedor' | 'pormes' | 'semanal'
 
 const WEEK_COLORS = [
   { bg: 'bg-red-50',    border: 'border-red-500',    text: 'text-red-700',    label: 'text-red-500' },
@@ -40,6 +40,21 @@ export default function ComprasTab({
   const [compSearch, setCompSearch] = useState('')
   const [compSemFilter, setCompSemFilter] = useState<string>('all')
   const [compNoPagaraSet, setCompNoPagaraSet] = useState<Set<number>>(new Set())
+
+  // Antigüedad de cartera (pivot proveedor × tramo)
+  const [antExpandidos, setAntExpandidos] = useState<Record<string, boolean>>({})
+  const [antMostrarTodas, setAntMostrarTodas] = useState(false)
+
+  const pivotAntData: Record<string, Record<string, number>> = {}
+  const comprasPorProveedor: Record<string, any[]> = {}
+  cxp.forEach((c: any) => {
+    const k = c.proveedor || 'N/A'
+    if (!pivotAntData[k]) { pivotAntData[k] = {}; comprasPorProveedor[k] = [] }
+    comprasPorProveedor[k].push(c)
+    pivotAntData[k][c.tramo] = (pivotAntData[k][c.tramo] || 0) + (c.saldo_pendiente ?? c.total ?? 0)
+  })
+  const proveedoresAnt = Object.keys(pivotAntData).sort()
+  const totalCarteraCxp = cxp.reduce((s: number, c: any) => s + (c.saldo_pendiente ?? c.total ?? 0), 0)
 
   const compWeekDateObjs = compWeekDates.map(d => new Date(d + 'T00:00:00'))
   const vencCompras = buildVencimientoSemanal(compras, compWeekDateObjs, 'vencimiento')
@@ -70,6 +85,7 @@ export default function ComprasTab({
         {[
           { key: 'listado',      label: 'Listado' },
           { key: 'cxp',          label: 'Cuentas por pagar' },
+          { key: 'antiguedad',   label: 'Antigüedad de cartera' },
           { key: 'porproveedor', label: 'Por proveedor' },
           { key: 'pormes',       label: 'Por período' },
           { key: 'semanal',      label: 'Vencimiento semanal' },
@@ -219,6 +235,172 @@ export default function ComprasTab({
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {comprasTab === 'antiguedad' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <p className="text-sm font-semibold text-gray-700">Antigüedad de cartera por proveedor (saldos pendientes de pago)</p>
+            <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() => {
+              exportXLSX(`compras_antiguedad_${new Date().toISOString().split('T')[0]}.xlsx`, [
+                buildKpiSheet('Compras — Antigüedad de cartera', 'Saldos pendientes por proveedor', [
+                  ...BUCKETS.map(b => [
+                    b.label,
+                    proveedoresAnt.reduce((s, p) => s + (pivotAntData[p]?.[b.key] || 0), 0),
+                  ] as [string, number]),
+                  ['Total cartera', totalCarteraCxp],
+                ]),
+                { name: 'Por proveedor', rows: [
+                  ['Proveedor', ...BUCKETS.map(b => b.label), 'Total'],
+                  ...proveedoresAnt.map(p => [
+                    p,
+                    ...BUCKETS.map(b => pivotAntData[p]?.[b.key] || 0),
+                    BUCKETS.reduce((s, b) => s + (pivotAntData[p]?.[b.key] || 0), 0),
+                  ]),
+                ] },
+                { name: 'Detalle', rows: [
+                  ['Proveedor', 'Concepto', 'Vencimiento', 'Días vencida', 'Tramo', 'Total', 'Abonado', 'Saldo'],
+                  ...cxp.map((c: any) => [
+                    c.proveedor, c.concepto || '', c.vencimiento, c.dias_vencida,
+                    TRAMO_LABELS[c.tramo] || c.tramo, c.total, c.monto_pagado || 0, c.saldo_pendiente ?? c.total,
+                  ]),
+                ] },
+              ])
+            }}>
+              <Download size={14} />Exportar Excel
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3">
+            {BUCKETS.map(bucket => {
+              const total = proveedoresAnt.reduce((s, p) => s + (pivotAntData[p]?.[bucket.key] || 0), 0)
+              return (
+                <div key={bucket.key} className="card p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-3 h-3 rounded-full" style={{ background: TRAMO_COLORS_HEX[bucket.key] }} />
+                    <span className="text-xs font-medium text-gray-600">{bucket.label}</span>
+                  </div>
+                  <p className="text-lg font-bold">{formatCurrency(total)}</p>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="card p-4 bg-brand-50 border-brand-200">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium text-brand-700">Total cuentas por pagar</span>
+              <span className="text-2xl font-bold text-brand-800">{formatCurrency(totalCarteraCxp)}</span>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+              <input type="checkbox" className="w-4 h-4 accent-brand-600 cursor-pointer"
+                checked={antMostrarTodas}
+                onChange={e => setAntMostrarTodas(e.target.checked)} />
+              Mostrar todas las compras
+            </label>
+          </div>
+
+          {proveedoresAnt.length === 0 ? (
+            <div className="card p-12 text-center text-gray-400">No hay cuentas por pagar pendientes</div>
+          ) : (
+            <div className="card overflow-auto">
+              <table className="w-full min-w-max">
+                <thead>
+                  <tr className="border-b-2 border-gray-300 bg-gray-50">
+                    <th className="table-header text-left sticky left-0 bg-gray-50 z-10 min-w-[220px]">Proveedor / Compra</th>
+                    {BUCKETS.map(b => (
+                      <th key={b.key} className="table-header text-right min-w-[120px]">
+                        <div className="flex items-center justify-end gap-1">
+                          <div className="w-2 h-2 rounded-full" style={{ background: TRAMO_COLORS_HEX[b.key] }} />
+                          {b.label}
+                        </div>
+                      </th>
+                    ))}
+                    <th className="table-header text-right min-w-[120px] bg-gray-100">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {proveedoresAnt.map((prov: string) => {
+                    const provTotal = BUCKETS.reduce((s, b) => s + (pivotAntData[prov]?.[b.key] || 0), 0)
+                    const expandido = antMostrarTodas || (antExpandidos[prov] ?? false)
+                    return (
+                      <Fragment key={prov}>
+                        <tr
+                          className="border-b border-gray-200 bg-brand-50/30 hover:bg-brand-50 cursor-pointer"
+                          onClick={() => setAntExpandidos(p => ({ ...p, [prov]: !expandido }))}>
+                          <td className="table-cell sticky left-0 bg-brand-50/30 z-10 font-semibold text-brand-800">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs transition-transform ${expandido ? 'rotate-90' : ''}`}>▶</span>
+                              {prov}
+                            </div>
+                          </td>
+                          {BUCKETS.map(b => (
+                            <td key={b.key} className="table-cell text-right font-semibold">
+                              {(pivotAntData[prov]?.[b.key] || 0) > 0 ? (
+                                <span style={{ color: TRAMO_COLORS_HEX[b.key] }}>
+                                  {formatCurrency(pivotAntData[prov][b.key])}
+                                </span>
+                              ) : (
+                                <span className="text-gray-300">—</span>
+                              )}
+                            </td>
+                          ))}
+                          <td className="table-cell text-right font-bold text-brand-900 bg-brand-50">
+                            {formatCurrency(provTotal)}
+                          </td>
+                        </tr>
+
+                        {expandido && (comprasPorProveedor[prov] || []).map((c: any) => (
+                          <tr key={`d-${c.id}`} className="border-b border-gray-100 bg-white hover:bg-gray-50">
+                            <td className="table-cell sticky left-0 bg-white z-10 pl-10 text-sm">
+                              <span className="text-gray-500 mr-2">{c.concepto || 'Sin concepto'}</span>
+                              <span className="text-gray-400">Vence: {formatDate(c.vencimiento)}</span>
+                              {(c.monto_pagado || 0) > 0 && (
+                                <span className="text-green-600 ml-2 text-xs">abonado {formatCurrency(c.monto_pagado)}</span>
+                              )}
+                            </td>
+                            {BUCKETS.map(b => (
+                              <td key={b.key} className="table-cell text-right text-sm">
+                                {c.tramo === b.key ? (
+                                  <span style={{ color: TRAMO_COLORS_HEX[b.key] }}>
+                                    {formatCurrency(c.saldo_pendiente ?? c.total)}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-200">—</span>
+                                )}
+                              </td>
+                            ))}
+                            <td className="table-cell text-right text-sm font-medium bg-brand-50/30">
+                              {formatCurrency(c.saldo_pendiente ?? c.total)}
+                            </td>
+                          </tr>
+                        ))}
+                      </Fragment>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">
+                    <td className="table-cell sticky left-0 bg-gray-100 z-10">TOTAL</td>
+                    {BUCKETS.map(b => {
+                      const total = proveedoresAnt.reduce((s, p) => s + (pivotAntData[p]?.[b.key] || 0), 0)
+                      return (
+                        <td key={b.key} className="table-cell text-right" style={{ color: total > 0 ? TRAMO_COLORS_HEX[b.key] : '#d1d5db' }}>
+                          {total > 0 ? formatCurrency(total) : '—'}
+                        </td>
+                      )
+                    })}
+                    <td className="table-cell text-right text-brand-900 bg-gray-200">
+                      {formatCurrency(totalCarteraCxp)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
