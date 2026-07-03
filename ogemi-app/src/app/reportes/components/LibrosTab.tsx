@@ -171,8 +171,9 @@ export default function LibrosTab({
             <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() => {
               const totCompras = libroCompraFiltrado.reduce((s, c) => s + (c.total || 0), 0)
               const itbms = libroCompraFiltrado.reduce((s, c) => s + (c.itbms || 0), 0)
-              const pagadas = libroCompraFiltrado.filter(c => c.estado === 'pagada').reduce((s, c) => s + (c.total || 0), 0)
-              const pendientes = libroCompraFiltrado.filter(c => c.estado === 'pendiente').reduce((s, c) => s + (c.total || 0), 0)
+              // Pagadas incluye abonos parciales; Pendientes = saldo real (total − abonos)
+              const pagadas = libroCompraFiltrado.reduce((s, c) => s + (c.estado === 'pagada' ? (c.total || 0) : (c.monto_pagado || 0)), 0)
+              const pendientes = libroCompraFiltrado.reduce((s, c) => s + (c.estado === 'pendiente' ? (c.total || 0) - (c.monto_pagado || 0) : 0), 0)
               exportXLSX(`libro_compra_${fechaDesde}_${fechaHasta}.xlsx`, [
                 buildKpiSheet('Libro de Compra', `${fechaDesde} a ${fechaHasta}`, [
                   ['Total compras', totCompras],
@@ -197,8 +198,9 @@ export default function LibrosTab({
             {[
               { label: 'Total compras',      val: libroCompraFiltrado.reduce((s, c) => s + (c.total || 0), 0),                         color: 'text-orange-600' },
               { label: 'ITBMS acreditable',  val: libroCompraFiltrado.reduce((s, c) => s + (c.itbms || 0), 0),                         color: 'text-purple-600' },
-              { label: 'Pagadas',            val: libroCompraFiltrado.filter(c => c.estado === 'pagada').reduce((s, c) => s + (c.total || 0), 0), color: 'text-green-600' },
-              { label: 'Pendientes',         val: libroCompraFiltrado.filter(c => c.estado === 'pendiente').reduce((s, c) => s + (c.total || 0), 0), color: 'text-red-600' },
+              // Pagadas incluye abonos parciales; Pendientes = saldo real (total − abonos)
+              { label: 'Pagadas',            val: libroCompraFiltrado.reduce((s, c) => s + (c.estado === 'pagada' ? (c.total || 0) : (c.monto_pagado || 0)), 0), color: 'text-green-600' },
+              { label: 'Pendientes',         val: libroCompraFiltrado.reduce((s, c) => s + (c.estado === 'pendiente' ? (c.total || 0) - (c.monto_pagado || 0) : 0), 0), color: 'text-red-600' },
             ].map(s => (
               <div key={s.label} className="card p-3">
                 <p className="text-xs text-gray-500">{s.label}</p>

@@ -62,8 +62,10 @@ export default function VentasTab({
             <FiltrosBar {...{ search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }} />
             <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() => {
               const total = ventasFiltradas.reduce((s, f) => s + (f.total || 0), 0)
-              const cobrado = ventasFiltradas.filter(f => f.estado === 'pagada').reduce((s, f) => s + (f.total || 0), 0)
-              const pendiente = ventasFiltradas.filter(f => f.estado === 'pendiente').reduce((s, f) => s + (f.total || 0), 0)
+              // Cobrado incluye abonos parciales; Pendiente = saldo cobrable (total − retención − abonos)
+              const cobrado = ventasFiltradas.reduce((s, f) => s + (f.estado === 'pagada' ? (f.total || 0) : ((f as any).monto_pagado || 0)), 0)
+              const pendiente = ventasFiltradas.reduce((s, f) => s + (f.estado === 'pendiente'
+                ? Math.max((f.total || 0) - ((f as any).retencion_monto || 0) - ((f as any).monto_pagado || 0), 0) : 0), 0)
               exportXLSX(`ventas_${new Date().toISOString().split('T')[0]}.xlsx`, [
                 buildKpiSheet('Ventas — Listado', `${fechaDesde} a ${fechaHasta}`, [
                   ['Total facturado', total],
@@ -87,8 +89,10 @@ export default function VentasTab({
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: 'Total facturado', val: ventasFiltradas.reduce((s, f) => s + (f.total || 0), 0), color: 'text-brand-700' },
-              { label: 'Cobrado', val: ventasFiltradas.filter(f => f.estado === 'pagada').reduce((s, f) => s + (f.total || 0), 0), color: 'text-green-600' },
-              { label: 'Pendiente', val: ventasFiltradas.filter(f => f.estado === 'pendiente').reduce((s, f) => s + (f.total || 0), 0), color: 'text-orange-600' },
+              // Cobrado = cobradas completas + abonos de pendientes; Pendiente = saldo cobrable real
+              { label: 'Cobrado', val: ventasFiltradas.reduce((s, f) => s + (f.estado === 'pagada' ? (f.total || 0) : ((f as any).monto_pagado || 0)), 0), color: 'text-green-600' },
+              { label: 'Pendiente', val: ventasFiltradas.reduce((s, f) => s + (f.estado === 'pendiente'
+                ? Math.max((f.total || 0) - ((f as any).retencion_monto || 0) - ((f as any).monto_pagado || 0), 0) : 0), 0), color: 'text-orange-600' },
               { label: '# Facturas', val: ventasFiltradas.length, color: 'text-gray-700', isCnt: true },
             ].map(s => (
               <div key={s.label} className="card p-3">

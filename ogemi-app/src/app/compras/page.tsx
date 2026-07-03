@@ -388,8 +388,9 @@ function ComprasPage() {
       return
     }
     const total = filtered.reduce((s, c) => s + (c.total || 0), 0)
-    const pagado = filtered.filter(c => c.estado === 'pagada').reduce((s, c) => s + (c.total || 0), 0)
-    const pendiente = filtered.filter(c => c.estado === 'pendiente').reduce((s, c) => s + (c.total || 0), 0)
+    // Pagado incluye abonos parciales de compras pendientes; Pendiente = saldo real
+    const pagado = filtered.reduce((s, c) => s + (c.estado === 'pagada' ? (c.total || 0) : (c.monto_pagado || 0)), 0)
+    const pendiente = filtered.reduce((s, c) => s + (c.estado === 'pendiente' ? (c.total || 0) - (c.monto_pagado || 0) : 0), 0)
     exportXLSX(`compras_${fecha}.xlsx`, [
       kpiSheet('Compras — Listado', 'Filtros activos', [
         ['# Compras', filtered.length],
@@ -423,8 +424,9 @@ function ComprasPage() {
   })
 
   // Totales del set filtrado (reflejan búsqueda, estado y rango de fechas)
-  const totalPendiente = filtered.filter(c => c.estado === 'pendiente').reduce((s, c) => s + c.total, 0)
-  const totalPagado = filtered.filter(c => c.estado === 'pagada').reduce((s, c) => s + c.total, 0)
+  // Pendiente = saldo real (total − abonos); Pagado = pagadas completas + abonos de pendientes
+  const totalPendiente = filtered.filter(c => c.estado === 'pendiente').reduce((s, c) => s + c.total - (c.monto_pagado || 0), 0)
+  const totalPagado = filtered.reduce((s, c) => s + (c.estado === 'pagada' ? c.total : (c.monto_pagado || 0)), 0)
   const countPendiente = filtered.filter(c => c.estado === 'pendiente').length
 
   const totalVencidas = vencidas.reduce((s: number, c: any) => s + (c.total || 0), 0)

@@ -365,8 +365,9 @@ function PresupuestosPage() {
 
   const exportExcel = () => {
     const total = filtered.reduce((s, p) => s + (p.total || 0), 0)
-    const cobrado = filtered.filter(p => p.estado === 'pagada').reduce((s, p) => s + (p.total || 0), 0)
-    const pendiente = filtered.filter(p => p.estado === 'pendiente').reduce((s, p) => s + (p.total || 0), 0)
+    // Cobrado incluye abonos parciales de pendientes; Pendiente = saldo real
+    const cobrado = filtered.reduce((s, p) => s + (p.estado === 'pagada' ? (p.total || 0) : (p.monto_pagado || 0)), 0)
+    const pendiente = filtered.reduce((s, p) => s + (p.estado === 'pendiente' ? (p.total || 0) - (p.monto_pagado || 0) : 0), 0)
     exportXLSX(`presupuestos_${new Date().toISOString().split('T')[0]}.xlsx`, [
       kpiSheet('Presupuestos', estadoFilter === 'todos' ? 'Todos' : estadoFilter, [
         ['# Presupuestos', filtered.length],
@@ -386,8 +387,9 @@ function PresupuestosPage() {
     ])
   }
 
-  const totalPendiente = filtered.filter(p => p.estado === 'pendiente').reduce((s, p) => s + p.total, 0)
-  const totalPagado = filtered.filter(p => p.estado === 'pagada').reduce((s, p) => s + p.total, 0)
+  // Pendiente = saldo real (total − abonos); Pagado = pagadas completas + abonos de pendientes
+  const totalPendiente = filtered.filter(p => p.estado === 'pendiente').reduce((s, p) => s + p.total - (p.monto_pagado || 0), 0)
+  const totalPagado = filtered.reduce((s, p) => s + (p.estado === 'pagada' ? p.total : (p.monto_pagado || 0)), 0)
 
   return (
     <AppLayout>
