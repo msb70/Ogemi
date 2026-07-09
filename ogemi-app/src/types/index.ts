@@ -84,6 +84,7 @@ export interface NotaCredito {
 export interface Presupuesto {
   id: string;
   numero_presupuesto: number;
+  orden_trabajo?: string | null;
   fecha: string;
   cliente_id: string;
   tipo_documento: string;

@@ -8,7 +8,7 @@ import type { Modulo } from '@/types/auth'
 import {
   LayoutDashboard, FileText, Users, Building2,
   BarChart3, Upload, ShieldCheck, LogOut, ChevronRight,
-  ShoppingCart, Truck, Wallet, ClipboardList, CalendarClock, QrCode, CreditCard
+  ShoppingCart, Truck, Wallet, ClipboardList, CalendarClock, QrCode, CreditCard, WalletCards
 } from 'lucide-react'
 
 const navItems: { href: string; label: string; icon: React.ElementType; modulo: Modulo }[] = [
@@ -18,9 +18,11 @@ const navItems: { href: string; label: string; icon: React.ElementType; modulo: 
   { href: '/factura-electronica', label: 'Factura Electrónica', icon: QrCode, modulo: 'factura_electronica' },
   { href: '/notas-credito', label: 'Notas de crédito', icon: FileText,     modulo: 'notas_credito' },
   { href: '/presupuestos', label: 'Presupuestos',   icon: ClipboardList,   modulo: 'presupuestos' },
+  { href: '/cobros-presupuestos', label: 'Cobro presupuestos', icon: WalletCards, modulo: 'presupuestos' },
   { href: '/clientes',     label: 'Clientes',       icon: Users,           modulo: 'clientes'     },
   { href: '/anticipos',    label: 'Anticipos',      icon: Wallet,          modulo: 'facturas'     },
   { href: '/compras',      label: 'Compras',        icon: ShoppingCart,    modulo: 'compras'      },
+  { href: '/pagos-compras', label: 'Pago compras',  icon: WalletCards,     modulo: 'compras'      },
   { href: '/proveedores',  label: 'Proveedores',    icon: Truck,           modulo: 'proveedores'  },
   { href: '/banco',        label: 'Banco',          icon: Building2,       modulo: 'banco'        },
   { href: '/gastos-fijos', label: 'Gastos fijos',   icon: CalendarClock,   modulo: 'gastos_fijos' },
