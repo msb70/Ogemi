@@ -134,23 +134,42 @@ function AnticiposPage() {
     )
   })
 
-  const totalActivos = anticipos
-    .filter(a => a.estado === 'activo')
-    .reduce((s, a) => s + a.monto, 0)
+  // Resumen por cada estado existente (activo, aplicado, anulado, ...)
+  const ORDEN_ESTADOS = ['activo', 'aplicado', 'anulado']
+  const porEstado = anticipos.reduce((acc, a) => {
+    const e = a.estado || 'sin estado'
+    if (!acc[e]) acc[e] = { cantidad: 0, monto: 0 }
+    acc[e].cantidad += 1
+    acc[e].monto += a.monto
+    return acc
+  }, {} as Record<string, { cantidad: number; monto: number }>)
+  const estadosPresentes = Object.keys(porEstado).sort((x, y) => {
+    const ix = ORDEN_ESTADOS.indexOf(x); const iy = ORDEN_ESTADOS.indexOf(y)
+    return (ix === -1 ? 99 : ix) - (iy === -1 ? 99 : iy)
+  })
+  const saldoDisponible = anticipos.reduce(
+    (s, a) => s + (saldos[a.id]?.saldo ?? (a.estado === 'anulado' ? 0 : a.monto)), 0
+  )
 
   const exportExcel = () => {
     exportXLSX(`anticipos_${new Date().toISOString().split('T')[0]}.xlsx`, [
       kpiSheet('Anticipos', `${filtered.length} registros`, [
         ['# Anticipos', anticipos.length],
-        ['Anticipos activos (monto)', totalActivos],
-        ['Saldo disponible total', anticipos.reduce((s, a) => s + (saldos[a.id]?.saldo ?? (a.estado === 'anulado' ? 0 : a.monto)), 0)],
+        ...estadosPresentes.map(e => (
+          [`Anticipos ${e} (monto)`, porEstado[e].monto] as [string, number]
+        )),
+        ...estadosPresentes.map(e => (
+          [`# ${e}`, porEstado[e].cantidad] as [string, number]
+        )),
+        ['Saldo disponible total', saldoDisponible],
       ]),
       { name: 'Listado', rows: [
         ['N° Recibo', 'Fecha', 'Cliente', 'Cuenta', 'Banco', 'N° Depósito', 'Monto', 'Aplicado', 'Saldo', 'Estado', 'Notas'],
         ...filtered.map(a => [
           `REC-${String(a.numero_recibo).padStart(5, '0')}`,
           a.fecha, a.clientes?.nombre || '', a.banco_cuentas?.nombre || '', a.banco_cuentas?.banco || '',
-          a.numero_deposito || '', a.monto, saldos[a.id]?.aplicado ?? 0, saldos[a.id]?.saldo ?? a.monto,
+          a.numero_deposito || '', a.monto, saldos[a.id]?.aplicado ?? 0,
+          saldos[a.id]?.saldo ?? (a.estado === 'anulado' ? 0 : a.monto),
           a.estado, a.notas || '',
         ]),
       ] },
@@ -190,11 +209,18 @@ function AnticiposPage() {
         }
       />
 
-      {/* Resumen */}
-      <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-6">
+      {/* Resumen por estado */}
+      <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-6 flex-wrap">
+        {estadosPresentes.map(e => (
+          <div key={e} className="flex items-center gap-1.5">
+            <span className={`badge ${estadoBadge(e)} capitalize`}>{e}</span>
+            <span className="font-semibold text-gray-700">{formatCurrency(porEstado[e].monto)}</span>
+            <span className="text-xs text-gray-400">({porEstado[e].cantidad})</span>
+          </div>
+        ))}
         <div>
-          <span className="text-xs text-gray-500">Anticipos activos: </span>
-          <span className="font-semibold text-brand-700">{formatCurrency(totalActivos)}</span>
+          <span className="text-xs text-gray-500">Saldo disponible: </span>
+          <span className="font-semibold text-green-700">{formatCurrency(saldoDisponible)}</span>
         </div>
         <div>
           <span className="text-xs text-gray-500">Total registros: </span>
@@ -260,8 +286,8 @@ function AnticiposPage() {
                   <td className="table-cell text-right text-gray-500">
                     {formatCurrency(saldos[a.id]?.aplicado ?? 0)}
                   </td>
-                  <td className="table-cell text-right font-semibold text-green-700">
-                    {formatCurrency(saldos[a.id]?.saldo ?? a.monto)}
+                  <td className={`table-cell text-right font-semibold ${a.estado === 'anulado' ? 'text-gray-400' : 'text-green-700'}`}>
+                    {formatCurrency(saldos[a.id]?.saldo ?? (a.estado === 'anulado' ? 0 : a.monto))}
                   </td>
                   <td className="table-cell">
                     <span className={`badge ${estadoBadge(a.estado)}`}>
