@@ -6,7 +6,7 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { CarteraVencida } from '@/types'
 import {
-  FileText, ShoppingCart, CreditCard, Building2, BookOpen, ClipboardList, Printer, FileSpreadsheet,
+  FileText, ShoppingCart, CreditCard, Building2, BookOpen, ClipboardList, Printer, FileSpreadsheet, Users,
 } from 'lucide-react'
 import { withPagePermission } from '@/components/PermissionGuard'
 import { isNC, xlsxFromReporteArea } from './reportes.utils'
@@ -17,8 +17,9 @@ import ComprasTab     from './components/ComprasTab'
 import NcTab          from './components/NcTab'
 import BancoTab       from './components/BancoTab'
 import LibrosTab      from './components/LibrosTab'
+import EstadoCuentaTab from './components/EstadoCuentaTab'
 
-type ReporteTab = 'ventas' | 'presupuestos' | 'compras' | 'nc' | 'banco' | 'libros'
+type ReporteTab = 'ventas' | 'presupuestos' | 'compras' | 'nc' | 'banco' | 'libros' | 'estado_cuenta'
 
 function ReportesPage() {
   const [tab, setTab] = useState<ReporteTab>('ventas')
@@ -267,6 +268,7 @@ function ReportesPage() {
     { key: 'nc',           label: 'Notas de crédito',  icon: CreditCard },
     { key: 'banco',        label: 'Banco',             icon: Building2 },
     { key: 'libros',       label: 'Libros',            icon: BookOpen },
+    { key: 'estado_cuenta', label: 'Estado de cuenta', icon: Users },
   ]
 
   return (
@@ -383,6 +385,16 @@ function ReportesPage() {
             setFechaHasta={setFechaHasta}
             loadMovimientos={loadMovimientos}
             loadCierres={loadCierres}
+          />
+        )}
+
+        {tab === 'estado_cuenta' && (
+          <EstadoCuentaTab
+            facturas={facturas}
+            fechaDesde={fechaDesde}
+            setFechaDesde={setFechaDesde}
+            fechaHasta={fechaHasta}
+            setFechaHasta={setFechaHasta}
           />
         )}
 
