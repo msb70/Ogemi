@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
@@ -1117,11 +1118,15 @@ function FacturasPage() {
         </div>
       )}
 
-      {/* Contenedor de impresión del detalle (solo visible al imprimir) */}
-      {detalle && (
+      {/* Contenedor de impresión del detalle (solo visible al imprimir).
+          Portal directo a <body>: permite ocultar el resto de la app con
+          display:none al imprimir (visibility:hidden dejaba el espacio de la
+          tabla de fondo y generaba páginas en blanco). */}
+      {detalle && typeof document !== 'undefined' && createPortal(
         <div id="factura-print" className="hidden print:block">
           <FacturaDetalle factura={detalle} pagos={detallePagos} reversados={detalleReversados} fullPage />
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Modal: Detalle de factura */}
@@ -1284,15 +1289,9 @@ function FacturasPage() {
 
       <style>{`
         @media print {
-          body * { visibility: hidden !important; }
-          #factura-print, #factura-print * { visibility: visible !important; }
-          #factura-print {
-            display: block !important;
-            position: absolute;
-            left: 0; top: 0;
-            width: 100%;
-            min-height: 100vh;
-          }
+          /* display:none colapsa el layout (visibility dejaba páginas en blanco) */
+          body > :not(#factura-print) { display: none !important; }
+          #factura-print { display: block !important; width: 100%; }
           @page { margin: 14mm; }
         }
       `}</style>
