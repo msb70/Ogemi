@@ -8,6 +8,14 @@ import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
 
 type LibroSubTab = 'venta' | 'compra'
 
+/** Formato numérico sin símbolo de moneda (el libro de venta no debe mostrar USD) */
+const fmtMonto = (n: number) =>
+  new Intl.NumberFormat('es-PA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+
+/** Las NC restan: devuelve el valor con signo negativo si el documento es NC */
+const conSigno = (esNC: boolean, v: number | null | undefined) =>
+  esNC ? -Math.abs(v || 0) : (v || 0)
+
 export interface LibrosTabProps extends Omit<FiltrosBarProps, 'search' | 'setSearch'> {
   libroVentaFiltrado: any[]
   libroCompraFiltrado: any[]
@@ -63,10 +71,14 @@ export default function LibrosTab({
                 ]),
                 { name: 'Libro de Venta', rows: [
                   ['N°', 'Fecha', 'Cliente', 'Tipo Documento', 'Doc. Afectado', 'Monto Gravable', 'ITBMS', 'Total'],
-                  ...libroVentaFiltrado.map((f, i) => [
-                    i + 1, f.fecha, f.clientes?.nombre, f.tipo_documento,
-                    f.documento_afectado || '', f.monto, f.itbms, f.total,
-                  ]),
+                  ...libroVentaFiltrado.map((f, i) => {
+                    const esNC = isNC(f.tipo_documento)
+                    return [
+                      i + 1, f.fecha, f.clientes?.nombre, f.tipo_documento,
+                      f.documento_afectado || '',
+                      conSigno(esNC, f.monto), conSigno(esNC, f.itbms), conSigno(esNC, f.total),
+                    ]
+                  }),
                 ] },
               ])
             }}>
@@ -83,7 +95,7 @@ export default function LibrosTab({
             ].map(s => (
               <div key={s.label} className="card p-3">
                 <p className="text-xs text-gray-500">{s.label}</p>
-                <p className={`text-lg font-bold ${s.color}`}>{formatCurrency(s.val as number)}</p>
+                <p className={`text-lg font-bold ${s.color}`}>{fmtMonto(s.val as number)}</p>
               </div>
             ))}
           </div>
@@ -130,11 +142,11 @@ export default function LibrosTab({
                         {f.documento_afectado ? `#${f.documento_afectado}` : '—'}
                       </td>
                       <td className="table-cell text-right">
-                        <span className={esNC ? 'text-amber-600' : ''}>{formatCurrency(Math.abs(f.monto))}</span>
+                        <span className={esNC ? 'text-amber-600' : ''}>{fmtMonto(conSigno(esNC, f.monto))}</span>
                       </td>
-                      <td className="table-cell text-right text-gray-500">{formatCurrency(Math.abs(f.itbms))}</td>
+                      <td className="table-cell text-right text-gray-500">{fmtMonto(conSigno(esNC, f.itbms))}</td>
                       <td className="table-cell text-right font-semibold">
-                        <span className={esNC ? 'text-amber-700' : 'text-brand-700'}>{formatCurrency(Math.abs(f.total))}</span>
+                        <span className={esNC ? 'text-amber-700' : 'text-brand-700'}>{fmtMonto(conSigno(esNC, f.total))}</span>
                       </td>
                     </tr>
                   )
@@ -144,13 +156,13 @@ export default function LibrosTab({
                 <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
                   <td colSpan={6} className="table-cell text-right text-sm text-gray-600">TOTALES</td>
                   <td className="table-cell text-right text-brand-700">
-                    {formatCurrency(libroVentaFiltrado.reduce((s, f) => s + Math.abs(f.monto || 0), 0))}
+                    {fmtMonto(libroVentaFiltrado.reduce((s, f) => s + conSigno(isNC(f.tipo_documento), f.monto), 0))}
                   </td>
                   <td className="table-cell text-right text-gray-600">
-                    {formatCurrency(libroVentaFiltrado.reduce((s, f) => s + Math.abs(f.itbms || 0), 0))}
+                    {fmtMonto(libroVentaFiltrado.reduce((s, f) => s + conSigno(isNC(f.tipo_documento), f.itbms), 0))}
                   </td>
                   <td className="table-cell text-right text-brand-800">
-                    {formatCurrency(libroVentaFiltrado.reduce((s, f) => s + Math.abs(f.total || 0), 0))}
+                    {fmtMonto(libroVentaFiltrado.reduce((s, f) => s + conSigno(isNC(f.tipo_documento), f.total), 0))}
                   </td>
                 </tr>
               </tfoot>
