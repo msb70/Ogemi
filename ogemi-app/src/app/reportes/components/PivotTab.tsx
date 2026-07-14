@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { formatCurrency, formatDate, formatDateObj } from '@/lib/utils'
+import { formatMonto, formatDate, formatDateObj } from '@/lib/utils'
 import { Search } from 'lucide-react'
 import { CarteraVencida } from '@/types'
 import {
@@ -116,10 +116,10 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
                   <input type="date" value={weekDates[i]}
                     onChange={e => { const nd = [...weekDates]; nd[i] = e.target.value; setWeekDates(nd) }}
                     className="text-xs text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 mt-0.5 mb-2 w-full bg-white focus:outline-none focus:border-gray-400" />
-                  <p className={`text-lg font-bold ${c.text}`}>{formatCurrency(totProbable[i])}</p>
+                  <p className={`text-lg font-bold ${c.text}`}>{formatMonto(totProbable[i])}</p>
                   {noPaga > 0 && (
                     <p className="text-[11px] text-red-500 mt-0.5">
-                      No pagará: −{formatCurrency(noPaga)} · bruto {formatCurrency(vencViernes.totals[i])}
+                      No pagará: −{formatMonto(noPaga)} · bruto {formatMonto(vencViernes.totals[i])}
                     </p>
                   )}
                   <p className="text-xs text-gray-400 mt-1">{cnt} {cnt === 1 ? 'factura' : 'facturas'}</p>
@@ -131,15 +131,15 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
           <div className="card p-4 bg-brand-50 border border-brand-200 space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-brand-700">Total general vencido</span>
-              <span className="text-2xl font-bold text-brand-900">{formatCurrency(vencViernes.grandTotal)}</span>
+              <span className="text-2xl font-bold text-brand-900">{formatMonto(vencViernes.grandTotal)}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-green-600 font-medium">↳ Probable pago</span>
-              <span className="text-sm font-bold text-green-700">{formatCurrency(grandProbable)}</span>
+              <span className="text-sm font-bold text-green-700">{formatMonto(grandProbable)}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-red-500 font-medium">↳ No pagará</span>
-              <span className="text-sm font-bold text-red-600">{formatCurrency(grandNoPaga)}</span>
+              <span className="text-sm font-bold text-red-600">{formatMonto(grandNoPaga)}</span>
             </div>
           </div>
 
@@ -177,7 +177,7 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
                         {weekDateObjs.map((_, i) => (
                           <td key={i} className="table-cell text-right text-sm">
                             {f.fridayIdx === i
-                              ? <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>{formatCurrency(f.total)}</span>
+                              ? <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>{formatMonto(f.total)}</span>
                               : <span className="text-gray-200">—</span>}
                           </td>
                         ))}
@@ -194,21 +194,21 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
                   <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">
                     <td colSpan={4} className="table-cell text-right sticky left-0 bg-gray-100 z-10 text-sm text-gray-600">TOTAL VENCIDO</td>
                     {vencViernes.totals.map((t, i) => (
-                      <td key={i} className="table-cell text-right text-brand-800">{t > 0 ? formatCurrency(t) : '—'}</td>
+                      <td key={i} className="table-cell text-right text-brand-800">{t > 0 ? formatMonto(t) : '—'}</td>
                     ))}
                     <td className="table-cell" />
                   </tr>
                   <tr className="bg-green-50 text-xs font-semibold">
                     <td colSpan={4} className="table-cell text-right sticky left-0 bg-green-50 z-10 text-green-700">↳ Probable Pago</td>
                     {totProbable.map((t, i) => (
-                      <td key={i} className="table-cell text-right text-green-700">{t > 0 ? formatCurrency(t) : '—'}</td>
+                      <td key={i} className="table-cell text-right text-green-700">{t > 0 ? formatMonto(t) : '—'}</td>
                     ))}
                     <td className="table-cell" />
                   </tr>
                   <tr className="bg-red-50 text-xs font-semibold">
                     <td colSpan={4} className="table-cell text-right sticky left-0 bg-red-50 z-10 text-red-600">↳ No Pagará</td>
                     {totNoPaga.map((t, i) => (
-                      <td key={i} className="table-cell text-right text-red-600">{t > 0 ? formatCurrency(t) : '—'}</td>
+                      <td key={i} className="table-cell text-right text-red-600">{t > 0 ? formatMonto(t) : '—'}</td>
                     ))}
                     <td className="table-cell" />
                   </tr>
@@ -234,7 +234,7 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
                     <div className="w-3 h-3 rounded-full" style={{ background: TRAMO_COLORS_HEX[bucket.key] }} />
                     <span className="text-xs font-medium text-gray-600">{bucket.label}</span>
                   </div>
-                  <p className="text-lg font-bold">{formatCurrency(total)}</p>
+                  <p className="text-lg font-bold">{formatMonto(total)}</p>
                 </div>
               )
             })}
@@ -244,7 +244,7 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-brand-700">Total cartera pendiente</span>
               <span className="text-2xl font-bold text-brand-800">
-                {formatCurrency(cartera.reduce((s, c) => s + (c.saldo_pendiente ?? c.total), 0))}
+                {formatMonto(cartera.reduce((s, c) => s + (c.saldo_pendiente ?? c.total), 0))}
               </span>
             </div>
           </div>
@@ -296,7 +296,7 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
                             <td key={b.key} className="table-cell text-right font-semibold">
                               {(pivotAnt.data[cliente]?.[b.key] || 0) > 0 ? (
                                 <span style={{ color: TRAMO_COLORS_HEX[b.key] }}>
-                                  {formatCurrency(pivotAnt.data[cliente][b.key])}
+                                  {formatMonto(pivotAnt.data[cliente][b.key])}
                                 </span>
                               ) : (
                                 <span className="text-gray-300">—</span>
@@ -304,7 +304,7 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
                             </td>
                           ))}
                           <td className="table-cell text-right font-bold text-brand-900 bg-brand-50">
-                            {formatCurrency(clienteTotal)}
+                            {formatMonto(clienteTotal)}
                           </td>
                         </tr>
 
@@ -318,7 +318,7 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
                               <td key={b.key} className="table-cell text-right text-sm">
                                 {c.tramo === b.key ? (
                                   <span style={{ color: TRAMO_COLORS_HEX[b.key] }}>
-                                    {formatCurrency(c.saldo_pendiente ?? c.total)}
+                                    {formatMonto(c.saldo_pendiente ?? c.total)}
                                   </span>
                                 ) : (
                                   <span className="text-gray-200">—</span>
@@ -326,7 +326,7 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
                               </td>
                             ))}
                             <td className="table-cell text-right text-sm font-medium bg-brand-50/30">
-                              {formatCurrency(c.saldo_pendiente ?? c.total)}
+                              {formatMonto(c.saldo_pendiente ?? c.total)}
                             </td>
                           </tr>
                         ))}
@@ -341,12 +341,12 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
                       const total = pivotAnt.clientes.reduce((s: number, c: string) => s + (pivotAnt.data[c]?.[b.key] || 0), 0)
                       return (
                         <td key={b.key} className="table-cell text-right" style={{ color: total > 0 ? TRAMO_COLORS_HEX[b.key] : '#d1d5db' }}>
-                          {total > 0 ? formatCurrency(total) : '—'}
+                          {total > 0 ? formatMonto(total) : '—'}
                         </td>
                       )
                     })}
                     <td className="table-cell text-right text-brand-900 bg-gray-200">
-                      {formatCurrency(cartera.reduce((s, c) => s + (c.saldo_pendiente ?? c.total), 0))}
+                      {formatMonto(cartera.reduce((s, c) => s + (c.saldo_pendiente ?? c.total), 0))}
                     </td>
                   </tr>
                 </tfoot>

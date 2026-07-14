@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
@@ -187,11 +188,13 @@ function AnticiposPage() {
 
   return (
     <AppLayout>
-      {/* Área de impresión — solo visible al imprimir */}
-      {printData && (
+      {/* Área de impresión — solo visible al imprimir (portal a body para
+          poder colapsar el resto con display:none y evitar páginas en blanco) */}
+      {printData && typeof document !== 'undefined' && createPortal(
         <div ref={printRef} id="recibo-print" className="hidden print:block">
           <ReciboAnticipo anticipo={printData} fullPage />
-        </div>
+        </div>,
+        document.body,
       )}
 
       <Header
@@ -508,15 +511,9 @@ function AnticiposPage() {
 
       <style>{`
         @media print {
-          body * { visibility: hidden !important; }
-          #recibo-print, #recibo-print * { visibility: visible !important; }
-          #recibo-print {
-            display: block !important;
-            position: absolute;
-            left: 0; top: 0;
-            width: 100%;
-            min-height: 100vh;
-          }
+          /* display:none colapsa el layout (visibility dejaba páginas en blanco) */
+          body > :not(#recibo-print) { display: none !important; }
+          #recibo-print { display: block !important; width: 100%; }
           @page { margin: 14mm; }
         }
       `}</style>

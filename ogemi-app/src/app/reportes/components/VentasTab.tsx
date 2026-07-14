@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { formatCurrency, formatDate, tramoColor } from '@/lib/utils'
+import { formatMonto, formatDate, tramoColor } from '@/lib/utils'
 import { Download } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -97,7 +97,7 @@ export default function VentasTab({
             ].map(s => (
               <div key={s.label} className="card p-3">
                 <p className="text-xs text-gray-500">{s.label}</p>
-                <p className={`text-lg font-bold ${s.color}`}>{(s as any).isCnt ? s.val : formatCurrency(s.val as number)}</p>
+                <p className={`text-lg font-bold ${s.color}`}>{(s as any).isCnt ? s.val : formatMonto(s.val as number)}</p>
               </div>
             ))}
           </div>
@@ -121,7 +121,7 @@ export default function VentasTab({
                     <td className="table-cell text-sm">{formatDate(f.fecha)}</td>
                     <td className="table-cell max-w-[200px]"><span className="truncate block">{f.clientes?.nombre}</span></td>
                     <td className="table-cell text-xs text-gray-400">{f.tipo_documento}</td>
-                    <td className="table-cell text-right font-semibold">{formatCurrency(f.total)}</td>
+                    <td className="table-cell text-right font-semibold">{formatMonto(f.total)}</td>
                     <td className="table-cell">
                       <span className={`badge ${f.estado === 'pagada' ? 'bg-green-100 text-green-700' : f.estado === 'falta_retencion' ? 'bg-amber-100 text-amber-700' : 'bg-orange-100 text-orange-700'}`}>
                         {f.estado === 'pagada' ? 'Cobrada' : f.estado === 'falta_retencion' ? 'Falta retención' : 'Pendiente'}
@@ -147,7 +147,7 @@ export default function VentasTab({
                     <div className="w-3 h-3 rounded-full" style={{ background: TRAMO_COLORS_HEX[tramo] }} />
                     <span className="text-xs font-medium text-gray-600">{TRAMO_LABELS[tramo]}</span>
                   </div>
-                  <p className="text-lg font-bold">{formatCurrency(items.reduce((s, c) => s + (c.saldo_pendiente ?? c.total), 0))}</p>
+                  <p className="text-lg font-bold">{formatMonto(items.reduce((s, c) => s + (c.saldo_pendiente ?? c.total), 0))}</p>
                   <p className="text-xs text-gray-400">{items.length} facturas</p>
                 </div>
               )
@@ -156,7 +156,7 @@ export default function VentasTab({
           <div className="card p-4 bg-brand-50 border-brand-200">
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-brand-700">Total cartera pendiente</span>
-              <span className="text-2xl font-bold text-brand-800">{formatCurrency(cartera.reduce((s, c) => s + (c.saldo_pendiente ?? c.total), 0))}</span>
+              <span className="text-2xl font-bold text-brand-800">{formatMonto(cartera.reduce((s, c) => s + (c.saldo_pendiente ?? c.total), 0))}</span>
             </div>
           </div>
           <div className="card overflow-hidden">
@@ -178,8 +178,8 @@ export default function VentasTab({
                     <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha)}</td>
                     <td className="table-cell max-w-[200px]"><span className="truncate block">{c.cliente}</span></td>
                     <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha_pago)}</td>
-                    <td className="table-cell text-right">{formatCurrency(c.total)}</td>
-                    <td className="table-cell text-right font-semibold text-orange-600">{formatCurrency(c.saldo_pendiente ?? c.total)}</td>
+                    <td className="table-cell text-right">{formatMonto(c.total)}</td>
+                    <td className="table-cell text-right font-semibold text-orange-600">{formatMonto(c.saldo_pendiente ?? c.total)}</td>
                     <td className="table-cell text-right">
                       <span className={c.dias_vencida > 0 ? 'text-red-600 font-medium' : 'text-green-600'}>
                         {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
@@ -222,7 +222,7 @@ export default function VentasTab({
                   </div>
                   <div className="card p-4">
                     <p className="text-xs font-semibold uppercase text-gray-500">Monto total</p>
-                    <p className="text-2xl font-bold text-brand-700">{formatCurrency(totalMonto)}</p>
+                    <p className="text-2xl font-bold text-brand-700">{formatMonto(totalMonto)}</p>
                   </div>
                 </div>
 
@@ -250,7 +250,7 @@ export default function VentasTab({
                               <td className="px-3 py-2 text-gray-400">{i + 1}</td>
                               <td className="px-3 py-2 font-medium">{r.nombre}</td>
                               <td className="px-3 py-2 text-right text-gray-500">{r.count}</td>
-                              <td className="px-3 py-2 text-right font-semibold">{formatCurrency(r.monto)}</td>
+                              <td className="px-3 py-2 text-right font-semibold">{formatMonto(r.monto)}</td>
                               <td className="px-3 py-2 text-right text-brand-700">{r.pct.toFixed(1)}%</td>
                               <td className="px-3 py-2 text-right text-gray-600">{Math.min(acc, 100).toFixed(1)}%</td>
                             </tr>
@@ -262,7 +262,7 @@ export default function VentasTab({
                           <tr className="bg-gray-50 border-t border-gray-200 font-bold">
                             <td className="px-3 py-2" colSpan={2}>Total</td>
                             <td className="px-3 py-2 text-right">{totalCount}</td>
-                            <td className="px-3 py-2 text-right">{formatCurrency(totalMonto)}</td>
+                            <td className="px-3 py-2 text-right">{formatMonto(totalMonto)}</td>
                             <td className="px-3 py-2 text-right">100%</td>
                             <td className="px-3 py-2"></td>
                           </tr>
@@ -282,7 +282,7 @@ export default function VentasTab({
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
                         <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                         <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={130} />
-                        <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                        <Tooltip formatter={(v: number) => formatMonto(v)} />
                         <Bar dataKey="monto" name="Ventas" fill="#0284c7" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -295,7 +295,7 @@ export default function VentasTab({
                           cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={2} dataKey="value">
                           {topClientesVentas.slice(0, 8).map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                         </Pie>
-                        <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                        <Tooltip formatter={(v: number) => formatMonto(v)} />
                         <Legend wrapperStyle={{ fontSize: '11px' }} />
                       </PieChart>
                     </ResponsiveContainer>
@@ -316,7 +316,7 @@ export default function VentasTab({
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                <Tooltip formatter={(v: number) => formatMonto(v)} />
                 <Bar dataKey="ventas" name="Ventas" fill="#0284c7" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -345,7 +345,7 @@ export default function VentasTab({
                         <tr key={m.mes} className="hover:bg-gray-50">
                           <td className="px-3 py-2 font-medium">{m.mes}</td>
                           <td className="px-3 py-2 text-right text-gray-500">{m.count}</td>
-                          <td className="px-3 py-2 text-right font-semibold">{formatCurrency(m.ventas)}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{formatMonto(m.ventas)}</td>
                           <td className="px-3 py-2 text-right text-brand-700">
                             {totalMonto > 0 ? ((m.ventas / totalMonto) * 100).toFixed(1) : '0.0'}%
                           </td>
@@ -357,7 +357,7 @@ export default function VentasTab({
                         <tr className="bg-gray-50 border-t border-gray-200 font-bold">
                           <td className="px-3 py-2">Total</td>
                           <td className="px-3 py-2 text-right">{totalCount}</td>
-                          <td className="px-3 py-2 text-right">{formatCurrency(totalMonto)}</td>
+                          <td className="px-3 py-2 text-right">{formatMonto(totalMonto)}</td>
                           <td className="px-3 py-2 text-right">100%</td>
                         </tr>
                       </tfoot>

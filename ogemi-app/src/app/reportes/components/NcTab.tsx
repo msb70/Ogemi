@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatMonto, formatDate } from '@/lib/utils'
 import { Download } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
@@ -65,7 +65,7 @@ export default function NcTab({
             </div>
             <div className="card p-4">
               <p className="text-xs font-semibold uppercase text-gray-500">Total notas de crédito</p>
-              <p className="text-2xl font-bold text-amber-700">{formatCurrency(ncFiltradas.reduce((s, f) => s + Math.abs(f.total || 0), 0))}</p>
+              <p className="text-2xl font-bold text-amber-700">{formatMonto(ncFiltradas.reduce((s, f) => s + Math.abs(f.total || 0), 0))}</p>
             </div>
           </div>
           <div className="card overflow-hidden">
@@ -89,8 +89,8 @@ export default function NcTab({
                     <td className="table-cell max-w-[180px]"><span className="truncate block">{f.clientes?.nombre}</span></td>
                     <td className="table-cell text-xs text-amber-600">{f.tipo_documento}</td>
                     <td className="table-cell text-sm text-gray-400">{f.documento_afectado ? `#${f.documento_afectado}` : '—'}</td>
-                    <td className="table-cell text-right">{formatCurrency(Math.abs(f.monto))}</td>
-                    <td className="table-cell text-right font-semibold text-amber-700">{formatCurrency(Math.abs(f.total))}</td>
+                    <td className="table-cell text-right">{formatMonto(Math.abs(f.monto))}</td>
+                    <td className="table-cell text-right font-semibold text-amber-700">{formatMonto(Math.abs(f.total))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -125,7 +125,7 @@ export default function NcTab({
                   </div>
                   <div className="card p-4">
                     <p className="text-xs font-semibold uppercase text-gray-500">Monto total</p>
-                    <p className="text-2xl font-bold text-amber-700">{formatCurrency(totalMonto)}</p>
+                    <p className="text-2xl font-bold text-amber-700">{formatMonto(totalMonto)}</p>
                   </div>
                 </div>
                 <div className="card overflow-hidden">
@@ -151,7 +151,7 @@ export default function NcTab({
                               <td className="px-3 py-2 text-gray-400">{i + 1}</td>
                               <td className="px-3 py-2 font-medium">{r.nombre}</td>
                               <td className="px-3 py-2 text-right text-gray-500">{r.count}</td>
-                              <td className="px-3 py-2 text-right font-semibold">{formatCurrency(r.monto)}</td>
+                              <td className="px-3 py-2 text-right font-semibold">{formatMonto(r.monto)}</td>
                               <td className="px-3 py-2 text-right text-amber-700">{r.pct.toFixed(1)}%</td>
                               <td className="px-3 py-2 text-right text-gray-600">{Math.min(acc, 100).toFixed(1)}%</td>
                             </tr>
@@ -163,7 +163,7 @@ export default function NcTab({
                           <tr className="bg-gray-50 border-t border-gray-200 font-bold">
                             <td className="px-3 py-2" colSpan={2}>Total</td>
                             <td className="px-3 py-2 text-right">{totalCount}</td>
-                            <td className="px-3 py-2 text-right">{formatCurrency(totalMonto)}</td>
+                            <td className="px-3 py-2 text-right">{formatMonto(totalMonto)}</td>
                             <td className="px-3 py-2 text-right">100%</td>
                             <td className="px-3 py-2"></td>
                           </tr>
@@ -183,10 +183,10 @@ export default function NcTab({
                           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
                           <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                           <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={160} />
-                          <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                          <Tooltip formatter={(v: number) => formatMonto(v)} />
                           <Bar dataKey="monto" name="NC" fill="#d97706" radius={[0, 4, 4, 0]}>
                             <LabelList dataKey="monto" position="right" style={{ fontSize: 11, fill: '#92400e' }}
-                              formatter={(v: any) => formatCurrency(Number(v))} />
+                              formatter={(v: any) => formatMonto(Number(v))} />
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>

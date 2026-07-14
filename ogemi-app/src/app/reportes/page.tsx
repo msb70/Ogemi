@@ -402,9 +402,18 @@ function ReportesPage() {
 
       <style>{`
         @media print {
-          body * { visibility: hidden !important; }
-          #reporte-print, #reporte-print * { visibility: visible !important; }
-          #reporte-print { position: absolute; left: 0; top: 0; width: 100%; overflow: visible !important; }
+          /* Ocultar todo lo que no es el área del reporte ni un ancestro de ella.
+             display:none colapsa el layout (visibility dejaba páginas en blanco). */
+          body *:not(#reporte-print):not(#reporte-print *):not(:has(#reporte-print)) { display: none !important; }
+          /* Los ancestros del área pierden flex/altura/scroll para no generar espacio extra */
+          body :has(#reporte-print) {
+            display: block !important;
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+          }
+          html, body { height: auto !important; overflow: visible !important; }
+          #reporte-print { width: 100%; height: auto !important; overflow: visible !important; }
           /* Ocultar controles y gráficas en el PDF (solo KPIs y listados) */
           #reporte-print input,
           #reporte-print select,

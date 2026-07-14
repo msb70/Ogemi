@@ -1,16 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatMonto, formatDate } from '@/lib/utils'
 import { Download } from 'lucide-react'
 import { isNC, exportXLSX, buildKpiSheet } from '../reportes.utils'
 import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
 
 type LibroSubTab = 'venta' | 'compra'
-
-/** Formato numérico sin símbolo de moneda (el libro de venta no debe mostrar USD) */
-const fmtMonto = (n: number) =>
-  new Intl.NumberFormat('es-PA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 
 /** Las NC restan: devuelve el valor con signo negativo si el documento es NC */
 const conSigno = (esNC: boolean, v: number | null | undefined) =>
@@ -95,7 +91,7 @@ export default function LibrosTab({
             ].map(s => (
               <div key={s.label} className="card p-3">
                 <p className="text-xs text-gray-500">{s.label}</p>
-                <p className={`text-lg font-bold ${s.color}`}>{fmtMonto(s.val as number)}</p>
+                <p className={`text-lg font-bold ${s.color}`}>{formatMonto(s.val as number)}</p>
               </div>
             ))}
           </div>
@@ -142,11 +138,11 @@ export default function LibrosTab({
                         {f.documento_afectado ? `#${f.documento_afectado}` : '—'}
                       </td>
                       <td className="table-cell text-right">
-                        <span className={esNC ? 'text-amber-600' : ''}>{fmtMonto(conSigno(esNC, f.monto))}</span>
+                        <span className={esNC ? 'text-amber-600' : ''}>{formatMonto(conSigno(esNC, f.monto))}</span>
                       </td>
-                      <td className="table-cell text-right text-gray-500">{fmtMonto(conSigno(esNC, f.itbms))}</td>
+                      <td className="table-cell text-right text-gray-500">{formatMonto(conSigno(esNC, f.itbms))}</td>
                       <td className="table-cell text-right font-semibold">
-                        <span className={esNC ? 'text-amber-700' : 'text-brand-700'}>{fmtMonto(conSigno(esNC, f.total))}</span>
+                        <span className={esNC ? 'text-amber-700' : 'text-brand-700'}>{formatMonto(conSigno(esNC, f.total))}</span>
                       </td>
                     </tr>
                   )
@@ -156,13 +152,13 @@ export default function LibrosTab({
                 <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
                   <td colSpan={6} className="table-cell text-right text-sm text-gray-600">TOTALES</td>
                   <td className="table-cell text-right text-brand-700">
-                    {fmtMonto(libroVentaFiltrado.reduce((s, f) => s + conSigno(isNC(f.tipo_documento), f.monto), 0))}
+                    {formatMonto(libroVentaFiltrado.reduce((s, f) => s + conSigno(isNC(f.tipo_documento), f.monto), 0))}
                   </td>
                   <td className="table-cell text-right text-gray-600">
-                    {fmtMonto(libroVentaFiltrado.reduce((s, f) => s + conSigno(isNC(f.tipo_documento), f.itbms), 0))}
+                    {formatMonto(libroVentaFiltrado.reduce((s, f) => s + conSigno(isNC(f.tipo_documento), f.itbms), 0))}
                   </td>
                   <td className="table-cell text-right text-brand-800">
-                    {fmtMonto(libroVentaFiltrado.reduce((s, f) => s + conSigno(isNC(f.tipo_documento), f.total), 0))}
+                    {formatMonto(libroVentaFiltrado.reduce((s, f) => s + conSigno(isNC(f.tipo_documento), f.total), 0))}
                   </td>
                 </tr>
               </tfoot>
@@ -216,7 +212,7 @@ export default function LibrosTab({
             ].map(s => (
               <div key={s.label} className="card p-3">
                 <p className="text-xs text-gray-500">{s.label}</p>
-                <p className={`text-lg font-bold ${s.color}`}>{formatCurrency(s.val as number)}</p>
+                <p className={`text-lg font-bold ${s.color}`}>{formatMonto(s.val as number)}</p>
               </div>
             ))}
           </div>
@@ -255,9 +251,9 @@ export default function LibrosTab({
                       <span className="truncate block">{c.concepto || '—'}</span>
                     </td>
                     <td className="table-cell text-sm font-mono text-gray-400">{c.referencia || '—'}</td>
-                    <td className="table-cell text-right">{formatCurrency(c.monto)}</td>
-                    <td className="table-cell text-right text-gray-500">{formatCurrency(c.itbms)}</td>
-                    <td className="table-cell text-right font-semibold text-orange-700">{formatCurrency(c.total)}</td>
+                    <td className="table-cell text-right">{formatMonto(c.monto)}</td>
+                    <td className="table-cell text-right text-gray-500">{formatMonto(c.itbms)}</td>
+                    <td className="table-cell text-right font-semibold text-orange-700">{formatMonto(c.total)}</td>
                     <td className="table-cell">
                       <span className={`badge text-xs ${c.estado === 'pagada' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
                         {c.estado === 'pagada' ? 'Pagada' : 'Pendiente'}
@@ -270,13 +266,13 @@ export default function LibrosTab({
                 <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
                   <td colSpan={5} className="table-cell text-right text-sm text-gray-600">TOTALES</td>
                   <td className="table-cell text-right text-orange-700">
-                    {formatCurrency(libroCompraFiltrado.reduce((s, c) => s + (c.monto || 0), 0))}
+                    {formatMonto(libroCompraFiltrado.reduce((s, c) => s + (c.monto || 0), 0))}
                   </td>
                   <td className="table-cell text-right text-gray-600">
-                    {formatCurrency(libroCompraFiltrado.reduce((s, c) => s + (c.itbms || 0), 0))}
+                    {formatMonto(libroCompraFiltrado.reduce((s, c) => s + (c.itbms || 0), 0))}
                   </td>
                   <td className="table-cell text-right text-orange-800">
-                    {formatCurrency(libroCompraFiltrado.reduce((s, c) => s + (c.total || 0), 0))}
+                    {formatMonto(libroCompraFiltrado.reduce((s, c) => s + (c.total || 0), 0))}
                   </td>
                   <td className="table-cell" />
                 </tr>

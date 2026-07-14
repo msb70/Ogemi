@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { formatCurrency, formatDate, formatDateObj, tramoColor } from '@/lib/utils'
+import { formatMonto, formatDate, formatDateObj, tramoColor } from '@/lib/utils'
 import { Download, Search } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -122,7 +122,7 @@ export default function PresupuestosTab({
             ].map(s => (
               <div key={s.label} className="card p-3">
                 <p className="text-xs text-gray-500">{s.label}</p>
-                <p className={`text-lg font-bold ${s.color}`}>{(s as any).isCnt ? s.val : formatCurrency(s.val as number)}</p>
+                <p className={`text-lg font-bold ${s.color}`}>{(s as any).isCnt ? s.val : formatMonto(s.val as number)}</p>
               </div>
             ))}
           </div>
@@ -148,7 +148,7 @@ export default function PresupuestosTab({
                     <td className="table-cell text-sm">{formatDate(p.fecha)}</td>
                     <td className="table-cell max-w-[200px]"><span className="truncate block">{p.clientes?.nombre}</span></td>
                     <td className="table-cell text-xs text-gray-400">{p.tipo_documento}</td>
-                    <td className="table-cell text-right font-semibold">{formatCurrency(p.total)}</td>
+                    <td className="table-cell text-right font-semibold">{formatMonto(p.total)}</td>
                     <td className="table-cell">
                       <span className={`badge ${p.estado === 'pagada' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
                         {p.estado === 'pagada' ? 'Cobrado' : 'Pendiente'}
@@ -174,7 +174,7 @@ export default function PresupuestosTab({
                     <div className="w-3 h-3 rounded-full" style={{ background: TRAMO_COLORS_HEX[tramo] }} />
                     <span className="text-xs font-medium text-gray-600">{TRAMO_LABELS[tramo]}</span>
                   </div>
-                  <p className="text-lg font-bold">{formatCurrency(items.reduce((s: number, c: any) => s + (c.saldo_pendiente ?? c.total), 0))}</p>
+                  <p className="text-lg font-bold">{formatMonto(items.reduce((s: number, c: any) => s + (c.saldo_pendiente ?? c.total), 0))}</p>
                   <p className="text-xs text-gray-400">{items.length} presupuestos</p>
                 </div>
               )
@@ -183,7 +183,7 @@ export default function PresupuestosTab({
           <div className="card p-4 bg-brand-50 border-brand-200">
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-brand-700">Total cartera pendiente</span>
-              <span className="text-2xl font-bold text-brand-800">{formatCurrency(carteraPresupuestos.reduce((s: number, c: any) => s + (c.saldo_pendiente ?? c.total), 0))}</span>
+              <span className="text-2xl font-bold text-brand-800">{formatMonto(carteraPresupuestos.reduce((s: number, c: any) => s + (c.saldo_pendiente ?? c.total), 0))}</span>
             </div>
           </div>
           <div className="card overflow-hidden">
@@ -207,8 +207,8 @@ export default function PresupuestosTab({
                     <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha)}</td>
                     <td className="table-cell max-w-[200px]"><span className="truncate block">{c.cliente}</span></td>
                     <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha_pago)}</td>
-                    <td className="table-cell text-right">{formatCurrency(c.total)}</td>
-                    <td className="table-cell text-right font-semibold text-orange-600">{formatCurrency(c.saldo_pendiente ?? c.total)}</td>
+                    <td className="table-cell text-right">{formatMonto(c.total)}</td>
+                    <td className="table-cell text-right font-semibold text-orange-600">{formatMonto(c.saldo_pendiente ?? c.total)}</td>
                     <td className="table-cell text-right">
                       <span className={c.dias_vencida > 0 ? 'text-red-600 font-medium' : 'text-green-600'}>
                         {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
@@ -249,7 +249,7 @@ export default function PresupuestosTab({
                   </div>
                   <div className="card p-4">
                     <p className="text-xs font-semibold uppercase text-gray-500">Monto total</p>
-                    <p className="text-2xl font-bold" style={{ color: '#7c3aed' }}>{formatCurrency(totalMonto)}</p>
+                    <p className="text-2xl font-bold" style={{ color: '#7c3aed' }}>{formatMonto(totalMonto)}</p>
                   </div>
                 </div>
                 <div className="card overflow-hidden">
@@ -275,7 +275,7 @@ export default function PresupuestosTab({
                               <td className="px-3 py-2 text-gray-400">{i + 1}</td>
                               <td className="px-3 py-2 font-medium">{r.nombre}</td>
                               <td className="px-3 py-2 text-right text-gray-500">{r.count}</td>
-                              <td className="px-3 py-2 text-right font-semibold">{formatCurrency(r.monto)}</td>
+                              <td className="px-3 py-2 text-right font-semibold">{formatMonto(r.monto)}</td>
                               <td className="px-3 py-2 text-right" style={{ color: '#7c3aed' }}>{r.pct.toFixed(1)}%</td>
                               <td className="px-3 py-2 text-right text-gray-600">{Math.min(acc, 100).toFixed(1)}%</td>
                             </tr>
@@ -287,7 +287,7 @@ export default function PresupuestosTab({
                           <tr className="bg-gray-50 border-t border-gray-200 font-bold">
                             <td className="px-3 py-2" colSpan={2}>Total</td>
                             <td className="px-3 py-2 text-right">{totalCount}</td>
-                            <td className="px-3 py-2 text-right">{formatCurrency(totalMonto)}</td>
+                            <td className="px-3 py-2 text-right">{formatMonto(totalMonto)}</td>
                             <td className="px-3 py-2 text-right">100%</td>
                             <td className="px-3 py-2"></td>
                           </tr>
@@ -305,7 +305,7 @@ export default function PresupuestosTab({
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
                         <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                         <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={130} />
-                        <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                        <Tooltip formatter={(v: number) => formatMonto(v)} />
                         <Bar dataKey="monto" name="Presupuestos" fill="#7c3aed" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -318,7 +318,7 @@ export default function PresupuestosTab({
                           cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={2} dataKey="value">
                           {topClientesPresupuestos.slice(0, 8).map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                         </Pie>
-                        <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                        <Tooltip formatter={(v: number) => formatMonto(v)} />
                         <Legend wrapperStyle={{ fontSize: '11px' }} />
                       </PieChart>
                     </ResponsiveContainer>
@@ -339,7 +339,7 @@ export default function PresupuestosTab({
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                <Tooltip formatter={(v: number) => formatMonto(v)} />
                 <Bar dataKey="total" name="Presupuestos" fill="#7c3aed" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -366,7 +366,7 @@ export default function PresupuestosTab({
                         <tr key={m.mes} className="hover:bg-gray-50">
                           <td className="px-3 py-2 font-medium">{m.mes}</td>
                           <td className="px-3 py-2 text-right text-gray-500">{m.count}</td>
-                          <td className="px-3 py-2 text-right font-semibold">{formatCurrency(m.total)}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{formatMonto(m.total)}</td>
                           <td className="px-3 py-2 text-right" style={{ color: '#7c3aed' }}>
                             {totalMonto > 0 ? ((m.total / totalMonto) * 100).toFixed(1) : '0.0'}%
                           </td>
@@ -378,7 +378,7 @@ export default function PresupuestosTab({
                         <tr className="bg-gray-50 border-t border-gray-200 font-bold">
                           <td className="px-3 py-2">Total</td>
                           <td className="px-3 py-2 text-right">{totalCount}</td>
-                          <td className="px-3 py-2 text-right">{formatCurrency(totalMonto)}</td>
+                          <td className="px-3 py-2 text-right">{formatMonto(totalMonto)}</td>
                           <td className="px-3 py-2 text-right">100%</td>
                         </tr>
                       </tfoot>
@@ -426,10 +426,10 @@ export default function PresupuestosTab({
                   <input type="date" value={presWeekDates[i]}
                     onChange={e => { const nd = [...presWeekDates]; nd[i] = e.target.value; setPresWeekDates(nd) }}
                     className="text-xs text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 mt-0.5 mb-2 w-full bg-white focus:outline-none focus:border-gray-400" />
-                  <p className={`text-lg font-bold ${c.text}`}>{formatCurrency(presTotProbable[i])}</p>
+                  <p className={`text-lg font-bold ${c.text}`}>{formatMonto(presTotProbable[i])}</p>
                   {noPaga > 0 && (
                     <p className="text-[11px] text-red-500 mt-0.5">
-                      No pagará: −{formatCurrency(noPaga)} · bruto {formatCurrency(vencPresupuestos.totals[i])}
+                      No pagará: −{formatMonto(noPaga)} · bruto {formatMonto(vencPresupuestos.totals[i])}
                     </p>
                   )}
                   <p className="text-xs text-gray-400 mt-1">{cnt} {cnt === 1 ? 'presupuesto' : 'presupuestos'}</p>
@@ -441,15 +441,15 @@ export default function PresupuestosTab({
           <div className="card p-4 bg-brand-50 border border-brand-200 space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-brand-700">Total general vencido</span>
-              <span className="text-2xl font-bold text-brand-900">{formatCurrency(vencPresupuestos.grandTotal)}</span>
+              <span className="text-2xl font-bold text-brand-900">{formatMonto(vencPresupuestos.grandTotal)}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-green-600 font-medium">↳ Probable pago</span>
-              <span className="text-sm font-bold text-green-700">{formatCurrency(presGrandProbable)}</span>
+              <span className="text-sm font-bold text-green-700">{formatMonto(presGrandProbable)}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-red-500 font-medium">↳ No pagará</span>
-              <span className="text-sm font-bold text-red-600">{formatCurrency(presGrandNoPaga)}</span>
+              <span className="text-sm font-bold text-red-600">{formatMonto(presGrandNoPaga)}</span>
             </div>
           </div>
 
@@ -491,9 +491,9 @@ export default function PresupuestosTab({
                             {p.fridayIdx === i
                               ? (
                                 <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>
-                                  {formatCurrency(p.saldo ?? p.total)}
+                                  {formatMonto(p.saldo ?? p.total)}
                                   {(p.monto_pagado || 0) > 0 && (
-                                    <span className="block text-[10px] font-normal text-gray-400">abonado {formatCurrency(p.monto_pagado)}</span>
+                                    <span className="block text-[10px] font-normal text-gray-400">abonado {formatMonto(p.monto_pagado)}</span>
                                   )}
                                 </span>
                               )
@@ -513,21 +513,21 @@ export default function PresupuestosTab({
                   <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">
                     <td colSpan={5} className="table-cell text-right sticky left-0 bg-gray-100 z-10 text-sm text-gray-600">TOTAL VENCIDO</td>
                     {vencPresupuestos.totals.map((t, i) => (
-                      <td key={i} className="table-cell text-right text-brand-800">{t > 0 ? formatCurrency(t) : '—'}</td>
+                      <td key={i} className="table-cell text-right text-brand-800">{t > 0 ? formatMonto(t) : '—'}</td>
                     ))}
                     <td className="table-cell" />
                   </tr>
                   <tr className="bg-green-50 text-xs font-semibold">
                     <td colSpan={5} className="table-cell text-right sticky left-0 bg-green-50 z-10 text-green-700">↳ Probable Pago</td>
                     {presTotProbable.map((t, i) => (
-                      <td key={i} className="table-cell text-right text-green-700">{t > 0 ? formatCurrency(t) : '—'}</td>
+                      <td key={i} className="table-cell text-right text-green-700">{t > 0 ? formatMonto(t) : '—'}</td>
                     ))}
                     <td className="table-cell" />
                   </tr>
                   <tr className="bg-red-50 text-xs font-semibold">
                     <td colSpan={5} className="table-cell text-right sticky left-0 bg-red-50 z-10 text-red-600">↳ No Pagará</td>
                     {presTotNoPaga.map((t, i) => (
-                      <td key={i} className="table-cell text-right text-red-600">{t > 0 ? formatCurrency(t) : '—'}</td>
+                      <td key={i} className="table-cell text-right text-red-600">{t > 0 ? formatMonto(t) : '—'}</td>
                     ))}
                     <td className="table-cell" />
                   </tr>

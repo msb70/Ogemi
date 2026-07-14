@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
@@ -1152,11 +1153,13 @@ function ComprasPage() {
         </div>
       )}
 
-      {/* Contenedor de impresión del detalle (solo visible al imprimir) */}
-      {detalle && (
+      {/* Contenedor de impresión del detalle (portal a body para colapsar el
+          resto con display:none y evitar páginas en blanco) */}
+      {detalle && typeof document !== 'undefined' && createPortal(
         <div id="compra-print" className="hidden print:block">
           <CompraDetalle compra={detalle} pagos={detallePagos} reversados={detalleReversados} fullPage />
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Modal: Detalle de compra */}
@@ -1187,15 +1190,9 @@ function ComprasPage() {
 
       <style>{`
         @media print {
-          body * { visibility: hidden !important; }
-          #compra-print, #compra-print * { visibility: visible !important; }
-          #compra-print {
-            display: block !important;
-            position: absolute;
-            left: 0; top: 0;
-            width: 100%;
-            min-height: 100vh;
-          }
+          /* display:none colapsa el layout (visibility dejaba páginas en blanco) */
+          body > :not(#compra-print) { display: none !important; }
+          #compra-print { display: block !important; width: 100%; }
           @page { margin: 14mm; }
         }
       `}</style>

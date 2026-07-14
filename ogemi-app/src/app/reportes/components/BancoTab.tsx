@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatMonto, formatDate } from '@/lib/utils'
 import { Download, TrendingUp, TrendingDown } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -122,7 +122,7 @@ export default function BancoTab({
           <div key={c.id} className="card p-4">
             <p className="text-xs text-gray-500">{c.nombre} · {c.banco}</p>
             <p className={`text-xl font-bold mt-0.5 ${(saldos[c.id] || 0) >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-              {formatCurrency(saldos[c.id] || 0)}
+              {formatMonto(saldos[c.id] || 0)}
             </p>
           </div>
         ))}
@@ -170,8 +170,8 @@ export default function BancoTab({
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Kpi label="# Ingresos" value={movIng.length.toLocaleString('es-PA')} color="text-green-700" />
             <Kpi label="# Egresos" value={movEgr.length.toLocaleString('es-PA')} color="text-red-600" />
-            <Kpi label="Monto ingresos" value={formatCurrency(movIngMonto)} color="text-green-700" />
-            <Kpi label="Monto egresos" value={formatCurrency(movEgrMonto)} color="text-red-600" />
+            <Kpi label="Monto ingresos" value={formatMonto(movIngMonto)} color="text-green-700" />
+            <Kpi label="Monto egresos" value={formatMonto(movEgrMonto)} color="text-red-600" />
           </div>
 
           <div className="card overflow-hidden">
@@ -200,10 +200,10 @@ export default function BancoTab({
                         </span>
                       </td>
                       <td className={`table-cell text-right font-semibold ${m.tipo === 'ingreso' ? 'text-green-700' : 'text-red-600'}`}>
-                        {m.tipo === 'egreso' ? '-' : ''}{formatCurrency(m.monto)}
+                        {m.tipo === 'egreso' ? '-' : ''}{formatMonto(m.monto)}
                       </td>
                       <td className={`table-cell text-right font-semibold ${(m.saldo || 0) >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
-                        {formatCurrency(m.saldo || 0)}
+                        {formatMonto(m.saldo || 0)}
                       </td>
                     </tr>
                   ))}
@@ -253,8 +253,8 @@ export default function BancoTab({
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Kpi label="# Depósitos" value={flIngCount.toLocaleString('es-PA')} color="text-green-700" />
             <Kpi label="# Egresos" value={flEgrCount.toLocaleString('es-PA')} color="text-red-600" />
-            <Kpi label="Monto depósitos" value={formatCurrency(flIngMonto)} color="text-green-700" />
-            <Kpi label="Monto egresos" value={formatCurrency(flEgrMonto)} color="text-red-600" />
+            <Kpi label="Monto depósitos" value={formatMonto(flIngMonto)} color="text-green-700" />
+            <Kpi label="Monto egresos" value={formatMonto(flEgrMonto)} color="text-red-600" />
           </div>
 
           {/* Gráfica */}
@@ -268,7 +268,7 @@ export default function BancoTab({
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                  <Tooltip formatter={(v: number) => formatMonto(v)} />
                   <Legend wrapperStyle={{ fontSize: '12px' }} />
                   <Bar dataKey="ingresos" name="Ingresos" fill="#22c55e" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="egresos" name="Egresos" fill="#ef4444" radius={[4, 4, 0, 0]} />
@@ -305,9 +305,9 @@ export default function BancoTab({
                         <td className="px-3 py-2 text-gray-600">{cuentaById[r.cuentaId]?.nombre || '—'}</td>
                         <td className="px-3 py-2 text-right text-gray-500">{r.ingCount}</td>
                         <td className="px-3 py-2 text-right text-gray-500">{r.egrCount}</td>
-                        <td className="px-3 py-2 text-right text-green-700">{formatCurrency(r.ing)}</td>
-                        <td className="px-3 py-2 text-right text-red-600">{formatCurrency(r.egr)}</td>
-                        <td className={`px-3 py-2 text-right font-semibold ${saldo >= 0 ? 'text-gray-800' : 'text-red-600'}`}>{formatCurrency(saldo)}</td>
+                        <td className="px-3 py-2 text-right text-green-700">{formatMonto(r.ing)}</td>
+                        <td className="px-3 py-2 text-right text-red-600">{formatMonto(r.egr)}</td>
+                        <td className={`px-3 py-2 text-right font-semibold ${saldo >= 0 ? 'text-gray-800' : 'text-red-600'}`}>{formatMonto(saldo)}</td>
                       </tr>
                     )
                   })}
@@ -318,9 +318,9 @@ export default function BancoTab({
                       <td className="px-3 py-2" colSpan={3}>Total</td>
                       <td className="px-3 py-2 text-right">{flIngCount}</td>
                       <td className="px-3 py-2 text-right">{flEgrCount}</td>
-                      <td className="px-3 py-2 text-right text-green-700">{formatCurrency(flIngMonto)}</td>
-                      <td className="px-3 py-2 text-right text-red-600">{formatCurrency(flEgrMonto)}</td>
-                      <td className="px-3 py-2 text-right">{formatCurrency(flIngMonto - flEgrMonto)}</td>
+                      <td className="px-3 py-2 text-right text-green-700">{formatMonto(flIngMonto)}</td>
+                      <td className="px-3 py-2 text-right text-red-600">{formatMonto(flEgrMonto)}</td>
+                      <td className="px-3 py-2 text-right">{formatMonto(flIngMonto - flEgrMonto)}</td>
                     </tr>
                   </tfoot>
                 )}
@@ -348,10 +348,10 @@ export default function BancoTab({
                 <tr key={c.id} className="hover:bg-gray-50">
                   <td className="table-cell font-medium">{c.periodo}</td>
                   <td className="table-cell text-sm text-gray-500">{(c.banco_cuentas as any)?.nombre}</td>
-                  <td className="table-cell text-right">{formatCurrency(c.saldo_sistema)}</td>
-                  <td className="table-cell text-right">{formatCurrency(c.saldo_banco)}</td>
+                  <td className="table-cell text-right">{formatMonto(c.saldo_sistema)}</td>
+                  <td className="table-cell text-right">{formatMonto(c.saldo_banco)}</td>
                   <td className={`table-cell text-right font-semibold ${Math.abs(c.diferencia) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
-                    {c.diferencia >= 0 ? '+' : ''}{formatCurrency(c.diferencia)}
+                    {c.diferencia >= 0 ? '+' : ''}{formatMonto(c.diferencia)}
                   </td>
                   <td className="table-cell">
                     <span className={`badge ${c.cerrado ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>

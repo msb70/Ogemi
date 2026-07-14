@@ -13,6 +13,14 @@ export function formatCurrency(amount: number): string {
   }).format(amount)
 }
 
+/** Monto sin símbolo de moneda (los reportes no deben mostrar USD/US$) */
+export function formatMonto(amount: number): string {
+  return new Intl.NumberFormat('es-PA', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount)
+}
+
 /** Formatea un objeto Date a DD/MM/YYYY */
 export function formatDateObj(d: Date): string {
   const dd = String(d.getDate()).padStart(2, '0')

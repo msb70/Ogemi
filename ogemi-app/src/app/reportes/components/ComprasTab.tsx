@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, Fragment } from 'react'
-import { formatCurrency, formatDate, formatDateObj } from '@/lib/utils'
+import { formatMonto, formatDate, formatDateObj } from '@/lib/utils'
 import { Download, Search } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -138,7 +138,7 @@ export default function ComprasTab({
             ].map(s => (
               <div key={s.label} className="card p-3">
                 <p className="text-xs text-gray-500">{s.label}</p>
-                <p className={`text-lg font-bold ${s.color}`}>{(s as any).isCnt ? s.val : formatCurrency(s.val as number)}</p>
+                <p className={`text-lg font-bold ${s.color}`}>{(s as any).isCnt ? s.val : formatMonto(s.val as number)}</p>
               </div>
             ))}
           </div>
@@ -167,11 +167,11 @@ export default function ComprasTab({
                     <td className="table-cell text-sm">{formatDate(c.fecha)}</td>
                     <td className="table-cell font-medium">{c.proveedores?.nombre}</td>
                     <td className="table-cell text-sm text-gray-500 max-w-[150px]"><span className="truncate block">{c.concepto || '—'}</span></td>
-                    <td className="table-cell text-right">{formatCurrency(c.monto)}</td>
-                    <td className="table-cell text-right text-gray-400">{formatCurrency(c.itbms)}</td>
-                    <td className="table-cell text-right font-semibold">{formatCurrency(c.total)}</td>
-                    <td className={`table-cell text-right ${abonado > 0 ? 'text-green-600 font-medium' : 'text-gray-300'}`}>{abonado > 0 ? formatCurrency(abonado) : '—'}</td>
-                    <td className={`table-cell text-right font-semibold ${saldo > 0 ? 'text-orange-600' : 'text-gray-300'}`}>{saldo > 0 ? formatCurrency(saldo) : '—'}</td>
+                    <td className="table-cell text-right">{formatMonto(c.monto)}</td>
+                    <td className="table-cell text-right text-gray-400">{formatMonto(c.itbms)}</td>
+                    <td className="table-cell text-right font-semibold">{formatMonto(c.total)}</td>
+                    <td className={`table-cell text-right ${abonado > 0 ? 'text-green-600 font-medium' : 'text-gray-300'}`}>{abonado > 0 ? formatMonto(abonado) : '—'}</td>
+                    <td className={`table-cell text-right font-semibold ${saldo > 0 ? 'text-orange-600' : 'text-gray-300'}`}>{saldo > 0 ? formatMonto(saldo) : '—'}</td>
                     <td className="table-cell">
                       <span className={`badge ${c.estado === 'pagada' ? 'bg-green-100 text-green-700' : abonoParcial ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'}`}>
                         {c.estado === 'pagada' ? 'Pagada' : abonoParcial ? 'Abono parcial' : 'Pendiente'}
@@ -197,7 +197,7 @@ export default function ComprasTab({
                     <div className="w-3 h-3 rounded-full" style={{ background: TRAMO_COLORS_HEX[tramo] }} />
                     <span className="text-xs font-medium text-gray-600">{TRAMO_LABELS[tramo]}</span>
                   </div>
-                  <p className="text-lg font-bold">{formatCurrency(items.reduce((s: number, c: any) => s + (c.saldo_pendiente ?? c.total), 0))}</p>
+                  <p className="text-lg font-bold">{formatMonto(items.reduce((s: number, c: any) => s + (c.saldo_pendiente ?? c.total), 0))}</p>
                   <p className="text-xs text-gray-400">{items.length} compras</p>
                 </div>
               )
@@ -224,7 +224,7 @@ export default function ComprasTab({
                         {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
                       </span>
                     </td>
-                    <td className="table-cell text-right font-semibold">{formatCurrency(c.saldo_pendiente ?? c.total)}</td>
+                    <td className="table-cell text-right font-semibold">{formatMonto(c.saldo_pendiente ?? c.total)}</td>
                     <td className="table-cell">
                       <span className="badge text-xs" style={{ backgroundColor: TRAMO_COLORS_HEX[c.tramo] + '20', color: TRAMO_COLORS_HEX[c.tramo] }}>
                         {TRAMO_LABELS[c.tramo]}
@@ -281,7 +281,7 @@ export default function ComprasTab({
                     <div className="w-3 h-3 rounded-full" style={{ background: TRAMO_COLORS_HEX[bucket.key] }} />
                     <span className="text-xs font-medium text-gray-600">{bucket.label}</span>
                   </div>
-                  <p className="text-lg font-bold">{formatCurrency(total)}</p>
+                  <p className="text-lg font-bold">{formatMonto(total)}</p>
                 </div>
               )
             })}
@@ -290,7 +290,7 @@ export default function ComprasTab({
           <div className="card p-4 bg-brand-50 border-brand-200">
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-brand-700">Total cuentas por pagar</span>
-              <span className="text-2xl font-bold text-brand-800">{formatCurrency(totalCarteraCxp)}</span>
+              <span className="text-2xl font-bold text-brand-800">{formatMonto(totalCarteraCxp)}</span>
             </div>
           </div>
 
@@ -341,7 +341,7 @@ export default function ComprasTab({
                             <td key={b.key} className="table-cell text-right font-semibold">
                               {(pivotAntData[prov]?.[b.key] || 0) > 0 ? (
                                 <span style={{ color: TRAMO_COLORS_HEX[b.key] }}>
-                                  {formatCurrency(pivotAntData[prov][b.key])}
+                                  {formatMonto(pivotAntData[prov][b.key])}
                                 </span>
                               ) : (
                                 <span className="text-gray-300">—</span>
@@ -349,7 +349,7 @@ export default function ComprasTab({
                             </td>
                           ))}
                           <td className="table-cell text-right font-bold text-brand-900 bg-brand-50">
-                            {formatCurrency(provTotal)}
+                            {formatMonto(provTotal)}
                           </td>
                         </tr>
 
@@ -359,14 +359,14 @@ export default function ComprasTab({
                               <span className="text-gray-500 mr-2">{c.concepto || 'Sin concepto'}</span>
                               <span className="text-gray-400">Vence: {formatDate(c.vencimiento)}</span>
                               {(c.monto_pagado || 0) > 0 && (
-                                <span className="text-green-600 ml-2 text-xs">abonado {formatCurrency(c.monto_pagado)}</span>
+                                <span className="text-green-600 ml-2 text-xs">abonado {formatMonto(c.monto_pagado)}</span>
                               )}
                             </td>
                             {BUCKETS.map(b => (
                               <td key={b.key} className="table-cell text-right text-sm">
                                 {c.tramo === b.key ? (
                                   <span style={{ color: TRAMO_COLORS_HEX[b.key] }}>
-                                    {formatCurrency(c.saldo_pendiente ?? c.total)}
+                                    {formatMonto(c.saldo_pendiente ?? c.total)}
                                   </span>
                                 ) : (
                                   <span className="text-gray-200">—</span>
@@ -374,7 +374,7 @@ export default function ComprasTab({
                               </td>
                             ))}
                             <td className="table-cell text-right text-sm font-medium bg-brand-50/30">
-                              {formatCurrency(c.saldo_pendiente ?? c.total)}
+                              {formatMonto(c.saldo_pendiente ?? c.total)}
                             </td>
                           </tr>
                         ))}
@@ -389,12 +389,12 @@ export default function ComprasTab({
                       const total = proveedoresAnt.reduce((s, p) => s + (pivotAntData[p]?.[b.key] || 0), 0)
                       return (
                         <td key={b.key} className="table-cell text-right" style={{ color: total > 0 ? TRAMO_COLORS_HEX[b.key] : '#d1d5db' }}>
-                          {total > 0 ? formatCurrency(total) : '—'}
+                          {total > 0 ? formatMonto(total) : '—'}
                         </td>
                       )
                     })}
                     <td className="table-cell text-right text-brand-900 bg-gray-200">
-                      {formatCurrency(totalCarteraCxp)}
+                      {formatMonto(totalCarteraCxp)}
                     </td>
                   </tr>
                 </tfoot>
@@ -430,7 +430,7 @@ export default function ComprasTab({
                   </div>
                   <div className="card p-4">
                     <p className="text-xs font-semibold uppercase text-gray-500">Monto total</p>
-                    <p className="text-2xl font-bold text-orange-700">{formatCurrency(totalMonto)}</p>
+                    <p className="text-2xl font-bold text-orange-700">{formatMonto(totalMonto)}</p>
                   </div>
                 </div>
                 <div className="card overflow-hidden">
@@ -456,7 +456,7 @@ export default function ComprasTab({
                               <td className="px-3 py-2 text-gray-400">{i + 1}</td>
                               <td className="px-3 py-2 font-medium">{r.nombre}</td>
                               <td className="px-3 py-2 text-right text-gray-500">{r.count}</td>
-                              <td className="px-3 py-2 text-right font-semibold">{formatCurrency(r.monto)}</td>
+                              <td className="px-3 py-2 text-right font-semibold">{formatMonto(r.monto)}</td>
                               <td className="px-3 py-2 text-right text-orange-700">{r.pct.toFixed(1)}%</td>
                               <td className="px-3 py-2 text-right text-gray-600">{Math.min(acc, 100).toFixed(1)}%</td>
                             </tr>
@@ -468,7 +468,7 @@ export default function ComprasTab({
                           <tr className="bg-gray-50 border-t border-gray-200 font-bold">
                             <td className="px-3 py-2" colSpan={2}>Total</td>
                             <td className="px-3 py-2 text-right">{totalCount}</td>
-                            <td className="px-3 py-2 text-right">{formatCurrency(totalMonto)}</td>
+                            <td className="px-3 py-2 text-right">{formatMonto(totalMonto)}</td>
                             <td className="px-3 py-2 text-right">100%</td>
                             <td className="px-3 py-2"></td>
                           </tr>
@@ -485,7 +485,7 @@ export default function ComprasTab({
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
                       <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                       <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={130} />
-                      <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                      <Tooltip formatter={(v: number) => formatMonto(v)} />
                       <Bar dataKey="monto" name="Compras" fill="#f97316" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -505,7 +505,7 @@ export default function ComprasTab({
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                <Tooltip formatter={(v: number) => formatMonto(v)} />
                 <Bar dataKey="total" name="Compras" fill="#f97316" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -532,7 +532,7 @@ export default function ComprasTab({
                         <tr key={m.mes} className="hover:bg-gray-50">
                           <td className="px-3 py-2 font-medium">{m.mes}</td>
                           <td className="px-3 py-2 text-right text-gray-500">{m.count}</td>
-                          <td className="px-3 py-2 text-right font-semibold">{formatCurrency(m.total)}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{formatMonto(m.total)}</td>
                           <td className="px-3 py-2 text-right text-orange-700">
                             {totalMonto > 0 ? ((m.total / totalMonto) * 100).toFixed(1) : '0.0'}%
                           </td>
@@ -544,7 +544,7 @@ export default function ComprasTab({
                         <tr className="bg-gray-50 border-t border-gray-200 font-bold">
                           <td className="px-3 py-2">Total</td>
                           <td className="px-3 py-2 text-right">{totalCount}</td>
-                          <td className="px-3 py-2 text-right">{formatCurrency(totalMonto)}</td>
+                          <td className="px-3 py-2 text-right">{formatMonto(totalMonto)}</td>
                           <td className="px-3 py-2 text-right">100%</td>
                         </tr>
                       </tfoot>
@@ -592,10 +592,10 @@ export default function ComprasTab({
                   <input type="date" value={compWeekDates[i]}
                     onChange={e => { const nd = [...compWeekDates]; nd[i] = e.target.value; setCompWeekDates(nd) }}
                     className="text-xs text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 mt-0.5 mb-2 w-full bg-white focus:outline-none focus:border-gray-400" />
-                  <p className={`text-lg font-bold ${c.text}`}>{formatCurrency(compTotProbable[i])}</p>
+                  <p className={`text-lg font-bold ${c.text}`}>{formatMonto(compTotProbable[i])}</p>
                   {noPaga > 0 && (
                     <p className="text-[11px] text-red-500 mt-0.5">
-                      No pagará: −{formatCurrency(noPaga)} · bruto {formatCurrency(vencCompras.totals[i])}
+                      No pagará: −{formatMonto(noPaga)} · bruto {formatMonto(vencCompras.totals[i])}
                     </p>
                   )}
                   <p className="text-xs text-gray-400 mt-1">{cnt} {cnt === 1 ? 'compra' : 'compras'}</p>
@@ -607,15 +607,15 @@ export default function ComprasTab({
           <div className="card p-4 bg-brand-50 border border-brand-200 space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-brand-700">Total general vencido</span>
-              <span className="text-2xl font-bold text-brand-900">{formatCurrency(vencCompras.grandTotal)}</span>
+              <span className="text-2xl font-bold text-brand-900">{formatMonto(vencCompras.grandTotal)}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-green-600 font-medium">↳ Probable pago</span>
-              <span className="text-sm font-bold text-green-700">{formatCurrency(compGrandProbable)}</span>
+              <span className="text-sm font-bold text-green-700">{formatMonto(compGrandProbable)}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-red-500 font-medium">↳ No pagará</span>
-              <span className="text-sm font-bold text-red-600">{formatCurrency(compGrandNoPaga)}</span>
+              <span className="text-sm font-bold text-red-600">{formatMonto(compGrandNoPaga)}</span>
             </div>
           </div>
 
@@ -657,9 +657,9 @@ export default function ComprasTab({
                             {c.fridayIdx === i
                               ? (
                                 <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>
-                                  {formatCurrency(c.saldo ?? c.total)}
+                                  {formatMonto(c.saldo ?? c.total)}
                                   {(c.monto_pagado || 0) > 0 && (
-                                    <span className="block text-[10px] font-normal text-gray-400">abonado {formatCurrency(c.monto_pagado)}</span>
+                                    <span className="block text-[10px] font-normal text-gray-400">abonado {formatMonto(c.monto_pagado)}</span>
                                   )}
                                 </span>
                               )
@@ -679,21 +679,21 @@ export default function ComprasTab({
                   <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">
                     <td colSpan={4} className="table-cell text-right sticky left-0 bg-gray-100 z-10 text-sm text-gray-600">TOTAL VENCIDO</td>
                     {vencCompras.totals.map((t, i) => (
-                      <td key={i} className="table-cell text-right text-brand-800">{t > 0 ? formatCurrency(t) : '—'}</td>
+                      <td key={i} className="table-cell text-right text-brand-800">{t > 0 ? formatMonto(t) : '—'}</td>
                     ))}
                     <td className="table-cell" />
                   </tr>
                   <tr className="bg-green-50 text-xs font-semibold">
                     <td colSpan={4} className="table-cell text-right sticky left-0 bg-green-50 z-10 text-green-700">↳ Probable Pago</td>
                     {compTotProbable.map((t, i) => (
-                      <td key={i} className="table-cell text-right text-green-700">{t > 0 ? formatCurrency(t) : '—'}</td>
+                      <td key={i} className="table-cell text-right text-green-700">{t > 0 ? formatMonto(t) : '—'}</td>
                     ))}
                     <td className="table-cell" />
                   </tr>
                   <tr className="bg-red-50 text-xs font-semibold">
                     <td colSpan={4} className="table-cell text-right sticky left-0 bg-red-50 z-10 text-red-600">↳ No Pagará</td>
                     {compTotNoPaga.map((t, i) => (
-                      <td key={i} className="table-cell text-right text-red-600">{t > 0 ? formatCurrency(t) : '—'}</td>
+                      <td key={i} className="table-cell text-right text-red-600">{t > 0 ? formatMonto(t) : '—'}</td>
                     ))}
                     <td className="table-cell" />
                   </tr>
