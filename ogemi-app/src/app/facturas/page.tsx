@@ -341,7 +341,7 @@ function FacturasPage() {
     const [{ data: pagosData }, { data: reversos }] = await Promise.all([
       supabase
         .from('pagos')
-        .select('id, fecha, monto, referencia, anticipo_id, nota_credito_id, credito_factura_id, banco_cuentas(nombre, banco, numero_cuenta), anticipos(numero_deposito)')
+        .select('id, fecha, monto, referencia, numero_recibo, anticipo_id, nota_credito_id, credito_factura_id, banco_cuentas(nombre, banco, numero_cuenta), anticipos(numero_deposito)')
         .eq('factura_id', f.id)
         .order('fecha', { ascending: true }),
       supabase.from('pago_reversos').select('pago_id').eq('factura_id', f.id),
@@ -866,6 +866,7 @@ function FacturasPage() {
                         }`}
                       >
                         <span className={reversado ? 'text-gray-400 line-through' : 'text-gray-600'}>
+                          {p.numero_recibo ? <span className="font-mono text-xs mr-1">REC-{String(p.numero_recibo).padStart(5, '0')}</span> : null}
                           {formatDate(p.fecha)} · {(p.nota_credito_id || p.credito_factura_id) ? 'Nota de crédito' : p.anticipo_id ? 'Anticipo' : p.banco_cuentas?.nombre}
                         </span>
                         <div className="flex items-center gap-2">
@@ -1367,6 +1368,7 @@ function FacturaDetalle({
             <table className="w-full text-sm border border-gray-100 rounded-xl overflow-hidden" style={exact}>
               <thead>
                 <tr className="bg-gray-50 text-left text-xs text-gray-500 uppercase">
+                  <th className="px-3 py-2">Recibo</th>
                   <th className="px-3 py-2">Fecha</th>
                   <th className="px-3 py-2">Origen</th>
                   <th className="px-3 py-2">Banco / Cuenta</th>
@@ -1379,6 +1381,7 @@ function FacturaDetalle({
                   const rev = reversados.has(p.id)
                   return (
                     <tr key={p.id} className={rev ? 'text-gray-400 line-through' : ''}>
+                      <td className="px-3 py-2 font-mono text-xs">{p.numero_recibo ? `REC-${String(p.numero_recibo).padStart(5, '0')}` : '—'}</td>
                       <td className="px-3 py-2">{formatDate(p.fecha)}</td>
                       <td className="px-3 py-2">{(p.nota_credito_id || p.credito_factura_id) ? 'Nota de crédito' : p.anticipo_id ? 'Anticipo' : 'Cobro'}{rev ? ' (reversado)' : ''}</td>
                       <td className="px-3 py-2">

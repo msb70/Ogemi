@@ -426,7 +426,22 @@ function ReportesPage() {
           #reporte-print [class*="btn-"],
           #reporte-print .recharts-responsive-container,
           #reporte-print .recharts-wrapper { display: none !important; }
-          @page { margin: 12mm; }
+          /* ── Modo compacto: menos interlineado y totales reducidos ── */
+          #reporte-print { font-size: 10px !important; }
+          #reporte-print .p-6 { padding: 6px 8px !important; }
+          #reporte-print [class*="space-y"] > * + * { margin-top: 4px !important; }
+          #reporte-print .gap-3, #reporte-print .gap-4 { gap: 4px !important; }
+          #reporte-print .card { box-shadow: none !important; border-radius: 4px !important; }
+          #reporte-print .card.p-3, #reporte-print .card.p-4, #reporte-print .card.p-5 { padding: 4px 8px !important; }
+          #reporte-print .text-lg, #reporte-print .text-xl, #reporte-print .text-2xl,
+          #reporte-print .text-3xl { font-size: 12px !important; line-height: 1.2 !important; }
+          #reporte-print table th, #reporte-print table td {
+            padding: 2px 6px !important;
+            font-size: 9.5px !important;
+            line-height: 1.25 !important;
+          }
+          #reporte-print .badge { padding: 0 4px !important; font-size: 8.5px !important; }
+          @page { margin: 10mm; }
         }
       `}</style>
     </AppLayout>

@@ -68,17 +68,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        setLoading(true)
-        await loadProfile()
-        setLoading(false)
-      } else {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Al volver a la pestaña, Supabase refresca la sesión y emite
+      // TOKEN_REFRESHED / SIGNED_IN. NO se debe poner loading=true aquí:
+      // withPagePermission desmontaría la página activa y se perdería su
+      // estado local (tab de reporte seleccionado, filtros, etc.).
+      if (!session?.user) {
         setUser(null)
         setProfile(null)
         setPermisos({})
         setLoading(false)
+        return
       }
+      // El refresh de token no cambia usuario ni permisos: no recargar nada.
+      if (event === 'TOKEN_REFRESHED') return
+      // Refrescar perfil en segundo plano, sin desmontar la UI.
+      loadProfile().finally(() => setLoading(false))
     })
 
     return () => subscription.unsubscribe()

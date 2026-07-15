@@ -67,7 +67,7 @@ function BancoPage() {
     if (!cuentaSelected) return
     const { data } = await supabase
       .from('banco_movimientos')
-      .select('*, facturas(numero_factura, clientes(nombre))')
+      .select('*, facturas(numero_factura, clientes(nombre)), compras(proveedores(nombre))')
       .eq('cuenta_id', cuentaSelected)
       .order('fecha', { ascending: false })
       .order('created_at', { ascending: false })
@@ -261,7 +261,12 @@ function BancoPage() {
                   ) : movimientos.map((m, i) => (
                     <tr key={m.id} className="hover:bg-gray-50">
                       <td className="table-cell text-gray-500">{formatDate(m.fecha)}</td>
-                      <td className="table-cell">{m.concepto}</td>
+                      <td className="table-cell">
+                        {m.concepto}
+                        {(m as any).compras?.proveedores?.nombre && !(m.concepto || '').includes((m as any).compras.proveedores.nombre) && (
+                          <span className="block text-xs text-gray-400">Proveedor: {(m as any).compras.proveedores.nombre}</span>
+                        )}
+                      </td>
                       <td className="table-cell text-gray-400 text-xs">{m.referencia || '—'}</td>
                       <td className="table-cell">
                         <span className={`badge flex items-center gap-1 w-fit ${m.tipo === 'ingreso' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>

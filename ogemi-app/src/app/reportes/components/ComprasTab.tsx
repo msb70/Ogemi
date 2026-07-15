@@ -34,6 +34,11 @@ export default function ComprasTab({
   search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta,
 }: ComprasTabProps) {
   const [comprasTab, setComprasTab] = useState<ComprasSubTab>('listado')
+
+  // Listado ordenado por fecha de la factura descendente
+  const comprasOrdenadas = [...comprasFiltradas].sort((a: any, b: any) =>
+    a.fecha === b.fecha ? 0 : (a.fecha < b.fecha ? 1 : -1)
+  )
   const [compWeekDates, setCompWeekDates] = useState<string[]>(() =>
     getNextFridays(4).map(d => d.toISOString().split('T')[0])
   )
@@ -156,9 +161,9 @@ export default function ComprasTab({
                 <th className="table-header">Estado</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-100">
-                {comprasFiltradas.length === 0 ? (
+                {comprasOrdenadas.length === 0 ? (
                   <tr><td colSpan={9} className="text-center py-8 text-gray-400">Sin resultados</td></tr>
-                ) : comprasFiltradas.map((c: any) => {
+                ) : comprasOrdenadas.map((c: any) => {
                   const abonado = c.monto_pagado || 0
                   const saldo = c.estado === 'pagada' ? 0 : (c.total || 0) - abonado
                   const abonoParcial = c.estado === 'pendiente' && abonado > 0

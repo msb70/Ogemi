@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { formatMonto, formatDate, tramoColor } from '@/lib/utils'
+import { Fragment, useState } from 'react'
+import { formatMonto, formatDate } from '@/lib/utils'
 import { Download } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -9,10 +9,20 @@ import {
 } from 'recharts'
 import { CarteraVencida } from '@/types'
 import {
-  TRAMOS, TRAMO_LABELS, TRAMO_COLORS_HEX, PIE_COLORS, exportXLSX, buildKpiSheet,
+  PIE_COLORS, exportXLSX, buildKpiSheet,
 } from '../reportes.utils'
 import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
 import PivotTab from './PivotTab'
+
+// Tramos de cartera SIN columna de 120 días: 91–120 y +120 se consolidan en +90
+const TRAMOS_90 = ['corriente', '1-30', '31-60', '61-90', '+90'] as const
+const TRAMO90_LABELS: Record<string, string> = {
+  corriente: 'Al día', '1-30': '1–30 días', '31-60': '31–60 días', '61-90': '61–90 días', '+90': '+90 días',
+}
+const TRAMO90_COLORS: Record<string, string> = {
+  corriente: '#22c55e', '1-30': '#facc15', '31-60': '#fb923c', '61-90': '#f87171', '+90': '#b91c1c',
+}
+const normTramo = (t: string) => (t === '91-120' || t === '+120') ? '+90' : t
 
 type VentasSubTab =
   | 'listado'
@@ -35,6 +45,29 @@ export default function VentasTab({
   search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta,
 }: VentasTabProps) {
   const [ventasTab, setVentasTab] = useState<VentasSubTab>('listado')
+  const [agruparCliente, setAgruparCliente] = useState(false)
+  const [carteraAgrupar, setCarteraAgrupar] = useState<'cliente' | 'tramo'>('cliente')
+
+  // Listado ordenado por número de factura descendente
+  const ventasOrdenadas = [...ventasFiltradas].sort(
+    (a, b) => (Number(b.numero_factura) || 0) - (Number(a.numero_factura) || 0)
+  )
+
+  const filaVenta = (f: any) => (
+    <tr key={f.id} className="hover:bg-gray-50">
+      <td className="table-cell font-mono text-sm text-gray-500">#{f.numero_factura}</td>
+      <td className="table-cell text-sm">{formatDate(f.fecha)}</td>
+      <td className="table-cell max-w-[200px]"><span className="truncate block">{f.clientes?.nombre}</span></td>
+      <td className="table-cell text-xs text-gray-400">{f.tipo_documento}</td>
+      <td className="table-cell text-right font-semibold">{formatMonto(f.total)}</td>
+      <td className="table-cell">
+        <span className={`badge ${f.estado === 'pagada' ? 'bg-green-100 text-green-700' : f.estado === 'falta_retencion' ? 'bg-amber-100 text-amber-700' : 'bg-orange-100 text-orange-700'}`}>
+          {f.estado === 'pagada' ? 'Cobrada' : f.estado === 'falta_retencion' ? 'Falta retención' : 'Pendiente'}
+        </span>
+      </td>
+      <td className="table-cell text-sm text-gray-400">{formatDate(f.fecha_pago)}</td>
+    </tr>
+  )
 
   return (
     <div className="p-6 space-y-4">
@@ -60,6 +93,11 @@ export default function VentasTab({
         <div className="space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <FiltrosBar {...{ search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }} />
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+              <input type="checkbox" className="w-4 h-4 accent-brand-600 cursor-pointer"
+                checked={agruparCliente} onChange={e => setAgruparCliente(e.target.checked)} />
+              Agrupar por cliente
+            </label>
             <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() => {
               const total = ventasFiltradas.reduce((s, f) => s + (f.total || 0), 0)
               // Cobrado incluye abonos parciales; Pendiente = saldo cobrable (total − retención − abonos)
@@ -113,41 +151,75 @@ export default function VentasTab({
                 <th className="table-header">Vencimiento</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-100">
-                {ventasFiltradas.length === 0 ? (
+                {ventasOrdenadas.length === 0 ? (
                   <tr><td colSpan={7} className="text-center py-8 text-gray-400">Sin resultados</td></tr>
-                ) : ventasFiltradas.map((f: any) => (
-                  <tr key={f.id} className="hover:bg-gray-50">
-                    <td className="table-cell font-mono text-sm text-gray-500">#{f.numero_factura}</td>
-                    <td className="table-cell text-sm">{formatDate(f.fecha)}</td>
-                    <td className="table-cell max-w-[200px]"><span className="truncate block">{f.clientes?.nombre}</span></td>
-                    <td className="table-cell text-xs text-gray-400">{f.tipo_documento}</td>
-                    <td className="table-cell text-right font-semibold">{formatMonto(f.total)}</td>
-                    <td className="table-cell">
-                      <span className={`badge ${f.estado === 'pagada' ? 'bg-green-100 text-green-700' : f.estado === 'falta_retencion' ? 'bg-amber-100 text-amber-700' : 'bg-orange-100 text-orange-700'}`}>
-                        {f.estado === 'pagada' ? 'Cobrada' : f.estado === 'falta_retencion' ? 'Falta retención' : 'Pendiente'}
-                      </span>
-                    </td>
-                    <td className="table-cell text-sm text-gray-400">{formatDate(f.fecha_pago)}</td>
-                  </tr>
-                ))}
+                ) : agruparCliente ? (
+                  Object.entries(
+                    ventasOrdenadas.reduce((acc: Record<string, any[]>, f: any) => {
+                      const k = f.clientes?.nombre || 'Sin nombre'
+                      ;(acc[k] = acc[k] || []).push(f)
+                      return acc
+                    }, {})
+                  )
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .map(([nombre, fs]) => (
+                      <Fragment key={nombre}>
+                        <tr className="bg-brand-50/40 border-t border-gray-200">
+                          <td colSpan={4} className="table-cell font-semibold text-brand-800">
+                            {nombre} <span className="text-xs text-gray-400 font-normal">({fs.length} factura{fs.length === 1 ? '' : 's'})</span>
+                          </td>
+                          <td className="table-cell text-right font-bold text-brand-800">
+                            {formatMonto(fs.reduce((s, f) => s + (f.total || 0), 0))}
+                          </td>
+                          <td colSpan={2} />
+                        </tr>
+                        {fs.map(filaVenta)}
+                      </Fragment>
+                    ))
+                ) : ventasOrdenadas.map(filaVenta)}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {ventasTab === 'cartera' && (
+      {ventasTab === 'cartera' && (() => {
+        const carteraNorm = cartera.map((c: any) => ({ ...c, tramo90: normTramo(c.tramo) }))
+        const saldoDe = (c: any) => c.saldo_pendiente ?? c.total
+        const totalCartera = carteraNorm.reduce((s: number, c: any) => s + saldoDe(c), 0)
+
+        // Grupos: por cliente (orden alfabético) o por antigüedad (30/60/90)
+        const grupos: [string, any[]][] = carteraAgrupar === 'cliente'
+          ? Object.entries(
+              carteraNorm.reduce((acc: Record<string, any[]>, c: any) => {
+                const k = c.cliente || 'Sin nombre'
+                ;(acc[k] = acc[k] || []).push(c)
+                return acc
+              }, {})
+            )
+              .sort((a, b) => a[0].localeCompare(b[0]))
+              .map(([k, items]) => [k, items.sort((a: any, b: any) => b.dias_vencida - a.dias_vencida)] as [string, any[]])
+          : TRAMOS_90
+              .map(t => [
+                TRAMO90_LABELS[t],
+                carteraNorm
+                  .filter((c: any) => c.tramo90 === t)
+                  .sort((a: any, b: any) => (a.cliente || '').localeCompare(b.cliente || '') || b.dias_vencida - a.dias_vencida),
+              ] as [string, any[]])
+              .filter(([, items]) => items.length > 0)
+
+        return (
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-            {TRAMOS.map(tramo => {
-              const items = cartera.filter(c => c.tramo === tramo)
+            {TRAMOS_90.map(tramo => {
+              const items = carteraNorm.filter((c: any) => c.tramo90 === tramo)
               return (
                 <div key={tramo} className="card p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="w-3 h-3 rounded-full" style={{ background: TRAMO_COLORS_HEX[tramo] }} />
-                    <span className="text-xs font-medium text-gray-600">{TRAMO_LABELS[tramo]}</span>
+                    <div className="w-3 h-3 rounded-full" style={{ background: TRAMO90_COLORS[tramo] }} />
+                    <span className="text-xs font-medium text-gray-600">{TRAMO90_LABELS[tramo]}</span>
                   </div>
-                  <p className="text-lg font-bold">{formatMonto(items.reduce((s, c) => s + (c.saldo_pendiente ?? c.total), 0))}</p>
+                  <p className="text-lg font-bold">{formatMonto(items.reduce((s: number, c: any) => s + saldoDe(c), 0))}</p>
                   <p className="text-xs text-gray-400">{items.length} facturas</p>
                 </div>
               )
@@ -156,8 +228,18 @@ export default function VentasTab({
           <div className="card p-4 bg-brand-50 border-brand-200">
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-brand-700">Total cartera pendiente</span>
-              <span className="text-2xl font-bold text-brand-800">{formatMonto(cartera.reduce((s, c) => s + (c.saldo_pendiente ?? c.total), 0))}</span>
+              <span className="text-2xl font-bold text-brand-800">{formatMonto(totalCartera)}</span>
             </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500">Agrupar por:</span>
+            <select
+              className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-600 bg-white focus:outline-none focus:border-gray-400"
+              value={carteraAgrupar}
+              onChange={e => setCarteraAgrupar(e.target.value as 'cliente' | 'tramo')}>
+              <option value="cliente">Cliente</option>
+              <option value="tramo">Antigüedad (30 / 60 / 90 días)</option>
+            </select>
           </div>
           <div className="card overflow-hidden">
             <table className="w-full">
@@ -172,27 +254,47 @@ export default function VentasTab({
                 <th className="table-header">Tramo</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-100">
-                {cartera.map(c => (
-                  <tr key={c.id} className="hover:bg-gray-50">
-                    <td className="table-cell font-mono">#{c.numero_factura}</td>
-                    <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha)}</td>
-                    <td className="table-cell max-w-[200px]"><span className="truncate block">{c.cliente}</span></td>
-                    <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha_pago)}</td>
-                    <td className="table-cell text-right">{formatMonto(c.total)}</td>
-                    <td className="table-cell text-right font-semibold text-orange-600">{formatMonto(c.saldo_pendiente ?? c.total)}</td>
-                    <td className="table-cell text-right">
-                      <span className={c.dias_vencida > 0 ? 'text-red-600 font-medium' : 'text-green-600'}>
-                        {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
-                      </span>
-                    </td>
-                    <td className="table-cell"><span className={`badge ${tramoColor(c.tramo)}`}>{TRAMO_LABELS[c.tramo]}</span></td>
-                  </tr>
+                {grupos.length === 0 ? (
+                  <tr><td colSpan={8} className="text-center py-8 text-gray-400">Sin cartera pendiente</td></tr>
+                ) : grupos.map(([nombre, items]) => (
+                  <Fragment key={nombre}>
+                    <tr className="bg-brand-50/40 border-t border-gray-200">
+                      <td colSpan={5} className="table-cell font-semibold text-brand-800">
+                        {nombre} <span className="text-xs text-gray-400 font-normal">({items.length} factura{items.length === 1 ? '' : 's'})</span>
+                      </td>
+                      <td className="table-cell text-right font-bold text-brand-800">
+                        {formatMonto(items.reduce((s: number, c: any) => s + saldoDe(c), 0))}
+                      </td>
+                      <td colSpan={2} />
+                    </tr>
+                    {items.map((c: any) => (
+                      <tr key={c.id} className="hover:bg-gray-50">
+                        <td className="table-cell font-mono">#{c.numero_factura}</td>
+                        <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha)}</td>
+                        <td className="table-cell max-w-[200px]"><span className="truncate block">{c.cliente}</span></td>
+                        <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha_pago)}</td>
+                        <td className="table-cell text-right">{formatMonto(c.total)}</td>
+                        <td className="table-cell text-right font-semibold text-orange-600">{formatMonto(saldoDe(c))}</td>
+                        <td className="table-cell text-right">
+                          <span className={c.dias_vencida > 0 ? 'text-red-600 font-medium' : 'text-green-600'}>
+                            {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
+                          </span>
+                        </td>
+                        <td className="table-cell">
+                          <span className="badge text-xs" style={{ backgroundColor: TRAMO90_COLORS[c.tramo90] + '20', color: TRAMO90_COLORS[c.tramo90] }}>
+                            {TRAMO90_LABELS[c.tramo90]}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {ventasTab === 'porcliente' && (
         <div className="space-y-4">

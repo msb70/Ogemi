@@ -220,6 +220,8 @@ export interface Pago {
   fecha: string;
   referencia: string | null;
   notas: string | null;
+  /** Recibo autonumérico (solo pagos de facturas de clientes) — se muestra REC-NNNNN */
+  numero_recibo: number | null;
   created_at: string;
   // Joins
   banco_cuentas?: BancoCuenta;
