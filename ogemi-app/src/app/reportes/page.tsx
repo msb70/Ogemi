@@ -389,13 +389,7 @@ function ReportesPage() {
         )}
 
         {tab === 'estado_cuenta' && (
-          <EstadoCuentaTab
-            facturas={facturas}
-            fechaDesde={fechaDesde}
-            setFechaDesde={setFechaDesde}
-            fechaHasta={fechaHasta}
-            setFechaHasta={setFechaHasta}
-          />
+          <EstadoCuentaTab cartera={cartera} />
         )}
 
         {tab === 'libros' && (
