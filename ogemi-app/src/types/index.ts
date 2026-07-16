@@ -159,6 +159,12 @@ export interface BancoMovimiento {
   cuenta_id: string;
   factura_id: string | null;
   compra_id: string | null;
+  presupuesto_id?: string | null;
+  pago_id?: string | null;
+  pago_reverso_id?: string | null;
+  anticipo_id?: string | null;
+  lote_id?: string | null;
+  reverso_de_id?: string | null;
   tipo: MovimientoTipo;
   concepto: string;
   monto: number;

@@ -6,10 +6,11 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate, formatDateObj } from '@/lib/utils'
 import { BancoCuenta, BancoMovimiento } from '@/types'
-import { Plus, Building2, TrendingUp, TrendingDown, Printer } from 'lucide-react'
+import { Plus, Building2, TrendingUp, TrendingDown, Printer, RefreshCw } from 'lucide-react'
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
 import { withPagePermission } from '@/components/PermissionGuard'
+import { useAuth } from '@/context/AuthContext'
 import EstadoCuentaTab from './EstadoCuentaTab'
 import CierreMesTab from './CierreMesTab'
 
@@ -37,8 +38,16 @@ function BancoPage() {
   // Recibo de movimiento
   const [reciboMovimiento, setReciboMovimiento] = useState<any | null>(null)
 
+  // Reverso de movimiento
+  const [reversar, setReversar] = useState<BancoMovimiento | null>(null)
+  const [motivoReverso, setMotivoReverso] = useState('')
+  const [reversando, setReversando] = useState(false)
+  // ids de movimientos originales que ya tienen un contra-movimiento (reversados)
+  const [reversados, setReversados] = useState<Set<string>>(new Set())
+
   const supabase = createClient()
   const { toast, showToast, hideToast } = useToast()
+  const { puedeHacer } = useAuth()
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -73,7 +82,43 @@ function BancoPage() {
       .order('created_at', { ascending: false })
       .limit(100)
     setMovimientos(data || [])
+
+    // Conjunto de movimientos originales que ya fueron reversados (tienen un contra).
+    // Se consulta aparte para no depender de que el contra caiga en las 100 filas visibles.
+    const { data: revs } = await supabase
+      .from('banco_movimientos')
+      .select('reverso_de_id')
+      .eq('cuenta_id', cuentaSelected)
+      .not('reverso_de_id', 'is', null)
+    setReversados(new Set((revs || []).map((r: { reverso_de_id: string }) => r.reverso_de_id)))
   }, [cuentaSelected])
+
+  // Un movimiento es "manual" si no proviene de ningún documento/cobro/pago.
+  // Solo esos se pueden reversar desde Banco.
+  const esManual = (m: BancoMovimiento) =>
+    !m.factura_id && !m.compra_id && !m.presupuesto_id && !m.pago_id &&
+    !m.pago_reverso_id && !m.anticipo_id && !m.lote_id
+
+  const puedeReversar = puedeHacer('banco', 'editar')
+
+  const handleReversar = async () => {
+    if (!reversar || motivoReverso.trim().length < 3) return
+    setReversando(true)
+    const { error } = await supabase.rpc('reversar_movimiento_banco', {
+      p_movimiento_id: reversar.id,
+      p_motivo: motivoReverso.trim(),
+    })
+    setReversando(false)
+    if (error) {
+      showToast(`No se pudo reversar: ${error.message}`, 'error')
+      return
+    }
+    setReversar(null)
+    setMotivoReverso('')
+    showToast('Movimiento reversado', 'success')
+    loadData()
+    loadMovimientos()
+  }
 
   useEffect(() => { loadData() }, [loadData])
   useEffect(() => { loadMovimientos() }, [loadMovimientos])
@@ -262,7 +307,15 @@ function BancoPage() {
                     <tr key={m.id} className="hover:bg-gray-50">
                       <td className="table-cell text-gray-500">{formatDate(m.fecha)}</td>
                       <td className="table-cell">
-                        {m.concepto}
+                        <span className="inline-flex items-center gap-1.5">
+                          {m.concepto}
+                          {m.reverso_de_id && (
+                            <span className="badge bg-amber-100 text-amber-700 text-[10px]">Reverso</span>
+                          )}
+                          {reversados.has(m.id) && (
+                            <span className="badge bg-gray-200 text-gray-600 text-[10px]">Reversado</span>
+                          )}
+                        </span>
                         {(m as any).compras?.proveedores?.nombre && !(m.concepto || '').includes((m as any).compras.proveedores.nombre) && (
                           <span className="block text-xs text-gray-400">Proveedor: {(m as any).compras.proveedores.nombre}</span>
                         )}
@@ -281,13 +334,24 @@ function BancoPage() {
                         {formatCurrency(saldosCorridos[i] ?? 0)}
                       </td>
                       <td className="table-cell">
-                        <button
-                          onClick={() => setReciboMovimiento({ ...m, banco_cuentas: cuentas.find(c => c.id === m.cuenta_id) })}
-                          className="text-gray-400 hover:text-brand-600 transition-colors"
-                          title="Imprimir recibo"
-                        >
-                          <Printer size={14} />
-                        </button>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => setReciboMovimiento({ ...m, banco_cuentas: cuentas.find(c => c.id === m.cuenta_id) })}
+                            className="text-gray-400 hover:text-brand-600 transition-colors"
+                            title="Imprimir recibo"
+                          >
+                            <Printer size={14} />
+                          </button>
+                          {puedeReversar && esManual(m) && !m.reverso_de_id && !reversados.has(m.id) && (
+                            <button
+                              onClick={() => { setReversar(m); setMotivoReverso('') }}
+                              className="text-gray-400 hover:text-red-600 transition-colors"
+                              title="Reversar movimiento"
+                            >
+                              <RefreshCw size={14} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -331,6 +395,71 @@ function BancoPage() {
               <button className="btn-secondary flex-1" onClick={() => setReciboMovimiento(null)}>Cerrar</button>
               <button className="btn-primary flex-1 flex items-center justify-center gap-2" onClick={() => window.print()}>
                 <Printer size={16} />Imprimir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Reversar movimiento */}
+      {reversar && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-9 h-9 bg-red-100 rounded-xl flex items-center justify-center">
+                <RefreshCw size={18} className="text-red-600" />
+              </div>
+              <h2 className="text-lg font-semibold">Reversar movimiento</h2>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">
+              Se creará un movimiento opuesto por el mismo monto que anula el original. El
+              original no se borra: queda el rastro de ambos.
+            </p>
+
+            <div className="border border-gray-200 rounded-lg p-3 mb-4 text-sm space-y-1">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Concepto</span>
+                <span className="font-medium text-right max-w-[240px]">{reversar.concepto}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Tipo</span>
+                <span className={`font-semibold ${reversar.tipo === 'ingreso' ? 'text-green-700' : 'text-red-600'}`}>
+                  {reversar.tipo}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Monto</span>
+                <span className="font-semibold">{formatCurrency(reversar.monto)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Se generará</span>
+                <span className="font-semibold">
+                  {reversar.tipo === 'ingreso' ? 'un egreso' : 'un ingreso'} de {formatCurrency(reversar.monto)}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Motivo del reverso</label>
+              <input
+                className="input"
+                placeholder="Ej: monto equivocado, cuenta incorrecta..."
+                value={motivoReverso}
+                onChange={e => setMotivoReverso(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <button className="btn-secondary flex-1" onClick={() => { setReversar(null); setMotivoReverso('') }} disabled={reversando}>
+                Cancelar
+              </button>
+              <button
+                className="btn-primary flex-1"
+                onClick={handleReversar}
+                disabled={reversando || motivoReverso.trim().length < 3}
+              >
+                {reversando ? 'Reversando...' : 'Confirmar reverso'}
               </button>
             </div>
           </div>
