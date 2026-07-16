@@ -5,7 +5,7 @@ import { formatMonto, formatDate, formatDateObj } from '@/lib/utils'
 import { Search } from 'lucide-react'
 import { CarteraVencida } from '@/types'
 import {
-  BUCKETS, TRAMO_COLORS_HEX,
+  BUCKETS, TRAMO_COLORS_HEX, normTramo,
   getNextFridays, buildVencimientoViernes, buildPivotAntiguedad,
 } from '../reportes.utils'
 
@@ -316,7 +316,7 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
                             </td>
                             {BUCKETS.map(b => (
                               <td key={b.key} className="table-cell text-right text-sm">
-                                {c.tramo === b.key ? (
+                                {normTramo(c.tramo) === b.key ? (
                                   <span style={{ color: TRAMO_COLORS_HEX[b.key] }}>
                                     {formatMonto(c.saldo_pendiente ?? c.total)}
                                   </span>

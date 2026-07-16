@@ -1,9 +1,11 @@
 /**
  * Constantes y funciones puras compartidas por todos los tabs de Reportes.
  *
- * BUG CORREGIDO (Sprint 2 en compras/page.tsx, ahora en reportes):
- *   '91-120' estaba ausente en TRAMO_LABELS, TRAMO_COLORS_HEX, TRAMOS y BUCKETS.
- *   Facturas de 91-120 días vencidas se mostraban sin etiqueta y sin color.
+ * Los reportes de antigüedad muestran 5 tramos: la columna de 120 días se
+ * eliminó y todo lo mayor a 90 días se consolida en "Más de 90 días".
+ * Las vistas de la BD (cartera_vencida, compras_vencidas, cartera_presupuestos)
+ * siguen emitiendo 6 tramos ('91-120' y '+120'): usar normTramo() antes de
+ * agrupar, comparar o etiquetar por tramo.
  */
 
 import * as XLSX from 'xlsx'
@@ -18,8 +20,7 @@ export const TRAMO_LABELS: Record<string, string> = {
   '1-30':     '1–30 días',
   '31-60':    '31–60 días',
   '61-90':    '61–90 días',
-  '91-120':   '91–120 días',   // ← BUG FIX: faltaba esta entrada
-  '+120':     '+120 días',
+  '+90':      'Más de 90 días',
 }
 
 export const TRAMO_COLORS_HEX: Record<string, string> = {
@@ -27,13 +28,15 @@ export const TRAMO_COLORS_HEX: Record<string, string> = {
   '1-30':     '#facc15',
   '31-60':    '#fb923c',
   '61-90':    '#f87171',
-  '91-120':   '#ef4444',       // ← BUG FIX: faltaba esta entrada
-  '+120':     '#b91c1c',
+  '+90':      '#b91c1c',
 }
 
-export const TRAMOS = ['corriente', '1-30', '31-60', '61-90', '91-120', '+120'] as const
+export const TRAMOS = ['corriente', '1-30', '31-60', '61-90', '+90'] as const
 
 export type Tramo = typeof TRAMOS[number]
+
+/** Normaliza el tramo de la BD (6 tramos) al tramo de UI (5 tramos, +90 consolidado) */
+export const normTramo = (t: string): string => (t === '91-120' || t === '+120') ? '+90' : t
 
 /** Para pivot de antigüedad — muestra columnas en orden */
 export const BUCKETS: { key: Tramo; label: string }[] = [
@@ -41,8 +44,7 @@ export const BUCKETS: { key: Tramo; label: string }[] = [
   { key: '1-30',     label: '1–30 días' },
   { key: '31-60',    label: '31–60 días' },
   { key: '61-90',    label: '61–90 días' },
-  { key: '91-120',   label: '91–120 días' },  // ← BUG FIX: faltaba esta entrada
-  { key: '+120',     label: '+120 días' },
+  { key: '+90',      label: 'Más de 90 días' },
 ]
 
 export const PIE_COLORS = [
@@ -285,7 +287,8 @@ export function buildPivotAntiguedad(cartera: CarteraVencida[]): {
     if (!data[c.cliente]) data[c.cliente] = {}
     if (!factByCliente[c.cliente]) factByCliente[c.cliente] = []
     factByCliente[c.cliente].push(c)
-    data[c.cliente][c.tramo] = (data[c.cliente][c.tramo] || 0) + (c.saldo_pendiente ?? c.total)
+    const tramo = normTramo(c.tramo)
+    data[c.cliente][tramo] = (data[c.cliente][tramo] || 0) + (c.saldo_pendiente ?? c.total)
   })
 
   return { clientes: Array.from(clienteSet).sort(), data, factByCliente }

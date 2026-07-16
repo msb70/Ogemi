@@ -392,7 +392,7 @@ export const MANUAL_MODULOS: ManualModulo[] = [
         titulo: 'Cartera por antigüedad',
         pasos: [
           'Abra Reportes y seleccione la cartera de deuda pendiente por cliente.',
-          'Verá la deuda clasificada por tramos: corriente, 1-30, 31-60, 61-90, 91-120 y más de 120 días.',
+          'Verá la deuda clasificada por tramos: corriente, 1-30, 31-60, 61-90 y más de 90 días.',
         ],
       },
       {

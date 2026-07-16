@@ -17,7 +17,7 @@ import PivotTab from './PivotTab'
 // Tramos de cartera SIN columna de 120 días: 91–120 y +120 se consolidan en +90
 const TRAMOS_90 = ['corriente', '1-30', '31-60', '61-90', '+90'] as const
 const TRAMO90_LABELS: Record<string, string> = {
-  corriente: 'Al día', '1-30': '1–30 días', '31-60': '31–60 días', '61-90': '61–90 días', '+90': '+90 días',
+  corriente: 'Al día', '1-30': '1–30 días', '31-60': '31–60 días', '61-90': '61–90 días', '+90': 'Más de 90 días',
 }
 const TRAMO90_COLORS: Record<string, string> = {
   corriente: '#22c55e', '1-30': '#facc15', '31-60': '#fb923c', '61-90': '#f87171', '+90': '#b91c1c',

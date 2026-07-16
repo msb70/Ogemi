@@ -7,7 +7,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import {
-  TRAMOS, TRAMO_LABELS, TRAMO_COLORS_HEX, BUCKETS,
+  TRAMOS, TRAMO_LABELS, TRAMO_COLORS_HEX, BUCKETS, normTramo,
   exportXLSX, buildKpiSheet, getNextFridays, buildVencimientoSemanal,
 } from '../reportes.utils'
 import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
@@ -56,7 +56,8 @@ export default function ComprasTab({
     const k = c.proveedor || 'N/A'
     if (!pivotAntData[k]) { pivotAntData[k] = {}; comprasPorProveedor[k] = [] }
     comprasPorProveedor[k].push(c)
-    pivotAntData[k][c.tramo] = (pivotAntData[k][c.tramo] || 0) + (c.saldo_pendiente ?? c.total ?? 0)
+    const tramo = normTramo(c.tramo)
+    pivotAntData[k][tramo] = (pivotAntData[k][tramo] || 0) + (c.saldo_pendiente ?? c.total ?? 0)
   })
   const proveedoresAnt = Object.keys(pivotAntData).sort()
   const totalCarteraCxp = cxp.reduce((s: number, c: any) => s + (c.saldo_pendiente ?? c.total ?? 0), 0)
@@ -195,7 +196,7 @@ export default function ComprasTab({
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
             {TRAMOS.map(tramo => {
-              const items = cxp.filter((c: any) => c.tramo === tramo)
+              const items = cxp.filter((c: any) => normTramo(c.tramo) === tramo)
               return (
                 <div key={tramo} className="card p-4">
                   <div className="flex items-center gap-2 mb-2">
@@ -231,8 +232,8 @@ export default function ComprasTab({
                     </td>
                     <td className="table-cell text-right font-semibold">{formatMonto(c.saldo_pendiente ?? c.total)}</td>
                     <td className="table-cell">
-                      <span className="badge text-xs" style={{ backgroundColor: TRAMO_COLORS_HEX[c.tramo] + '20', color: TRAMO_COLORS_HEX[c.tramo] }}>
-                        {TRAMO_LABELS[c.tramo]}
+                      <span className="badge text-xs" style={{ backgroundColor: TRAMO_COLORS_HEX[normTramo(c.tramo)] + '20', color: TRAMO_COLORS_HEX[normTramo(c.tramo)] }}>
+                        {TRAMO_LABELS[normTramo(c.tramo)]}
                       </span>
                     </td>
                   </tr>
@@ -268,7 +269,7 @@ export default function ComprasTab({
                   ['Proveedor', 'Concepto', 'Vencimiento', 'Días vencida', 'Tramo', 'Total', 'Abonado', 'Saldo'],
                   ...cxp.map((c: any) => [
                     c.proveedor, c.concepto || '', c.vencimiento, c.dias_vencida,
-                    TRAMO_LABELS[c.tramo] || c.tramo, c.total, c.monto_pagado || 0, c.saldo_pendiente ?? c.total,
+                    TRAMO_LABELS[normTramo(c.tramo)] || c.tramo, c.total, c.monto_pagado || 0, c.saldo_pendiente ?? c.total,
                   ]),
                 ] },
               ])
@@ -277,7 +278,7 @@ export default function ComprasTab({
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
             {BUCKETS.map(bucket => {
               const total = proveedoresAnt.reduce((s, p) => s + (pivotAntData[p]?.[bucket.key] || 0), 0)
               return (
@@ -369,7 +370,7 @@ export default function ComprasTab({
                             </td>
                             {BUCKETS.map(b => (
                               <td key={b.key} className="table-cell text-right text-sm">
-                                {c.tramo === b.key ? (
+                                {normTramo(c.tramo) === b.key ? (
                                   <span style={{ color: TRAMO_COLORS_HEX[b.key] }}>
                                     {formatMonto(c.saldo_pendiente ?? c.total)}
                                   </span>

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { formatMonto, formatDate, tramoColor } from '@/lib/utils'
 import { Download } from 'lucide-react'
 import { CarteraVencida } from '@/types'
-import { exportXLSX, buildKpiSheet, TRAMO_LABELS } from '../reportes.utils'
+import { exportXLSX, buildKpiSheet, TRAMO_LABELS, normTramo } from '../reportes.utils'
 
 /**
  * Estado de cuenta por cliente.
@@ -62,7 +62,7 @@ export default function EstadoCuentaTab({ cartera }: EstadoCuentaTabProps) {
         ...rows.map(c => [
           c.fecha, c.numero_factura, c.fecha_pago,
           c.dias_vencida > 0 ? c.dias_vencida : 0,
-          TRAMO_LABELS[c.tramo] || c.tramo,
+          TRAMO_LABELS[normTramo(c.tramo)] || c.tramo,
           c.total, c.monto_pagado || 0,
           c.saldo_pendiente ?? c.total, c.saldo_acum,
         ]),
@@ -132,8 +132,8 @@ export default function EstadoCuentaTab({ cartera }: EstadoCuentaTabProps) {
                     <td className="table-cell font-mono text-sm">#{c.numero_factura}</td>
                     <td className="table-cell text-sm">{formatDate(c.fecha_pago)}</td>
                     <td className="table-cell">
-                      <span className={`badge text-xs ${tramoColor(c.tramo)}`}>
-                        {TRAMO_LABELS[c.tramo] || c.tramo}{c.dias_vencida > 0 ? ` · ${c.dias_vencida}d` : ''}
+                      <span className={`badge text-xs ${tramoColor(normTramo(c.tramo))}`}>
+                        {TRAMO_LABELS[normTramo(c.tramo)] || c.tramo}{c.dias_vencida > 0 ? ` · ${c.dias_vencida}d` : ''}
                       </span>
                     </td>
                     <td className="table-cell text-right">{formatMonto(c.total)}</td>

@@ -8,7 +8,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from 'recharts'
 import {
-  TRAMOS, TRAMO_LABELS, TRAMO_COLORS_HEX, PIE_COLORS,
+  TRAMOS, TRAMO_LABELS, TRAMO_COLORS_HEX, PIE_COLORS, normTramo,
   exportXLSX, buildKpiSheet, getNextFridays, buildVencimientoSemanal,
 } from '../reportes.utils'
 import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
@@ -167,7 +167,7 @@ export default function PresupuestosTab({
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
             {TRAMOS.map(tramo => {
-              const items = carteraPresupuestos.filter((c: any) => c.tramo === tramo)
+              const items = carteraPresupuestos.filter((c: any) => normTramo(c.tramo) === tramo)
               return (
                 <div key={tramo} className="card p-4">
                   <div className="flex items-center gap-2 mb-2">
@@ -214,7 +214,7 @@ export default function PresupuestosTab({
                         {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
                       </span>
                     </td>
-                    <td className="table-cell"><span className={`badge ${tramoColor(c.tramo)}`}>{TRAMO_LABELS[c.tramo]}</span></td>
+                    <td className="table-cell"><span className={`badge ${tramoColor(normTramo(c.tramo))}`}>{TRAMO_LABELS[normTramo(c.tramo)]}</span></td>
                   </tr>
                 ))}
               </tbody>

@@ -53,6 +53,7 @@ export function tramoColor(tramo: string): string {
     case '1-30': return 'bg-yellow-100 text-yellow-800'
     case '31-60': return 'bg-orange-100 text-orange-800'
     case '61-90': return 'bg-red-100 text-red-800'
+    case '+90': return 'bg-rose-300 text-rose-950'
     case '91-120': return 'bg-red-200 text-red-900'
     case '+120': return 'bg-rose-300 text-rose-950'
     default: return 'bg-gray-100 text-gray-800'
