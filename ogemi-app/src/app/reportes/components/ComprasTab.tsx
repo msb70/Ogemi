@@ -74,6 +74,26 @@ export default function ComprasTab({
     return matchSearch && matchSem
   })
 
+  // Agrupado por proveedor para el vencimiento semanal (con subtotales por semana)
+  const compGroups = (() => {
+    const m = new Map<string, any[]>()
+    compRows.forEach((r: any) => {
+      const k = r.proveedores?.nombre || '—'
+      if (!m.has(k)) m.set(k, [])
+      m.get(k)!.push(r)
+    })
+    return Array.from(m.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([nombre, rows]) => ({
+        nombre,
+        rows,
+        weekTotals: compWeekDateObjs.map((_, i) =>
+          rows.filter((r: any) => r.fridayIdx === i).reduce((s: number, r: any) => s + (r.saldo ?? r.total ?? 0), 0)
+        ),
+        total: rows.reduce((s: number, r: any) => s + (r.saldo ?? r.total ?? 0), 0),
+      }))
+  })()
+
   const compTotProbable = compWeekDateObjs.map((_, i) =>
     vencCompras.rows.filter((r: any) => r.fridayIdx === i && !compNoPagaraSet.has(r.id))
       .reduce((s: number, r: any) => s + (r.saldo ?? r.total ?? 0), 0)
@@ -646,40 +666,55 @@ export default function ComprasTab({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {compRows.map((c: any) => {
-                    const isNoPaga = compNoPagaraSet.has(c.id)
-                    return (
-                      <tr key={c.id} className={`hover:bg-gray-50 transition-opacity ${isNoPaga ? 'opacity-50 bg-red-50/40' : ''}`}>
-                        <td className={`table-cell sticky left-0 z-10 max-w-[180px] ${isNoPaga ? 'bg-red-50' : 'bg-white'}`}>
-                          <span className="truncate block text-sm font-medium">{c.proveedores?.nombre || '—'}</span>
-                        </td>
-                        <td className="table-cell text-center text-sm text-gray-500 max-w-[140px]">
-                          <span className="truncate block">{c.concepto || c.referencia || '—'}</span>
-                        </td>
-                        <td className="table-cell text-center text-sm text-gray-400">{formatDate(c.fecha)}</td>
-                        <td className="table-cell text-center text-sm font-semibold text-red-600">{formatDate(c.vencimiento)}</td>
-                        {compWeekDateObjs.map((_, i) => (
-                          <td key={i} className="table-cell text-right text-sm">
-                            {c.fridayIdx === i
-                              ? (
-                                <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>
-                                  {formatMonto(c.saldo ?? c.total)}
-                                  {(c.monto_pagado || 0) > 0 && (
-                                    <span className="block text-[10px] font-normal text-gray-400">abonado {formatMonto(c.monto_pagado)}</span>
-                                  )}
-                                </span>
-                              )
-                              : <span className="text-gray-200">—</span>}
+                  {compGroups.flatMap((g) => [
+                    <tr key={`h-${g.nombre}`} className="bg-gray-100 border-t-2 border-gray-300">
+                      <td colSpan={4 + compWeekDateObjs.length + 1} className="table-cell sticky left-0 bg-gray-100 z-10 font-bold text-gray-800 text-sm">
+                        {g.nombre}
+                        <span className="text-xs font-normal text-gray-400"> · {g.rows.length} {g.rows.length === 1 ? 'compra' : 'compras'} · {formatMonto(g.total)}</span>
+                      </td>
+                    </tr>,
+                    ...g.rows.map((c: any) => {
+                      const isNoPaga = compNoPagaraSet.has(c.id)
+                      return (
+                        <tr key={c.id} className={`hover:bg-gray-50 transition-opacity ${isNoPaga ? 'opacity-50 bg-red-50/40' : ''}`}>
+                          <td className={`table-cell sticky left-0 z-10 max-w-[180px] ${isNoPaga ? 'bg-red-50' : 'bg-white'}`}>
+                            <span className="truncate block text-sm font-medium">{c.proveedores?.nombre || '—'}</span>
                           </td>
-                        ))}
-                        <td className="table-cell text-center">
-                          <input type="checkbox" checked={isNoPaga}
-                            onChange={e => { setCompNoPagaraSet(prev => { const next = new Set(prev); e.target.checked ? next.add(c.id) : next.delete(c.id); return next }) }}
-                            className="w-4 h-4 accent-red-600 cursor-pointer" title="Marcar como No Pagará" />
-                        </td>
-                      </tr>
-                    )
-                  })}
+                          <td className="table-cell text-center text-sm text-gray-500 max-w-[140px]">
+                            <span className="truncate block">{c.concepto || c.referencia || '—'}</span>
+                          </td>
+                          <td className="table-cell text-center text-sm text-gray-400">{formatDate(c.fecha)}</td>
+                          <td className="table-cell text-center text-sm font-semibold text-red-600">{formatDate(c.vencimiento)}</td>
+                          {compWeekDateObjs.map((_, i) => (
+                            <td key={i} className="table-cell text-right text-sm">
+                              {c.fridayIdx === i
+                                ? (
+                                  <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>
+                                    {formatMonto(c.saldo ?? c.total)}
+                                    {(c.monto_pagado || 0) > 0 && (
+                                      <span className="block text-[10px] font-normal text-gray-400">abonado {formatMonto(c.monto_pagado)}</span>
+                                    )}
+                                  </span>
+                                )
+                                : <span className="text-gray-200">—</span>}
+                            </td>
+                          ))}
+                          <td className="table-cell text-center">
+                            <input type="checkbox" checked={isNoPaga}
+                              onChange={e => { setCompNoPagaraSet(prev => { const next = new Set(prev); e.target.checked ? next.add(c.id) : next.delete(c.id); return next }) }}
+                              className="w-4 h-4 accent-red-600 cursor-pointer" title="Marcar como No Pagará" />
+                          </td>
+                        </tr>
+                      )
+                    }),
+                    <tr key={`s-${g.nombre}`} className="border-t border-gray-200 bg-gray-50 text-sm font-semibold">
+                      <td colSpan={4} className="table-cell text-right sticky left-0 bg-gray-50 z-10 text-gray-500">Subtotal {g.nombre}</td>
+                      {g.weekTotals.map((t, i) => (
+                        <td key={i} className="table-cell text-right text-gray-700">{t > 0 ? formatMonto(t) : '—'}</td>
+                      ))}
+                      <td className="table-cell" />
+                    </tr>,
+                  ])}
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">
