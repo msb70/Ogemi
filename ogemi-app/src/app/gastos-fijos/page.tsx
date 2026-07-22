@@ -69,9 +69,11 @@ const defaultWeekDates = (month: string): string[] => {
  * Input de monto sin flechas (type="text"): mientras se edita muestra el valor
  * crudo; al salir, formateado con separador de miles y 2 decimales.
  */
-function MontoInput({ value, onChange, disabled }: {
+function MontoInput({ value, onChange, onCommit, disabled }: {
   value: string
   onChange: (v: string) => void
+  /** Se dispara al salir del campo, con el valor crudo actual (para autoguardar). */
+  onCommit?: (v: string) => void
   disabled?: boolean
 }) {
   const [editing, setEditing] = useState(false)
@@ -89,7 +91,7 @@ function MontoInput({ value, onChange, disabled }: {
       value={display}
       disabled={disabled}
       onFocus={() => setEditing(true)}
-      onBlur={() => setEditing(false)}
+      onBlur={() => { setEditing(false); onCommit?.(value) }}
       onChange={e => onChange(e.target.value.replace(/,/g, ''))}
     />
   )
@@ -456,9 +458,41 @@ function GastosFijosPage() {
     }))
   }
 
+  // ── Autoguardado: montos, fechas y nombres se graban al editarlos ──────────
+  const saveMonto = useCallback(async (gastoId: string, semana: Semana, raw: string) => {
+    const monto = parseFloat(raw || '0') || 0
+    const { error } = await supabase
+      .from('gastos_fijos_montos')
+      .upsert({ gasto_fijo_id: gastoId, periodo, semana, monto }, { onConflict: 'gasto_fijo_id,periodo,semana' })
+    if (error) showToast(`Error al guardar el monto: ${error.message}`, 'error')
+  }, [periodo, showToast, supabase])
+
+  const persistFecha = useCallback(async (semana: number, fecha: string) => {
+    const { error } = await supabase
+      .from('gastos_fijos_semanas')
+      .upsert({ periodo, semana, fecha }, { onConflict: 'periodo,semana' })
+    if (error) showToast(`Error al guardar la fecha: ${error.message}`, 'error')
+  }, [periodo, showToast, supabase])
+
+  const saveNombre = useCallback(async (gasto: GastoFijo) => {
+    const nombre = gasto.nombre.trim()
+    if (!nombre) return
+    const { error } = await supabase
+      .from('gastos_fijos')
+      .upsert({ id: gasto.id, nombre }, { onConflict: 'id' })
+    if (error) showToast(`Error al guardar el nombre: ${error.message}`, 'error')
+  }, [showToast, supabase])
+
   const updateFecha = (semanaIndex: number, value: string) => {
     setSemanaFechas(prev => prev.map((f, i) => (i === semanaIndex ? value : f)))
+    if (value) persistFecha(semanaIndex + 1, value)
   }
+
+  // Setter de fechas para las pestañas de vencimiento: persiste las que cambian
+  const setSemanaFechasPersist = useCallback((dates: string[]) => {
+    dates.forEach((f, i) => { if (f && f !== semanaFechas[i]) persistFecha(i + 1, f) })
+    setSemanaFechas(dates)
+  }, [semanaFechas, persistFecha])
 
   const toggleActivo = async (gasto: GastoFijo) => {
     const { error } = await supabase
@@ -537,7 +571,7 @@ function GastosFijosPage() {
                 <VencimientoSemanalVentas
                   facturas={facturasAll}
                   weekDates={semanaFechas}
-                  setWeekDates={setSemanaFechas}
+                  setWeekDates={setSemanaFechasPersist}
                   noPagaraSet={marcasVentas}
                   onToggleNoPagara={(id, marked) => toggleMarca('venta', id, marked)}
                   onToggleManyNoPagara={(ids, marked) => toggleMarcaMany('venta', ids, marked)}
@@ -547,7 +581,7 @@ function GastosFijosPage() {
                 <VencimientoSemanalPresupuestos
                   presupuestos={presupuestosAll}
                   weekDates={semanaFechas}
-                  setWeekDates={setSemanaFechas}
+                  setWeekDates={setSemanaFechasPersist}
                   noPagaraSet={marcasPresupuestos}
                   onToggleNoPagara={(id, marked) => toggleMarca('presupuesto', id, marked)}
                   onToggleManyNoPagara={(ids, marked) => toggleMarcaMany('presupuesto', ids, marked)}
@@ -557,7 +591,7 @@ function GastosFijosPage() {
                 <VencimientoSemanalCompras
                   compras={comprasAll}
                   weekDates={semanaFechas}
-                  setWeekDates={setSemanaFechas}
+                  setWeekDates={setSemanaFechasPersist}
                   pagaraSet={marcasCompras}
                   onTogglePagara={(id, marked) => toggleMarca('compra', id, marked)}
                   onToggleManyPagara={(ids, marked) => toggleMarcaMany('compra', ids, marked)}
@@ -800,6 +834,7 @@ function GastosFijosPage() {
                             className="input min-w-[160px]"
                             value={gasto.nombre}
                             onChange={event => updateGasto(gasto.id, event.target.value)}
+                            onBlur={() => saveNombre(gasto)}
                             disabled={!gasto.activo}
                           />
                         </td>
@@ -808,6 +843,7 @@ function GastosFijosPage() {
                             <MontoInput
                               value={fila[semana] || ''}
                               onChange={v => updateMonto(gasto.id, semana, v)}
+                              onCommit={v => saveMonto(gasto.id, semana, v)}
                               disabled={!gasto.activo}
                             />
                           </td>
