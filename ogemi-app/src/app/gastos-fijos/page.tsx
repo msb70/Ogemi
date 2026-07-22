@@ -8,7 +8,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
 import { Toast } from '@/components/Toast'
 import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
-import { CalendarDays, Plus, Save, WalletCards, Trash2, FileText, ClipboardList, ShoppingCart } from 'lucide-react'
+import { CalendarDays, Plus, Save, WalletCards, Trash2, FileText, ClipboardList, ShoppingCart, Printer } from 'lucide-react'
 import VencimientoSemanalVentas from '@/app/reportes/components/VencimientoSemanalVentas'
 import VencimientoSemanalPresupuestos from '@/app/reportes/components/VencimientoSemanalPresupuestos'
 import VencimientoSemanalCompras from '@/app/reportes/components/VencimientoSemanalCompras'
@@ -77,8 +77,6 @@ function GastosFijosPage() {
   const [cxcSemana, setCxcSemana] = useState<number[]>([0, 0, 0, 0])
   const [cuentas, setCuentas] = useState<BancoCuentaLite[]>([])
   const [saldoBancos, setSaldoBancos] = useState(0)
-  const [cuentasPorCobrar, setCuentasPorCobrar] = useState(0)
-  const [facturasPendientes, setFacturasPendientes] = useState(0)
   const [loading, setLoading] = useState(true)
   const [savingMontos, setSavingMontos] = useState(false)
   const [nuevoGastoNombre, setNuevoGastoNombre] = useState('')
@@ -107,8 +105,6 @@ function GastosFijosPage() {
     [gastos, montos]
   )
   const totalGastos = useMemo(() => totalesSemana.reduce((a, b) => a + b, 0), [totalesSemana])
-  const totalCxCBancos = cuentasPorCobrar + saldoBancos
-  const disponibleDespuesGastos = totalCxCBancos - totalGastos
 
   const loadGastos = useCallback(async () => {
     const { data, error } = await supabase
@@ -167,24 +163,6 @@ function GastosFijosPage() {
   }, [periodo, periodoMes, showToast, supabase])
 
   const loadResumen = useCallback(async () => {
-    const { data: facturasData, error: facturasError } = await supabase
-      .from('facturas')
-      .select('total,monto_pagado')
-      .eq('estado', 'pendiente')
-      .lte('fecha_pago', fechaResumen)
-
-    if (facturasError) {
-      showToast(`Error al calcular cuentas por cobrar: ${facturasError.message}`, 'error')
-    } else {
-      const facturas = facturasData || []
-      setFacturasPendientes(facturas.length)
-      setCuentasPorCobrar(
-        facturas.reduce((sum, factura) =>
-          sum + Math.max(0, (factura.total || 0) - (factura.monto_pagado || 0)), 0
-        )
-      )
-    }
-
     const { data: cuentasData, error: cuentasError } = await supabase
       .from('banco_cuentas')
       .select('id,nombre,banco')
@@ -328,6 +306,14 @@ function GastosFijosPage() {
     flujo.cobrosVentas[i] + flujo.cobrosPres[i] - flujo.pagosCompras[i] - totalesSemana[i])
   const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0)
 
+  // KPIs del flujo de pago
+  const cobrosVentasTotal = sum(flujo.cobrosVentas)
+  const cobrosPresTotal = sum(flujo.cobrosPres)
+  const cxcProbable = cobrosVentasTotal + cobrosPresTotal           // ventas + presupuestos no marcados "No pagará"
+  const comprasAPagarTotal = sum(flujo.pagosCompras)                // compras marcadas "Pagará"
+  const totalCxCBancos = cxcProbable + saldoBancos
+  const disponibleFlujo = totalCxCBancos - totalGastos - comprasAPagarTotal
+
   const crearGasto = async () => {
     const nombre = nuevoGastoNombre.trim()
     if (!nombre) return
@@ -451,6 +437,11 @@ function GastosFijosPage() {
       <Header
         title="Flujo de Pago"
         subtitle="Cobros probables, pagos y gastos fijos por semana"
+        actions={
+          <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2">
+            <Printer size={16} /> Reporte PDF
+          </button>
+        }
       />
 
       <div className="bg-white border-b border-gray-200 px-6">
@@ -466,6 +457,23 @@ function GastosFijosPage() {
               </button>
             )
           })}
+        </div>
+      </div>
+
+      <div id="flujo-print">
+      {/* Encabezado solo visible al imprimir / Guardar como PDF */}
+      <div className="hidden print:block px-6 pt-6 mb-2">
+        <div className="flex items-center gap-3 border-b-2 pb-3" style={{ borderColor: '#0f766e' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.jpeg" alt="Ogemi" style={{ width: 48, height: 48, objectFit: 'contain' }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>Flujo de Pago</div>
+            <div style={{ fontSize: 11, color: '#6b7280' }}>Impresos Comerciales S.A. · Sistema Ogemi</div>
+          </div>
+          <div style={{ textAlign: 'right', fontSize: 10, color: '#6b7280' }}>
+            <div>Período: {periodoMes}</div>
+            <div>Generado: {new Date().toLocaleString('es-PA')}</div>
+          </div>
         </div>
       </div>
 
@@ -544,11 +552,13 @@ function GastosFijosPage() {
 
         </section>
 
-        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+        <section className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
           <div className="card p-4">
             <p className="text-xs font-semibold uppercase text-gray-500">CxC vencida al corte</p>
-            <p className="mt-2 text-2xl font-bold text-orange-600">{formatCurrency(cuentasPorCobrar)}</p>
-            <p className="text-xs text-gray-400">{facturasPendientes} facturas pendientes</p>
+            <p className="mt-2 text-2xl font-bold text-green-700">{formatCurrency(cxcProbable)}</p>
+            <p className="text-xs text-gray-400">
+              Ventas {formatCurrency(cobrosVentasTotal)} · Presup. {formatCurrency(cobrosPresTotal)}
+            </p>
           </div>
           <div className="card p-4">
             <p className="text-xs font-semibold uppercase text-gray-500">Saldo total bancos</p>
@@ -558,36 +568,41 @@ function GastosFijosPage() {
           <div className="card p-4">
             <p className="text-xs font-semibold uppercase text-gray-500">CxC + bancos</p>
             <p className="mt-2 text-2xl font-bold text-gray-900">{formatCurrency(totalCxCBancos)}</p>
-            <p className="text-xs text-gray-400">Disponible antes de gastos</p>
+            <p className="text-xs text-gray-400">Disponible antes de gastos y compras</p>
           </div>
           <div className="card p-4">
             <p className="text-xs font-semibold uppercase text-gray-500">Total gastos</p>
-            <p className="mt-2 text-2xl font-bold text-gray-900">{formatCurrency(totalGastos)}</p>
+            <p className="mt-2 text-2xl font-bold text-red-600">{formatCurrency(totalGastos)}</p>
             <p className="text-xs text-gray-400">4 semanas</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs font-semibold uppercase text-gray-500">Compras a pagar</p>
+            <p className="mt-2 text-2xl font-bold text-red-600">{formatCurrency(comprasAPagarTotal)}</p>
+            <p className="text-xs text-gray-400">Marcadas &quot;Pagará&quot;</p>
           </div>
           <div
             className={`card p-4 ${
-              disponibleDespuesGastos >= 0
+              disponibleFlujo >= 0
                 ? 'bg-green-50 border-green-200'
                 : 'bg-red-50 border-red-200'
             }`}
           >
             <p
               className={`text-xs font-semibold uppercase ${
-                disponibleDespuesGastos >= 0 ? 'text-green-700' : 'text-red-700'
+                disponibleFlujo >= 0 ? 'text-green-700' : 'text-red-700'
               }`}
             >
-              Despues de gastos
+              Disponible
             </p>
             <p
               className={`mt-2 text-2xl font-bold ${
-                disponibleDespuesGastos >= 0 ? 'text-green-800' : 'text-red-800'
+                disponibleFlujo >= 0 ? 'text-green-800' : 'text-red-800'
               }`}
             >
-              {formatCurrency(disponibleDespuesGastos)}
+              {formatCurrency(disponibleFlujo)}
             </p>
-            <p className={disponibleDespuesGastos >= 0 ? 'text-xs text-green-700' : 'text-xs text-red-700'}>
-              CxC + bancos - gastos
+            <p className={disponibleFlujo >= 0 ? 'text-xs text-green-700' : 'text-xs text-red-700'}>
+              CxC + bancos − gastos − compras
             </p>
           </div>
         </section>
@@ -860,6 +875,46 @@ function GastosFijosPage() {
         </section>
       </div>
       )}
+      </div>
+
+      <style>{`
+        @media print {
+          /* Ocultar todo lo que no es el área del flujo ni un ancestro de ella */
+          body *:not(#flujo-print):not(#flujo-print *):not(:has(#flujo-print)) { display: none !important; }
+          body :has(#flujo-print) {
+            display: block !important;
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+          }
+          html, body { height: auto !important; overflow: visible !important; }
+          #flujo-print { width: 100%; height: auto !important; overflow: visible !important; font-size: 10px !important; }
+          /* Inputs como texto plano (la tabla de gastos usa inputs para los montos) */
+          #flujo-print input {
+            border: none !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+          }
+          #flujo-print select,
+          #flujo-print button,
+          #flujo-print [class*="btn-"] { display: none !important; }
+          /* Modo compacto */
+          #flujo-print .p-6 { padding: 6px 8px !important; }
+          #flujo-print [class*="space-y"] > * + * { margin-top: 4px !important; }
+          #flujo-print .gap-3, #flujo-print .gap-4 { gap: 4px !important; }
+          #flujo-print .card { box-shadow: none !important; border-radius: 4px !important; }
+          #flujo-print .card.p-3, #flujo-print .card.p-4 { padding: 4px 8px !important; }
+          #flujo-print .text-lg, #flujo-print .text-xl, #flujo-print .text-2xl { font-size: 12px !important; line-height: 1.2 !important; }
+          #flujo-print table th, #flujo-print table td {
+            padding: 2px 6px !important;
+            font-size: 9.5px !important;
+            line-height: 1.25 !important;
+          }
+          #flujo-print .badge { padding: 0 4px !important; font-size: 8.5px !important; }
+          @page { margin: 10mm; }
+        }
+      `}</style>
 
       {/* Modal: confirmar eliminación */}
       {gastoAEliminar && (
