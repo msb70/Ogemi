@@ -6,7 +6,7 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { CarteraVencida } from '@/types'
 import {
-  FileText, ShoppingCart, CreditCard, Building2, BookOpen, ClipboardList, Printer, FileSpreadsheet, Users,
+  FileText, ShoppingCart, Building2, BookOpen, ClipboardList, Printer, FileSpreadsheet,
 } from 'lucide-react'
 import { withPagePermission } from '@/components/PermissionGuard'
 import { isNC, xlsxFromReporteArea } from './reportes.utils'
@@ -14,12 +14,10 @@ import { isNC, xlsxFromReporteArea } from './reportes.utils'
 import VentasTab      from './components/VentasTab'
 import PresupuestosTab from './components/PresupuestosTab'
 import ComprasTab     from './components/ComprasTab'
-import NcTab          from './components/NcTab'
 import BancoTab       from './components/BancoTab'
 import LibrosTab      from './components/LibrosTab'
-import EstadoCuentaTab from './components/EstadoCuentaTab'
 
-type ReporteTab = 'ventas' | 'presupuestos' | 'compras' | 'nc' | 'banco' | 'libros' | 'estado_cuenta'
+type ReporteTab = 'ventas' | 'presupuestos' | 'compras' | 'banco' | 'libros'
 
 function ReportesPage() {
   const [tab, setTab] = useState<ReporteTab>('ventas')
@@ -253,22 +251,14 @@ function ReportesPage() {
     return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 15)
   })()
 
-  const ncPorCliente = (() => {
-    const map: Record<string, number> = {}
-    nc.forEach(f => { const n = f.clientes?.nombre || 'N/A'; map[n] = (map[n] || 0) + Math.abs(f.total || 0) })
-    return Object.entries(map).sort((a, b) => b[1] - a[1])
-  })()
-
   const filtrosBarProps = { search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }
 
   const tabs: { key: ReporteTab; label: string; icon: React.ElementType }[] = [
-    { key: 'ventas',       label: 'Ventas',            icon: FileText },
-    { key: 'presupuestos', label: 'Presupuestos',      icon: ClipboardList },
-    { key: 'compras',      label: 'Compras',           icon: ShoppingCart },
-    { key: 'nc',           label: 'Notas de crédito',  icon: CreditCard },
-    { key: 'banco',        label: 'Banco',             icon: Building2 },
-    { key: 'libros',       label: 'Libros',            icon: BookOpen },
-    { key: 'estado_cuenta', label: 'Estado de cuenta', icon: Users },
+    { key: 'ventas',       label: 'Ventas',       icon: FileText },
+    { key: 'presupuestos', label: 'Presupuestos', icon: ClipboardList },
+    { key: 'compras',      label: 'Compras',      icon: ShoppingCart },
+    { key: 'banco',        label: 'Banco',        icon: Building2 },
+    { key: 'libros',       label: 'Libros',       icon: BookOpen },
   ]
 
   return (
@@ -334,6 +324,7 @@ function ReportesPage() {
             cartera={cartera}
             topClientesVentas={topClientesVentas}
             ventasPorMes={ventasPorMes}
+            ncFiltradas={ncFiltradas}
           />
         )}
 
@@ -354,13 +345,6 @@ function ReportesPage() {
             topProveedores={topProveedores}
             comprasPorMes={comprasPorMes}
             compras={compras}
-          />
-        )}
-
-        {tab === 'nc' && (
-          <NcTab {...filtrosBarProps}
-            ncFiltradas={ncFiltradas}
-            ncPorCliente={ncPorCliente}
           />
         )}
 
@@ -386,10 +370,6 @@ function ReportesPage() {
             loadMovimientos={loadMovimientos}
             loadCierres={loadCierres}
           />
-        )}
-
-        {tab === 'estado_cuenta' && (
-          <EstadoCuentaTab cartera={cartera} facturas={facturas} />
         )}
 
         {tab === 'libros' && (

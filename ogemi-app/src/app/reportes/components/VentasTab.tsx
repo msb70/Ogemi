@@ -13,6 +13,8 @@ import {
 } from '../reportes.utils'
 import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
 import PivotTab from './PivotTab'
+import NcTab from './NcTab'
+import { EstadoCuentaCliente, MovimientoCliente } from './EstadoCuentaTab'
 
 // Tramos de cartera SIN columna de 120 días: 91–120 y +120 se consolidan en +90
 const TRAMOS_90 = ['corriente', '1-30', '31-60', '61-90', '+90'] as const
@@ -27,10 +29,13 @@ const normTramo = (t: string) => (t === '91-120' || t === '+120') ? '+90' : t
 type VentasSubTab =
   | 'listado'
   | 'cartera'
+  | 'vencimiento_pivot'
+  | 'estado_cuenta'
+  | 'movimiento'
   | 'porcliente'
   | 'pormes'
-  | 'vencimiento_pivot'
   | 'antiguedad_pivot'
+  | 'nc'
 
 interface VentasTabProps extends FiltrosBarProps {
   ventasFiltradas: any[]
@@ -38,10 +43,11 @@ interface VentasTabProps extends FiltrosBarProps {
   cartera: CarteraVencida[]
   topClientesVentas: [string, number][]
   ventasPorMes: { mes: string; ventas: number; count: number }[]
+  ncFiltradas: any[]
 }
 
 export default function VentasTab({
-  ventasFiltradas, facturas, cartera, topClientesVentas, ventasPorMes,
+  ventasFiltradas, facturas, cartera, topClientesVentas, ventasPorMes, ncFiltradas,
   search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta,
 }: VentasTabProps) {
   const [ventasTab, setVentasTab] = useState<VentasSubTab>('listado')
@@ -73,12 +79,15 @@ export default function VentasTab({
     <div className="p-6 space-y-4">
       <div className="flex gap-2 flex-wrap">
         {[
-          { key: 'listado',    label: 'Listado' },
-          { key: 'cartera',    label: 'Cartera vencida' },
-          { key: 'porcliente', label: 'Por cliente' },
-          { key: 'pormes',     label: 'Por período' },
+          { key: 'listado',           label: 'Listado' },
+          { key: 'cartera',           label: 'Cartera vencida' },
           { key: 'vencimiento_pivot', label: 'Vencimiento x semana' },
+          { key: 'estado_cuenta',     label: 'Estado de cuenta' },
+          { key: 'movimiento',        label: 'Movimiento' },
+          { key: 'porcliente',        label: 'Por cliente' },
+          { key: 'pormes',            label: 'Por período' },
           { key: 'antiguedad_pivot',  label: 'Antigüedad de cartera' },
+          { key: 'nc',                label: 'Notas de crédito' },
         ].map(s => (
           <button key={s.key} onClick={() => setVentasTab(s.key as VentasSubTab)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
@@ -478,6 +487,19 @@ export default function VentasTab({
 
       {ventasTab === 'antiguedad_pivot' && (
         <PivotTab key="ventas-antiguedad-pivot" facturas={facturas} cartera={cartera} initialTab="antigüedad" hideTabs />
+      )}
+
+      {ventasTab === 'estado_cuenta' && (
+        <EstadoCuentaCliente cartera={cartera} />
+      )}
+
+      {ventasTab === 'movimiento' && (
+        <MovimientoCliente facturas={facturas} />
+      )}
+
+      {ventasTab === 'nc' && (
+        <NcTab ncFiltradas={ncFiltradas}
+          {...{ search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }} />
       )}
     </div>
   )

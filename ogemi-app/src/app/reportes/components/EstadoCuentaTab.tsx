@@ -7,50 +7,19 @@ import { CarteraVencida } from '@/types'
 import { exportXLSX, buildKpiSheet, TRAMO_LABELS, normTramo, isNC } from '../reportes.utils'
 
 /**
- * Estado de cuenta por cliente, con dos vistas:
+ * Estado de cuenta por cliente — dos vistas usadas como sub-pestañas de
+ * Reportes → Ventas:
  *
- * - Cliente: TODAS las facturas pendientes del cliente (sin filtro de fechas),
- *   con su saldo real (total − retención − abonos) tomado de la vista
- *   cartera_vencida — la misma fuente que usa el resto de los reportes.
- * - Movimiento: TODAS las ventas del cliente (pagadas y pendientes) con KPIs
- *   de # facturas, pagadas, vencidas, saldo deudor, monto facturado y pagado.
+ * - EstadoCuentaCliente: TODAS las facturas pendientes del cliente (sin filtro
+ *   de fechas), con su saldo real (total − retención − abonos) tomado de la
+ *   vista cartera_vencida — la misma fuente que usa el resto de los reportes.
+ * - MovimientoCliente: TODAS las ventas del cliente (pagadas y pendientes) con
+ *   KPIs de # facturas, pagadas, vencidas, saldo deudor, monto facturado y pagado.
  */
 
-type EstadoCuentaSubTab = 'cliente' | 'movimiento'
+// ── Estado de cuenta (solo facturas pendientes) ──────────────────────────────
 
-interface EstadoCuentaTabProps {
-  cartera: CarteraVencida[]
-  facturas: any[]
-}
-
-export default function EstadoCuentaTab({ cartera, facturas }: EstadoCuentaTabProps) {
-  const [subTab, setSubTab] = useState<EstadoCuentaSubTab>('cliente')
-
-  return (
-    <div className="p-6 space-y-4">
-      <div className="flex gap-2 flex-wrap">
-        {[
-          { key: 'cliente',    label: 'Cliente' },
-          { key: 'movimiento', label: 'Movimiento' },
-        ].map(s => (
-          <button key={s.key} onClick={() => setSubTab(s.key as EstadoCuentaSubTab)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-              subTab === s.key ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'
-            }`}>
-            {s.label}
-          </button>
-        ))}
-      </div>
-
-      {subTab === 'cliente' && <EstadoCuentaCliente cartera={cartera} />}
-      {subTab === 'movimiento' && <MovimientoCliente facturas={facturas} />}
-    </div>
-  )
-}
-
-// ── Sub-vista: Estado de cuenta (solo facturas pendientes) ───────────────────
-
-function EstadoCuentaCliente({ cartera }: { cartera: CarteraVencida[] }) {
+export function EstadoCuentaCliente({ cartera }: { cartera: CarteraVencida[] }) {
   const [cliente, setCliente] = useState('')
 
   // Clientes con saldo pendiente (derivados de la cartera)
@@ -192,9 +161,9 @@ function EstadoCuentaCliente({ cartera }: { cartera: CarteraVencida[] }) {
   )
 }
 
-// ── Sub-vista: Movimiento del cliente (todas las ventas) ─────────────────────
+// ── Movimiento del cliente (todas las ventas) ────────────────────────────────
 
-function MovimientoCliente({ facturas }: { facturas: any[] }) {
+export function MovimientoCliente({ facturas }: { facturas: any[] }) {
   const [cliente, setCliente] = useState('')
   const hoy = new Date().toISOString().split('T')[0]
 
