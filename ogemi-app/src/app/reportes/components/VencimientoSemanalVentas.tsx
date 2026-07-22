@@ -20,11 +20,12 @@ export interface VencimientoSemanalVentasProps {
   /** Marcas "No pagará" controladas (persistidas por el padre). Si se omiten, estado local. */
   noPagaraSet?: Set<string>
   onToggleNoPagara?: (id: string, marked: boolean) => void
+  onToggleManyNoPagara?: (ids: string[], marked: boolean) => void
 }
 
 export default function VencimientoSemanalVentas({
   facturas, weekDates: weekDatesProp, setWeekDates: setWeekDatesProp,
-  noPagaraSet: noPagaraProp, onToggleNoPagara,
+  noPagaraSet: noPagaraProp, onToggleNoPagara, onToggleManyNoPagara,
 }: VencimientoSemanalVentasProps) {
   const [internalDates, setInternalDates] = useState<string[]>(() =>
     getNextFridays(4).map(d => d.toISOString().split('T')[0])
@@ -50,6 +51,39 @@ export default function VencimientoSemanalVentas({
     const matchSemana = semanaFilter === 'all' || r.fridayIdx === parseInt(semanaFilter)
     return matchSearch && matchSemana
   })
+
+  // Agrupado por cliente (con subtotales por semana)
+  const ventasGroups = (() => {
+    const m = new Map<string, any[]>()
+    viernesRows.forEach((r: any) => {
+      const k = r.clientes?.nombre || '—'
+      if (!m.has(k)) m.set(k, [])
+      m.get(k)!.push(r)
+    })
+    return Array.from(m.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([nombre, rows]) => ({
+        nombre,
+        rows,
+        weekTotals: weekDateObjs.map((_, i) =>
+          rows.filter((r: any) => r.fridayIdx === i).reduce((s: number, r: any) => s + (r.total || 0), 0)
+        ),
+        total: rows.reduce((s: number, r: any) => s + (r.total || 0), 0),
+      }))
+  })()
+
+  // Marcar/desmarcar todas las filas visibles (filtradas)
+  const allMarked = viernesRows.length > 0 && viernesRows.every((r: any) => noPagaraSet.has(r.id))
+  const toggleAll = (marked: boolean) => {
+    const ids = viernesRows.map((r: any) => r.id as string)
+    if (onToggleManyNoPagara) { onToggleManyNoPagara(ids, marked); return }
+    if (onToggleNoPagara) { ids.forEach(id => onToggleNoPagara(id, marked)); return }
+    setInternalNoPagara(prev => {
+      const next = new Set(prev)
+      ids.forEach(id => marked ? next.add(id) : next.delete(id))
+      return next
+    })
+  }
 
   const totProbable = weekDateObjs.map((_, i) =>
     vencViernes.rows.filter((r: any) => r.fridayIdx === i && !noPagaraSet.has(r.id))
@@ -141,35 +175,58 @@ export default function VencimientoSemanalVentas({
                     <span className="font-normal text-[10px] opacity-80">{formatDateObj(fri).slice(0, 5)}</span>
                   </th>
                 ))}
-                <th className="table-header text-center min-w-[60px] text-[11px]">No<br />Pagará</th>
+                <th className="table-header text-center min-w-[60px] text-[11px]">
+                  <div className="flex flex-col items-center gap-1">
+                    <span>No<br />Pagará</span>
+                    <input type="checkbox" checked={allMarked}
+                      onChange={e => toggleAll(e.target.checked)}
+                      className="w-4 h-4 accent-red-600 cursor-pointer"
+                      title="Marcar/desmarcar todas como No Pagará" />
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {viernesRows.map((f: any) => {
-                const isNoPaga = noPagaraSet.has(f.id)
-                return (
-                  <tr key={f.id} className={`hover:bg-gray-50 transition-opacity ${isNoPaga ? 'opacity-50 bg-red-50/40' : ''}`}>
-                    <td className={`table-cell sticky left-0 z-10 max-w-[220px] ${isNoPaga ? 'bg-red-50' : 'bg-white'}`}>
-                      <span className="truncate block text-sm">{f.clientes?.nombre || '—'}</span>
-                    </td>
-                    <td className="table-cell text-center font-mono text-sm text-gray-500">#{f.numero_factura}</td>
-                    <td className="table-cell text-center text-sm text-gray-400">{formatDate(f.fecha)}</td>
-                    <td className="table-cell text-center text-sm font-semibold text-red-600">{formatDate(f.fecha_pago)}</td>
-                    {weekDateObjs.map((_, i) => (
-                      <td key={i} className="table-cell text-right text-sm">
-                        {f.fridayIdx === i
-                          ? <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>{formatMonto(f.total)}</span>
-                          : <span className="text-gray-200">—</span>}
+              {ventasGroups.flatMap((g) => [
+                <tr key={`h-${g.nombre}`} className="bg-gray-100 border-t-2 border-gray-300">
+                  <td colSpan={4 + weekDateObjs.length + 1} className="table-cell sticky left-0 bg-gray-100 z-10 font-bold text-gray-800 text-sm">
+                    {g.nombre}
+                    <span className="text-xs font-normal text-gray-400"> · {g.rows.length} {g.rows.length === 1 ? 'factura' : 'facturas'} · {formatMonto(g.total)}</span>
+                  </td>
+                </tr>,
+                ...g.rows.map((f: any) => {
+                  const isNoPaga = noPagaraSet.has(f.id)
+                  return (
+                    <tr key={f.id} className={`hover:bg-gray-50 transition-opacity ${isNoPaga ? 'opacity-50 bg-red-50/40' : ''}`}>
+                      <td className={`table-cell sticky left-0 z-10 max-w-[220px] ${isNoPaga ? 'bg-red-50' : 'bg-white'}`}>
+                        <span className="truncate block text-sm">{f.clientes?.nombre || '—'}</span>
                       </td>
-                    ))}
-                    <td className="table-cell text-center">
-                      <input type="checkbox" checked={isNoPaga}
-                        onChange={e => toggleNoPagara(f.id, e.target.checked)}
-                        className="w-4 h-4 accent-red-600 cursor-pointer" title="Marcar como No Pagará" />
-                    </td>
-                  </tr>
-                )
-              })}
+                      <td className="table-cell text-center font-mono text-sm text-gray-500">#{f.numero_factura}</td>
+                      <td className="table-cell text-center text-sm text-gray-400">{formatDate(f.fecha)}</td>
+                      <td className="table-cell text-center text-sm font-semibold text-red-600">{formatDate(f.fecha_pago)}</td>
+                      {weekDateObjs.map((_, i) => (
+                        <td key={i} className="table-cell text-right text-sm">
+                          {f.fridayIdx === i
+                            ? <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>{formatMonto(f.total)}</span>
+                            : <span className="text-gray-200">—</span>}
+                        </td>
+                      ))}
+                      <td className="table-cell text-center">
+                        <input type="checkbox" checked={isNoPaga}
+                          onChange={e => toggleNoPagara(f.id, e.target.checked)}
+                          className="w-4 h-4 accent-red-600 cursor-pointer" title="Marcar como No Pagará" />
+                      </td>
+                    </tr>
+                  )
+                }),
+                <tr key={`s-${g.nombre}`} className="border-t border-gray-200 bg-gray-50 text-sm font-semibold">
+                  <td colSpan={4} className="table-cell text-right sticky left-0 bg-gray-50 z-10 text-gray-500">Subtotal {g.nombre}</td>
+                  {g.weekTotals.map((t, i) => (
+                    <td key={i} className="table-cell text-right text-gray-700">{t > 0 ? formatMonto(t) : '—'}</td>
+                  ))}
+                  <td className="table-cell" />
+                </tr>,
+              ])}
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">

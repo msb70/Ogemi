@@ -20,6 +20,7 @@ export interface VencimientoSemanalComprasProps {
   /** Marcas "Pagará" controladas (persistidas por el padre). Si se omiten, estado local. */
   pagaraSet?: Set<string>
   onTogglePagara?: (id: string, marked: boolean) => void
+  onToggleManyPagara?: (ids: string[], marked: boolean) => void
 }
 
 /**
@@ -28,7 +29,7 @@ export interface VencimientoSemanalComprasProps {
  */
 export default function VencimientoSemanalCompras({
   compras, weekDates: weekDatesProp, setWeekDates: setWeekDatesProp,
-  pagaraSet: pagaraProp, onTogglePagara,
+  pagaraSet: pagaraProp, onTogglePagara, onToggleManyPagara,
 }: VencimientoSemanalComprasProps) {
   const [internalDates, setInternalDates] = useState<string[]>(() =>
     getNextFridays(4).map(d => d.toISOString().split('T')[0])
@@ -75,6 +76,19 @@ export default function VencimientoSemanalCompras({
         total: rows.reduce((s: number, r: any) => s + (r.saldo ?? r.total ?? 0), 0),
       }))
   })()
+
+  // Marcar/desmarcar todas las filas visibles (filtradas)
+  const allMarked = compRows.length > 0 && compRows.every((r: any) => pagaraSet.has(r.id))
+  const toggleAll = (marked: boolean) => {
+    const ids = compRows.map((r: any) => r.id as string)
+    if (onToggleManyPagara) { onToggleManyPagara(ids, marked); return }
+    if (onTogglePagara) { ids.forEach(id => onTogglePagara(id, marked)); return }
+    setInternalPagara(prev => {
+      const next = new Set(prev)
+      ids.forEach(id => marked ? next.add(id) : next.delete(id))
+      return next
+    })
+  }
 
   // Check invertido: marcada = Pagará. Lo no marcado se considera "No pagará".
   const compTotPagara = compWeekDateObjs.map((_, i) =>
@@ -164,7 +178,15 @@ export default function VencimientoSemanalCompras({
                     <span className="font-normal text-[10px] opacity-80">{formatDateObj(fri).slice(0, 5)}</span>
                   </th>
                 ))}
-                <th className="table-header text-center min-w-[60px] text-[11px]">Pagará</th>
+                <th className="table-header text-center min-w-[60px] text-[11px]">
+                  <div className="flex flex-col items-center gap-1">
+                    <span>Pagará</span>
+                    <input type="checkbox" checked={allMarked}
+                      onChange={e => toggleAll(e.target.checked)}
+                      className="w-4 h-4 accent-green-600 cursor-pointer"
+                      title="Marcar/desmarcar todas como Pagará" />
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">

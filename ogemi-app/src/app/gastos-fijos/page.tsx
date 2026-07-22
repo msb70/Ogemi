@@ -312,6 +312,26 @@ function GastosFijosPage() {
     }
   }, [periodo, showToast, supabase])
 
+  // Marcar/desmarcar TODAS las filas visibles de una pestaña (persistido en lote)
+  const toggleMarcaMany = useCallback(async (tipo: TipoMarca, ids: string[], marked: boolean) => {
+    if (ids.length === 0) return
+    const setter = tipo === 'venta' ? setMarcasVentas : tipo === 'presupuesto' ? setMarcasPresupuestos : setMarcasCompras
+    setter(prev => {
+      const next = new Set(prev)
+      ids.forEach(id => marked ? next.add(id) : next.delete(id))
+      return next
+    })
+    const { error } = marked
+      ? await supabase.from('flujo_pago_marcas')
+          .upsert(ids.map(id => ({ periodo, tipo, doc_id: id })), { onConflict: 'periodo,tipo,doc_id', ignoreDuplicates: true })
+      : await supabase.from('flujo_pago_marcas')
+          .delete().eq('periodo', periodo).eq('tipo', tipo).in('doc_id', ids)
+    if (error) {
+      await loadMarcas() // resincronizar con la BD
+      showToast(`Error al guardar las marcas: ${error.message}`, 'error')
+    }
+  }, [periodo, loadMarcas, showToast, supabase])
+
   // ── Resumen del flujo de pago por semana ────────────────────────────────────
   const flujo = useMemo(() => {
     const dateObjs = semanaFechas.map(d => new Date(d + 'T00:00:00'))
@@ -520,6 +540,7 @@ function GastosFijosPage() {
                   setWeekDates={setSemanaFechas}
                   noPagaraSet={marcasVentas}
                   onToggleNoPagara={(id, marked) => toggleMarca('venta', id, marked)}
+                  onToggleManyNoPagara={(ids, marked) => toggleMarcaMany('venta', ids, marked)}
                 />
               )}
               {pestana === 'presupuestos' && (
@@ -529,6 +550,7 @@ function GastosFijosPage() {
                   setWeekDates={setSemanaFechas}
                   noPagaraSet={marcasPresupuestos}
                   onToggleNoPagara={(id, marked) => toggleMarca('presupuesto', id, marked)}
+                  onToggleManyNoPagara={(ids, marked) => toggleMarcaMany('presupuesto', ids, marked)}
                 />
               )}
               {pestana === 'compras' && (
@@ -538,6 +560,7 @@ function GastosFijosPage() {
                   setWeekDates={setSemanaFechas}
                   pagaraSet={marcasCompras}
                   onTogglePagara={(id, marked) => toggleMarca('compra', id, marked)}
+                  onToggleManyPagara={(ids, marked) => toggleMarcaMany('compra', ids, marked)}
                 />
               )}
             </>

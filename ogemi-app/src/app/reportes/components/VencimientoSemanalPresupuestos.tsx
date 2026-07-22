@@ -20,11 +20,12 @@ export interface VencimientoSemanalPresupuestosProps {
   /** Marcas "No pagará" controladas (persistidas por el padre). Si se omiten, estado local. */
   noPagaraSet?: Set<string>
   onToggleNoPagara?: (id: string, marked: boolean) => void
+  onToggleManyNoPagara?: (ids: string[], marked: boolean) => void
 }
 
 export default function VencimientoSemanalPresupuestos({
   presupuestos, weekDates: weekDatesProp, setWeekDates: setWeekDatesProp,
-  noPagaraSet: noPagaraProp, onToggleNoPagara,
+  noPagaraSet: noPagaraProp, onToggleNoPagara, onToggleManyNoPagara,
 }: VencimientoSemanalPresupuestosProps) {
   const [internalDates, setInternalDates] = useState<string[]>(() =>
     getNextFridays(4).map(d => d.toISOString().split('T')[0])
@@ -70,6 +71,19 @@ export default function VencimientoSemanalPresupuestos({
         total: rows.reduce((s: number, r: any) => s + (r.saldo ?? r.total ?? 0), 0),
       }))
   })()
+
+  // Marcar/desmarcar todas las filas visibles (filtradas)
+  const allMarked = presRows.length > 0 && presRows.every((r: any) => presNoPagaraSet.has(r.id))
+  const toggleAll = (marked: boolean) => {
+    const ids = presRows.map((r: any) => r.id as string)
+    if (onToggleManyNoPagara) { onToggleManyNoPagara(ids, marked); return }
+    if (onToggleNoPagara) { ids.forEach(id => onToggleNoPagara(id, marked)); return }
+    setInternalNoPagara(prev => {
+      const next = new Set(prev)
+      ids.forEach(id => marked ? next.add(id) : next.delete(id))
+      return next
+    })
+  }
 
   const presTotProbable = presWeekDateObjs.map((_, i) =>
     vencPresupuestos.rows.filter((r: any) => r.fridayIdx === i && !presNoPagaraSet.has(r.id))
@@ -162,7 +176,15 @@ export default function VencimientoSemanalPresupuestos({
                     <span className="font-normal text-[10px] opacity-80">{formatDateObj(fri).slice(0, 5)}</span>
                   </th>
                 ))}
-                <th className="table-header text-center min-w-[60px] text-[11px]">No<br />Pagará</th>
+                <th className="table-header text-center min-w-[60px] text-[11px]">
+                  <div className="flex flex-col items-center gap-1">
+                    <span>No<br />Pagará</span>
+                    <input type="checkbox" checked={allMarked}
+                      onChange={e => toggleAll(e.target.checked)}
+                      className="w-4 h-4 accent-red-600 cursor-pointer"
+                      title="Marcar/desmarcar todas como No Pagará" />
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
