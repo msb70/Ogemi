@@ -65,6 +65,36 @@ const defaultWeekDates = (month: string): string[] => {
   return [0, 1, 2, 3].map(i => toISO(new Date(y, m - 1, firstFriday + i * 7)))
 }
 
+/**
+ * Input de monto sin flechas (type="text"): mientras se edita muestra el valor
+ * crudo; al salir, formateado con separador de miles y 2 decimales.
+ */
+function MontoInput({ value, onChange, disabled }: {
+  value: string
+  onChange: (v: string) => void
+  disabled?: boolean
+}) {
+  const [editing, setEditing] = useState(false)
+  const num = parseFloat(value)
+  const display = editing
+    ? value
+    : value && !isNaN(num)
+      ? num.toLocaleString('es-PA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : ''
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      className="input max-w-[120px] text-right ml-auto"
+      value={display}
+      disabled={disabled}
+      onFocus={() => setEditing(true)}
+      onBlur={() => setEditing(false)}
+      onChange={e => onChange(e.target.value.replace(/,/g, ''))}
+    />
+  )
+}
+
 function GastosFijosPage() {
   const supabase = useMemo(() => createClient(), [])
   const { toast, showToast, hideToast } = useToast()
@@ -555,29 +585,29 @@ function GastosFijosPage() {
         <section className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
           <div className="card p-4">
             <p className="text-xs font-semibold uppercase text-gray-500">CxC vencida al corte</p>
-            <p className="mt-2 text-2xl font-bold text-green-700">{formatCurrency(cxcProbable)}</p>
+            <p className="mt-2 text-lg font-bold text-green-700">{formatCurrency(cxcProbable)}</p>
             <p className="text-xs text-gray-400">
               Ventas {formatCurrency(cobrosVentasTotal)} · Presup. {formatCurrency(cobrosPresTotal)}
             </p>
           </div>
           <div className="card p-4">
             <p className="text-xs font-semibold uppercase text-gray-500">Saldo total bancos</p>
-            <p className="mt-2 text-2xl font-bold text-brand-700">{formatCurrency(saldoBancos)}</p>
+            <p className="mt-2 text-lg font-bold text-brand-700">{formatCurrency(saldoBancos)}</p>
             <p className="text-xs text-gray-400">{cuentas.length} cuentas activas</p>
           </div>
           <div className="card p-4">
             <p className="text-xs font-semibold uppercase text-gray-500">CxC + bancos</p>
-            <p className="mt-2 text-2xl font-bold text-gray-900">{formatCurrency(totalCxCBancos)}</p>
+            <p className="mt-2 text-lg font-bold text-gray-900">{formatCurrency(totalCxCBancos)}</p>
             <p className="text-xs text-gray-400">Disponible antes de gastos y compras</p>
           </div>
           <div className="card p-4">
             <p className="text-xs font-semibold uppercase text-gray-500">Total gastos</p>
-            <p className="mt-2 text-2xl font-bold text-red-600">{formatCurrency(totalGastos)}</p>
+            <p className="mt-2 text-lg font-bold text-red-600">{formatCurrency(totalGastos)}</p>
             <p className="text-xs text-gray-400">4 semanas</p>
           </div>
           <div className="card p-4">
             <p className="text-xs font-semibold uppercase text-gray-500">Compras a pagar</p>
-            <p className="mt-2 text-2xl font-bold text-red-600">{formatCurrency(comprasAPagarTotal)}</p>
+            <p className="mt-2 text-lg font-bold text-red-600">{formatCurrency(comprasAPagarTotal)}</p>
             <p className="text-xs text-gray-400">Marcadas &quot;Pagará&quot;</p>
           </div>
           <div
@@ -595,7 +625,7 @@ function GastosFijosPage() {
               Disponible
             </p>
             <p
-              className={`mt-2 text-2xl font-bold ${
+              className={`mt-2 text-lg font-bold ${
                 disponibleFlujo >= 0 ? 'text-green-800' : 'text-red-800'
               }`}
             >
@@ -752,13 +782,9 @@ function GastosFijosPage() {
                         </td>
                         {SEMANAS.map(semana => (
                           <td key={semana} className="table-cell">
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              className="input max-w-[120px] text-right ml-auto"
+                            <MontoInput
                               value={fila[semana] || ''}
-                              onChange={event => updateMonto(gasto.id, semana, event.target.value)}
+                              onChange={v => updateMonto(gasto.id, semana, v)}
                               disabled={!gasto.activo}
                             />
                           </td>
