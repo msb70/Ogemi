@@ -8,12 +8,14 @@ import { formatCurrency } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
 import { Toast } from '@/components/Toast'
 import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
-import { CalendarDays, Plus, Save, WalletCards, Trash2, X } from 'lucide-react'
+import { CalendarDays, Plus, Save, WalletCards, Trash2, FileText, ClipboardList, ShoppingCart } from 'lucide-react'
+import VencimientoSemanalVentas from '@/app/reportes/components/VencimientoSemanalVentas'
+import VencimientoSemanalPresupuestos from '@/app/reportes/components/VencimientoSemanalPresupuestos'
+import VencimientoSemanalCompras from '@/app/reportes/components/VencimientoSemanalCompras'
 
 type GastoFijo = {
   id: string
   nombre: string
-  categoria: string | null
   activo: boolean
   orden: number
 }
@@ -32,6 +34,8 @@ type BancoCuentaLite = {
   nombre: string
   banco: string
 }
+
+type Pestana = 'gastos' | 'ventas' | 'presupuestos' | 'compras'
 
 const SEMANAS = [1, 2, 3, 4] as const
 type Semana = (typeof SEMANAS)[number]
@@ -61,6 +65,7 @@ const defaultWeekDates = (month: string): string[] => {
 function GastosFijosPage() {
   const supabase = useMemo(() => createClient(), [])
   const { toast, showToast, hideToast } = useToast()
+  const [pestana, setPestana] = useState<Pestana>('gastos')
   const [periodoMes, setPeriodoMes] = useState(currentMonth)
   const [fechaResumen, setFechaResumen] = useState(new Date().toISOString().split('T')[0])
   const [gastos, setGastos] = useState<GastoFijo[]>([])
@@ -73,11 +78,16 @@ function GastosFijosPage() {
   const [facturasPendientes, setFacturasPendientes] = useState(0)
   const [loading, setLoading] = useState(true)
   const [savingMontos, setSavingMontos] = useState(false)
-  const [nuevoGasto, setNuevoGasto] = useState({ nombre: '', categoria: '' })
+  const [nuevoGastoNombre, setNuevoGastoNombre] = useState('')
   const [gastoAEliminar, setGastoAEliminar] = useState<GastoFijo | null>(null)
   const [eliminando, setEliminando] = useState(false)
-  const [categoriaAEliminar, setCategoriaAEliminar] = useState<string | null>(null)
-  const [eliminandoCat, setEliminandoCat] = useState(false)
+
+  // Datos para las pestañas de vencimiento semanal (se cargan al abrirlas)
+  const [vencLoaded, setVencLoaded] = useState(false)
+  const [vencLoading, setVencLoading] = useState(false)
+  const [facturasAll, setFacturasAll] = useState<any[]>([])
+  const [presupuestosAll, setPresupuestosAll] = useState<any[]>([])
+  const [comprasAll, setComprasAll] = useState<any[]>([])
 
   const periodo = useMemo(() => monthToPeriod(periodoMes), [periodoMes])
 
@@ -91,11 +101,6 @@ function GastosFijosPage() {
   const totalGastos = useMemo(() => totalesSemana.reduce((a, b) => a + b, 0), [totalesSemana])
   const totalCxCBancos = cuentasPorCobrar + saldoBancos
   const disponibleDespuesGastos = totalCxCBancos - totalGastos
-
-  const categorias = useMemo(
-    () => Array.from(new Set(gastos.map(g => g.categoria).filter((c): c is string => !!c))).sort(),
-    [gastos]
-  )
 
   const loadGastos = useCallback(async () => {
     const { data, error } = await supabase
@@ -223,13 +228,39 @@ function GastosFijosPage() {
   // Recalcular CxC vencida a la fecha de cada semana cuando cambian las fechas
   useEffect(() => { loadCxcSemana(semanaFechas) }, [semanaFechas, loadCxcSemana])
 
+  // Cargar facturas/presupuestos/compras al abrir una pestaña de vencimiento
+  const loadVencimientos = useCallback(async () => {
+    setVencLoading(true)
+    const [
+      { data: facturasData, error: e1 },
+      { data: presupuestosData, error: e2 },
+      { data: comprasData, error: e3 },
+    ] = await Promise.all([
+      supabase.from('facturas').select('*, clientes(nombre)').order('fecha', { ascending: false }),
+      supabase.from('presupuestos').select('*, clientes(nombre)').order('fecha', { ascending: false }),
+      supabase.from('compras').select('*, proveedores(nombre)').order('fecha', { ascending: false }),
+    ])
+    const err = e1 || e2 || e3
+    if (err) {
+      showToast(`Error al cargar vencimientos: ${err.message}`, 'error')
+    }
+    setFacturasAll(facturasData || [])
+    setPresupuestosAll(presupuestosData || [])
+    setComprasAll(comprasData || [])
+    setVencLoading(false)
+    setVencLoaded(true)
+  }, [showToast, supabase])
+
+  useEffect(() => {
+    if (pestana !== 'gastos' && !vencLoaded && !vencLoading) loadVencimientos()
+  }, [pestana, vencLoaded, vencLoading, loadVencimientos])
+
   const crearGasto = async () => {
-    const nombre = nuevoGasto.nombre.trim()
+    const nombre = nuevoGastoNombre.trim()
     if (!nombre) return
 
     const { error } = await supabase.from('gastos_fijos').insert({
       nombre,
-      categoria: nuevoGasto.categoria.trim() || null,
       orden: gastos.length + 1,
     })
 
@@ -238,7 +269,7 @@ function GastosFijosPage() {
       return
     }
 
-    setNuevoGasto({ nombre: '', categoria: '' })
+    setNuevoGastoNombre('')
     showToast('Gasto fijo creado.')
     loadGastos()
   }
@@ -262,10 +293,10 @@ function GastosFijosPage() {
       fecha: semanaFechas[semana - 1] || defaultWeekDates(periodoMes)[semana - 1],
     }))
 
-    // Persistir nombres/categorías editados (solo filas con nombre no vacío)
+    // Persistir nombres editados (solo filas con nombre no vacío)
     const gastoRows = gastos
       .filter(g => g.nombre.trim())
-      .map(g => ({ id: g.id, nombre: g.nombre.trim(), categoria: g.categoria?.trim() || null }))
+      .map(g => ({ id: g.id, nombre: g.nombre.trim() }))
 
     setSavingMontos(true)
 
@@ -291,25 +322,8 @@ function GastosFijosPage() {
     loadGastos()
   }
 
-  const updateGasto = (id: string, field: 'nombre' | 'categoria', value: string) => {
-    setGastos(prev => prev.map(g => (g.id === id ? { ...g, [field]: value } : g)))
-  }
-
-  const eliminarCategoria = async () => {
-    if (!categoriaAEliminar) return
-    setEliminandoCat(true)
-    const { error } = await supabase
-      .from('gastos_fijos')
-      .update({ categoria: null })
-      .eq('categoria', categoriaAEliminar)
-    setEliminandoCat(false)
-    if (error) {
-      showToast(`Error al eliminar categoría: ${error.message}`, 'error')
-      return
-    }
-    showToast('Categoría eliminada.')
-    setCategoriaAEliminar(null)
-    loadGastos()
+  const updateGasto = (id: string, value: string) => {
+    setGastos(prev => prev.map(g => (g.id === id ? { ...g, nombre: value } : g)))
   }
 
   const eliminarGasto = async () => {
@@ -351,6 +365,13 @@ function GastosFijosPage() {
     loadGastos()
   }
 
+  const pestanas: { key: Pestana; label: string; icon: React.ElementType }[] = [
+    { key: 'gastos',       label: 'Gastos fijos',          icon: WalletCards },
+    { key: 'ventas',       label: 'Ventas x semana',       icon: FileText },
+    { key: 'presupuestos', label: 'Presupuestos x semana', icon: ClipboardList },
+    { key: 'compras',      label: 'Compras x semana',      icon: ShoppingCart },
+  ]
+
   return (
     <AppLayout>
       {toast && <Toast {...toast} onClose={hideToast} />}
@@ -359,6 +380,55 @@ function GastosFijosPage() {
         subtitle="Planificacion semanal, cuentas por cobrar y saldos bancarios"
       />
 
+      <div className="bg-white border-b border-gray-200 px-6">
+        <div className="flex gap-1 overflow-x-auto">
+          {pestanas.map(t => {
+            const Icon = t.icon
+            return (
+              <button key={t.key} onClick={() => setPestana(t.key)}
+                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                  pestana === t.key ? 'border-brand-600 text-brand-700' : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}>
+                <Icon size={14} />{t.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {pestana !== 'gastos' && (
+        <div className="p-6">
+          {vencLoading || !vencLoaded ? (
+            <div className="p-8 text-center text-sm text-gray-400">Cargando datos...</div>
+          ) : (
+            <>
+              {pestana === 'ventas' && (
+                <VencimientoSemanalVentas
+                  facturas={facturasAll}
+                  weekDates={semanaFechas}
+                  setWeekDates={setSemanaFechas}
+                />
+              )}
+              {pestana === 'presupuestos' && (
+                <VencimientoSemanalPresupuestos
+                  presupuestos={presupuestosAll}
+                  weekDates={semanaFechas}
+                  setWeekDates={setSemanaFechas}
+                />
+              )}
+              {pestana === 'compras' && (
+                <VencimientoSemanalCompras
+                  compras={comprasAll}
+                  weekDates={semanaFechas}
+                  setWeekDates={setSemanaFechas}
+                />
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {pestana === 'gastos' && (
       <div className="p-6 space-y-6">
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="card p-4">
@@ -448,24 +518,14 @@ function GastosFijosPage() {
             <Plus size={16} className="text-brand-600" />
             <h2 className="text-sm font-semibold text-gray-800">Crear gasto fijo</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
             <label>
               <span className="label">Nombre</span>
               <input
                 className="input"
-                value={nuevoGasto.nombre}
-                onChange={event => setNuevoGasto(prev => ({ ...prev, nombre: event.target.value }))}
+                value={nuevoGastoNombre}
+                onChange={event => setNuevoGastoNombre(event.target.value)}
                 placeholder="Ej. Alquiler, planilla, internet"
-              />
-            </label>
-            <label>
-              <span className="label">Categoria</span>
-              <input
-                className="input"
-                list="categorias-list"
-                value={nuevoGasto.categoria}
-                onChange={event => setNuevoGasto(prev => ({ ...prev, categoria: event.target.value }))}
-                placeholder="Selecciona o crea una..."
               />
             </label>
             <button className="btn-primary inline-flex items-center gap-2" onClick={crearGasto}>
@@ -473,28 +533,6 @@ function GastosFijosPage() {
               Crear
             </button>
           </div>
-
-          {categorias.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <p className="label mb-2">Categorías existentes</p>
-              <div className="flex flex-wrap gap-2">
-                {categorias.map(cat => (
-                  <span key={cat} className="badge bg-gray-100 text-gray-600 inline-flex items-center gap-1.5">
-                    {cat}
-                    <PermissionGuard modulo="gastos_fijos" accion="editar" silent>
-                      <button
-                        onClick={() => setCategoriaAEliminar(cat)}
-                        className="text-gray-400 hover:text-red-600"
-                        title="Eliminar categoría (la quita de todos los gastos)"
-                      >
-                        <X size={13} />
-                      </button>
-                    </PermissionGuard>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
         </section>
 
         <section className="card overflow-hidden">
@@ -512,16 +550,11 @@ function GastosFijosPage() {
             </button>
           </div>
 
-          <datalist id="categorias-list">
-            {categorias.map(c => <option key={c} value={c} />)}
-          </datalist>
-
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200">
                   <th className="table-header">Gasto fijo</th>
-                  <th className="table-header">Categoria</th>
                   {SEMANAS.map((semana, i) => (
                     <th key={semana} className="table-header text-right">
                       <div className="flex flex-col items-end gap-1">
@@ -542,9 +575,9 @@ function GastosFijosPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={8} className="text-center py-10 text-gray-400">Cargando...</td></tr>
+                  <tr><td colSpan={7} className="text-center py-10 text-gray-400">Cargando...</td></tr>
                 ) : gastos.length === 0 ? (
-                  <tr><td colSpan={8} className="text-center py-10 text-gray-400">No hay gastos fijos creados.</td></tr>
+                  <tr><td colSpan={7} className="text-center py-10 text-gray-400">No hay gastos fijos creados.</td></tr>
                 ) : (
                   gastos.map(gasto => {
                     const fila = montos[gasto.id] || emptyMontos()
@@ -555,17 +588,7 @@ function GastosFijosPage() {
                           <input
                             className="input min-w-[160px]"
                             value={gasto.nombre}
-                            onChange={event => updateGasto(gasto.id, 'nombre', event.target.value)}
-                            disabled={!gasto.activo}
-                          />
-                        </td>
-                        <td className="table-cell">
-                          <input
-                            className="input min-w-[150px]"
-                            list="categorias-list"
-                            value={gasto.categoria || ''}
-                            onChange={event => updateGasto(gasto.id, 'categoria', event.target.value)}
-                            placeholder="Categoría..."
+                            onChange={event => updateGasto(gasto.id, event.target.value)}
                             disabled={!gasto.activo}
                           />
                         </td>
@@ -610,7 +633,7 @@ function GastosFijosPage() {
               {gastos.length > 0 && (
                 <tfoot>
                   <tr className="border-t border-gray-200 bg-gray-50">
-                    <td className="table-cell font-bold" colSpan={2}>Total semana</td>
+                    <td className="table-cell font-bold">Total semana</td>
                     {totalesSemana.map((total, i) => (
                       <td key={i} className="table-cell text-right font-bold">{formatCurrency(total)}</td>
                     ))}
@@ -618,7 +641,7 @@ function GastosFijosPage() {
                     <td className="table-cell"></td>
                   </tr>
                   <tr className="bg-gray-50">
-                    <td className="table-cell text-xs text-gray-500" colSpan={2}>CxC vencida a la fecha</td>
+                    <td className="table-cell text-xs text-gray-500">CxC vencida a la fecha</td>
                     {cxcSemana.map((v, i) => (
                       <td key={i} className="table-cell text-right text-xs font-semibold text-orange-600">
                         {formatCurrency(v)}
@@ -633,36 +656,6 @@ function GastosFijosPage() {
           </div>
         </section>
       </div>
-
-      {/* Modal: confirmar eliminación de categoría */}
-      {categoriaAEliminar && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold mb-1 flex items-center gap-2">
-              <Trash2 size={18} className="text-red-500" /> Eliminar categoría
-            </h2>
-            <p className="text-sm text-gray-600 mb-4">
-              ¿Eliminar la categoría <span className="font-semibold">{categoriaAEliminar}</span>?
-              Se quitará de todos los gastos que la usan (los gastos quedan sin categoría). No se borra ningún gasto.
-            </p>
-            <div className="flex gap-3">
-              <button
-                className="btn-secondary flex-1"
-                onClick={() => setCategoriaAEliminar(null)}
-                disabled={eliminandoCat}
-              >
-                Cancelar
-              </button>
-              <button
-                className="btn-primary flex-1 !bg-red-600 hover:!bg-red-700"
-                onClick={eliminarCategoria}
-                disabled={eliminandoCat}
-              >
-                {eliminandoCat ? 'Eliminando...' : 'Eliminar'}
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Modal: confirmar eliminación */}
