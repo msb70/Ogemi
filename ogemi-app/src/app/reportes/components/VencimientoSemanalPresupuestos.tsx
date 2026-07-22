@@ -14,13 +14,17 @@ const WEEK_COLORS = [
 
 export interface VencimientoSemanalPresupuestosProps {
   presupuestos: any[]
-  /** Fechas controladas (ej. las semanas de Gastos fijos). Si se omiten, usa los próximos 4 viernes. */
+  /** Fechas controladas (ej. las semanas del Flujo de Pago). Si se omiten, usa los próximos 4 viernes. */
   weekDates?: string[]
   setWeekDates?: (dates: string[]) => void
+  /** Marcas "No pagará" controladas (persistidas por el padre). Si se omiten, estado local. */
+  noPagaraSet?: Set<string>
+  onToggleNoPagara?: (id: string, marked: boolean) => void
 }
 
 export default function VencimientoSemanalPresupuestos({
   presupuestos, weekDates: weekDatesProp, setWeekDates: setWeekDatesProp,
+  noPagaraSet: noPagaraProp, onToggleNoPagara,
 }: VencimientoSemanalPresupuestosProps) {
   const [internalDates, setInternalDates] = useState<string[]>(() =>
     getNextFridays(4).map(d => d.toISOString().split('T')[0])
@@ -29,7 +33,12 @@ export default function VencimientoSemanalPresupuestos({
   const setPresWeekDates = setWeekDatesProp ?? setInternalDates
   const [presSearch, setPresSearch] = useState('')
   const [presSemFilter, setPresSemFilter] = useState<string>('all')
-  const [presNoPagaraSet, setPresNoPagaraSet] = useState<Set<number>>(new Set())
+  const [internalNoPagara, setInternalNoPagara] = useState<Set<string>>(new Set())
+  const presNoPagaraSet = noPagaraProp ?? internalNoPagara
+  const toggleNoPagara = (id: string, marked: boolean) => {
+    if (onToggleNoPagara) { onToggleNoPagara(id, marked); return }
+    setInternalNoPagara(prev => { const next = new Set(prev); marked ? next.add(id) : next.delete(id); return next })
+  }
 
   const presWeekDateObjs = presWeekDates.map(d => new Date(d + 'T00:00:00'))
   const vencPresupuestos = buildVencimientoSemanal(presupuestos, presWeekDateObjs, 'fecha_pago')
@@ -191,7 +200,7 @@ export default function VencimientoSemanalPresupuestos({
                       ))}
                       <td className="table-cell text-center">
                         <input type="checkbox" checked={isNoPaga}
-                          onChange={e => { setPresNoPagaraSet(prev => { const next = new Set(prev); e.target.checked ? next.add(p.id) : next.delete(p.id); return next }) }}
+                          onChange={e => toggleNoPagara(p.id, e.target.checked)}
                           className="w-4 h-4 accent-red-600 cursor-pointer" title="Marcar como No Pagará" />
                       </td>
                     </tr>

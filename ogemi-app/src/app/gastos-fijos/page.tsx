@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
 import { Toast } from '@/components/Toast'
 import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
@@ -12,6 +12,9 @@ import { CalendarDays, Plus, Save, WalletCards, Trash2, FileText, ClipboardList,
 import VencimientoSemanalVentas from '@/app/reportes/components/VencimientoSemanalVentas'
 import VencimientoSemanalPresupuestos from '@/app/reportes/components/VencimientoSemanalPresupuestos'
 import VencimientoSemanalCompras from '@/app/reportes/components/VencimientoSemanalCompras'
+import { buildVencimientoViernes, buildVencimientoSemanal } from '@/app/reportes/reportes.utils'
+
+type TipoMarca = 'venta' | 'presupuesto' | 'compra'
 
 type GastoFijo = {
   id: string
@@ -82,12 +85,17 @@ function GastosFijosPage() {
   const [gastoAEliminar, setGastoAEliminar] = useState<GastoFijo | null>(null)
   const [eliminando, setEliminando] = useState(false)
 
-  // Datos para las pestañas de vencimiento semanal (se cargan al abrirlas)
+  // Datos para las pestañas de vencimiento semanal y el resumen del flujo
   const [vencLoaded, setVencLoaded] = useState(false)
   const [vencLoading, setVencLoading] = useState(false)
   const [facturasAll, setFacturasAll] = useState<any[]>([])
   const [presupuestosAll, setPresupuestosAll] = useState<any[]>([])
   const [comprasAll, setComprasAll] = useState<any[]>([])
+
+  // Marcas persistidas por período: venta/presupuesto = "No pagará"; compra = "Pagará"
+  const [marcasVentas, setMarcasVentas] = useState<Set<string>>(new Set())
+  const [marcasPresupuestos, setMarcasPresupuestos] = useState<Set<string>>(new Set())
+  const [marcasCompras, setMarcasCompras] = useState<Set<string>>(new Set())
 
   const periodo = useMemo(() => monthToPeriod(periodoMes), [periodoMes])
 
@@ -228,7 +236,7 @@ function GastosFijosPage() {
   // Recalcular CxC vencida a la fecha de cada semana cuando cambian las fechas
   useEffect(() => { loadCxcSemana(semanaFechas) }, [semanaFechas, loadCxcSemana])
 
-  // Cargar facturas/presupuestos/compras al abrir una pestaña de vencimiento
+  // Cargar facturas/presupuestos/compras (alimentan las pestañas y el resumen del flujo)
   const loadVencimientos = useCallback(async () => {
     setVencLoading(true)
     const [
@@ -251,9 +259,74 @@ function GastosFijosPage() {
     setVencLoaded(true)
   }, [showToast, supabase])
 
-  useEffect(() => {
-    if (pestana !== 'gastos' && !vencLoaded && !vencLoading) loadVencimientos()
-  }, [pestana, vencLoaded, vencLoading, loadVencimientos])
+  useEffect(() => { loadVencimientos() }, [loadVencimientos])
+
+  // Cargar marcas del período
+  const loadMarcas = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('flujo_pago_marcas')
+      .select('tipo, doc_id')
+      .eq('periodo', periodo)
+    if (error) {
+      showToast(`Error al cargar marcas del flujo: ${error.message}`, 'error')
+      return
+    }
+    const v = new Set<string>(), p = new Set<string>(), c = new Set<string>()
+    ;(data || []).forEach((m: { tipo: TipoMarca; doc_id: string }) => {
+      if (m.tipo === 'venta') v.add(m.doc_id)
+      else if (m.tipo === 'presupuesto') p.add(m.doc_id)
+      else if (m.tipo === 'compra') c.add(m.doc_id)
+    })
+    setMarcasVentas(v)
+    setMarcasPresupuestos(p)
+    setMarcasCompras(c)
+  }, [periodo, showToast, supabase])
+
+  useEffect(() => { loadMarcas() }, [loadMarcas])
+
+  // Marcar/desmarcar con actualización optimista + persistencia
+  const toggleMarca = useCallback(async (tipo: TipoMarca, id: string, marked: boolean) => {
+    const setter = tipo === 'venta' ? setMarcasVentas : tipo === 'presupuesto' ? setMarcasPresupuestos : setMarcasCompras
+    const apply = (add: boolean) => setter(prev => {
+      const next = new Set(prev)
+      add ? next.add(id) : next.delete(id)
+      return next
+    })
+    apply(marked)
+    const { error } = marked
+      ? await supabase.from('flujo_pago_marcas')
+          .upsert({ periodo, tipo, doc_id: id }, { onConflict: 'periodo,tipo,doc_id', ignoreDuplicates: true })
+      : await supabase.from('flujo_pago_marcas')
+          .delete().eq('periodo', periodo).eq('tipo', tipo).eq('doc_id', id)
+    if (error) {
+      apply(!marked) // revertir
+      showToast(`Error al guardar la marca: ${error.message}`, 'error')
+    }
+  }, [periodo, showToast, supabase])
+
+  // ── Resumen del flujo de pago por semana ────────────────────────────────────
+  const flujo = useMemo(() => {
+    const dateObjs = semanaFechas.map(d => new Date(d + 'T00:00:00'))
+    const vencVentas = buildVencimientoViernes(facturasAll, dateObjs)
+    const vencPres = buildVencimientoSemanal(presupuestosAll, dateObjs, 'fecha_pago')
+    const vencComp = buildVencimientoSemanal(comprasAll, dateObjs, 'vencimiento')
+
+    const cobrosVentas = dateObjs.map((_, i) =>
+      vencVentas.rows.filter((r: any) => r.fridayIdx === i && !marcasVentas.has(r.id))
+        .reduce((s: number, r: any) => s + ((r.total as number) || 0), 0))
+    const cobrosPres = dateObjs.map((_, i) =>
+      vencPres.rows.filter((r: any) => r.fridayIdx === i && !marcasPresupuestos.has(r.id))
+        .reduce((s: number, r: any) => s + (r.saldo || 0), 0))
+    const comprasPagar = vencComp.rows.filter((r: any) => marcasCompras.has(r.id))
+    const pagosCompras = dateObjs.map((_, i) =>
+      comprasPagar.filter((r: any) => r.fridayIdx === i)
+        .reduce((s: number, r: any) => s + (r.saldo || 0), 0))
+    return { cobrosVentas, cobrosPres, pagosCompras, comprasPagar }
+  }, [semanaFechas, facturasAll, presupuestosAll, comprasAll, marcasVentas, marcasPresupuestos, marcasCompras])
+
+  const flujoNetoSemana = SEMANAS.map((_, i) =>
+    flujo.cobrosVentas[i] + flujo.cobrosPres[i] - flujo.pagosCompras[i] - totalesSemana[i])
+  const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0)
 
   const crearGasto = async () => {
     const nombre = nuevoGastoNombre.trim()
@@ -366,7 +439,7 @@ function GastosFijosPage() {
   }
 
   const pestanas: { key: Pestana; label: string; icon: React.ElementType }[] = [
-    { key: 'gastos',       label: 'Gastos fijos',          icon: WalletCards },
+    { key: 'gastos',       label: 'Flujo de pago',         icon: WalletCards },
     { key: 'ventas',       label: 'Ventas x semana',       icon: FileText },
     { key: 'presupuestos', label: 'Presupuestos x semana', icon: ClipboardList },
     { key: 'compras',      label: 'Compras x semana',      icon: ShoppingCart },
@@ -376,8 +449,8 @@ function GastosFijosPage() {
     <AppLayout>
       {toast && <Toast {...toast} onClose={hideToast} />}
       <Header
-        title="Gastos fijos"
-        subtitle="Planificacion semanal, cuentas por cobrar y saldos bancarios"
+        title="Flujo de Pago"
+        subtitle="Cobros probables, pagos y gastos fijos por semana"
       />
 
       <div className="bg-white border-b border-gray-200 px-6">
@@ -407,6 +480,8 @@ function GastosFijosPage() {
                   facturas={facturasAll}
                   weekDates={semanaFechas}
                   setWeekDates={setSemanaFechas}
+                  noPagaraSet={marcasVentas}
+                  onToggleNoPagara={(id, marked) => toggleMarca('venta', id, marked)}
                 />
               )}
               {pestana === 'presupuestos' && (
@@ -414,6 +489,8 @@ function GastosFijosPage() {
                   presupuestos={presupuestosAll}
                   weekDates={semanaFechas}
                   setWeekDates={setSemanaFechas}
+                  noPagaraSet={marcasPresupuestos}
+                  onToggleNoPagara={(id, marked) => toggleMarca('presupuesto', id, marked)}
                 />
               )}
               {pestana === 'compras' && (
@@ -421,6 +498,8 @@ function GastosFijosPage() {
                   compras={comprasAll}
                   weekDates={semanaFechas}
                   setWeekDates={setSemanaFechas}
+                  pagaraSet={marcasCompras}
+                  onTogglePagara={(id, marked) => toggleMarca('compra', id, marked)}
                 />
               )}
             </>
@@ -511,6 +590,70 @@ function GastosFijosPage() {
               CxC + bancos - gastos
             </p>
           </div>
+        </section>
+
+        {/* Flujo de pago por semana: cobros probables − compras a pagar − gastos fijos */}
+        <section className="card overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+              Flujo de pago por semana - {periodoMes}
+            </p>
+          </div>
+          {vencLoading || !vencLoaded ? (
+            <div className="p-6 text-center text-sm text-gray-400">Cargando datos...</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="table-header">Concepto</th>
+                    {SEMANAS.map((semana, i) => (
+                      <th key={semana} className="table-header text-right">
+                        Semana {semana}
+                        <span className="block font-normal text-[10px] text-gray-400">
+                          {semanaFechas[i] ? formatDate(semanaFechas[i]) : ''}
+                        </span>
+                      </th>
+                    ))}
+                    <th className="table-header text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {[
+                    { label: 'Cobros ventas (probable)',       vals: flujo.cobrosVentas, neg: false },
+                    { label: 'Cobros presupuestos (probable)', vals: flujo.cobrosPres,   neg: false },
+                    { label: 'Compras a pagar (marcadas)',     vals: flujo.pagosCompras, neg: true },
+                    { label: 'Gastos fijos',                   vals: totalesSemana,      neg: true },
+                  ].map(r => (
+                    <tr key={r.label}>
+                      <td className="table-cell text-sm font-medium">{r.label}</td>
+                      {r.vals.map((v, i) => (
+                        <td key={i} className={`table-cell text-right text-sm ${r.neg ? 'text-red-600' : 'text-green-700'}`}>
+                          {v !== 0 ? `${r.neg ? '−' : ''}${formatCurrency(v)}` : '—'}
+                        </td>
+                      ))}
+                      <td className={`table-cell text-right font-semibold ${r.neg ? 'text-red-600' : 'text-green-700'}`}>
+                        {r.neg ? '−' : ''}{formatCurrency(sum(r.vals))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
+                    <td className="table-cell">Flujo neto</td>
+                    {flujoNetoSemana.map((v, i) => (
+                      <td key={i} className={`table-cell text-right ${v >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                        {formatCurrency(v)}
+                      </td>
+                    ))}
+                    <td className={`table-cell text-right ${sum(flujoNetoSemana) >= 0 ? 'text-green-800' : 'text-red-700'}`}>
+                      {formatCurrency(sum(flujoNetoSemana))}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </section>
 
         <section className="card p-4">
@@ -654,6 +797,66 @@ function GastosFijosPage() {
               )}
             </table>
           </div>
+        </section>
+
+        {/* Detalle: compras marcadas como "Pagará" */}
+        <section className="card overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+              Compras a pagar (marcadas &quot;Pagará&quot;) - {periodoMes}
+            </p>
+          </div>
+          {vencLoading || !vencLoaded ? (
+            <div className="p-6 text-center text-sm text-gray-400">Cargando datos...</div>
+          ) : flujo.comprasPagar.length === 0 ? (
+            <div className="p-6 text-center text-sm text-gray-400">
+              No hay compras marcadas como &quot;Pagará&quot;. Márcalas en la pestaña Compras x semana.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="table-header">Proveedor</th>
+                    <th className="table-header">Concepto</th>
+                    <th className="table-header">Vencimiento</th>
+                    {SEMANAS.map(semana => (
+                      <th key={semana} className="table-header text-right">Semana {semana}</th>
+                    ))}
+                    <th className="table-header text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {flujo.comprasPagar.map((c: any) => (
+                    <tr key={c.id} className="hover:bg-gray-50">
+                      <td className="table-cell text-sm font-medium">{c.proveedores?.nombre || '—'}</td>
+                      <td className="table-cell text-sm text-gray-500 max-w-[200px]">
+                        <span className="truncate block">{c.concepto || c.referencia || '—'}</span>
+                      </td>
+                      <td className="table-cell text-sm text-gray-500">{formatDate(c.vencimiento)}</td>
+                      {SEMANAS.map((_, i) => (
+                        <td key={i} className="table-cell text-right text-sm">
+                          {c.fridayIdx === i
+                            ? <span className="font-medium text-red-600">−{formatCurrency(c.saldo)}</span>
+                            : <span className="text-gray-200">—</span>}
+                        </td>
+                      ))}
+                      <td className="table-cell text-right font-semibold text-red-600">−{formatCurrency(c.saldo)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
+                    <td colSpan={3} className="table-cell text-right text-sm text-gray-600">TOTAL A PAGAR</td>
+                    {flujo.pagosCompras.map((v, i) => (
+                      <td key={i} className="table-cell text-right text-red-600">{v > 0 ? `−${formatCurrency(v)}` : '—'}</td>
+                    ))}
+                    <td className="table-cell text-right text-red-600">−{formatCurrency(sum(flujo.pagosCompras))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </section>
       </div>
       )}

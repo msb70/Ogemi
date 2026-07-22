@@ -25,7 +25,7 @@ const navItems: { href: string; label: string; icon: React.ElementType; modulo: 
   { href: '/pagos-compras', label: 'Pago compras',  icon: WalletCards,     modulo: 'compras'      },
   { href: '/proveedores',  label: 'Proveedores',    icon: Truck,           modulo: 'proveedores'  },
   { href: '/banco',        label: 'Banco',          icon: Building2,       modulo: 'banco'        },
-  { href: '/gastos-fijos', label: 'Gastos fijos',   icon: CalendarClock,   modulo: 'gastos_fijos' },
+  { href: '/gastos-fijos', label: 'Flujo de Pago',  icon: CalendarClock,   modulo: 'gastos_fijos' },
   { href: '/reportes',     label: 'Reportes',       icon: BarChart3,       modulo: 'reportes'     },
   { href: '/importar',     label: 'Importar',       icon: Upload,          modulo: 'importar'     },
   { href: '/usuarios',     label: 'Usuarios',       icon: ShieldCheck,     modulo: 'usuarios'     },

@@ -14,9 +14,12 @@ const WEEK_COLORS = [
 
 export interface VencimientoSemanalComprasProps {
   compras: any[]
-  /** Fechas controladas (ej. las semanas de Gastos fijos). Si se omiten, usa los próximos 4 viernes. */
+  /** Fechas controladas (ej. las semanas del Flujo de Pago). Si se omiten, usa los próximos 4 viernes. */
   weekDates?: string[]
   setWeekDates?: (dates: string[]) => void
+  /** Marcas "Pagará" controladas (persistidas por el padre). Si se omiten, estado local. */
+  pagaraSet?: Set<string>
+  onTogglePagara?: (id: string, marked: boolean) => void
 }
 
 /**
@@ -25,6 +28,7 @@ export interface VencimientoSemanalComprasProps {
  */
 export default function VencimientoSemanalCompras({
   compras, weekDates: weekDatesProp, setWeekDates: setWeekDatesProp,
+  pagaraSet: pagaraProp, onTogglePagara,
 }: VencimientoSemanalComprasProps) {
   const [internalDates, setInternalDates] = useState<string[]>(() =>
     getNextFridays(4).map(d => d.toISOString().split('T')[0])
@@ -33,7 +37,12 @@ export default function VencimientoSemanalCompras({
   const setCompWeekDates = setWeekDatesProp ?? setInternalDates
   const [compSearch, setCompSearch] = useState('')
   const [compSemFilter, setCompSemFilter] = useState<string>('all')
-  const [pagaraSet, setPagaraSet] = useState<Set<number>>(new Set())
+  const [internalPagara, setInternalPagara] = useState<Set<string>>(new Set())
+  const pagaraSet = pagaraProp ?? internalPagara
+  const togglePagara = (id: string, marked: boolean) => {
+    if (onTogglePagara) { onTogglePagara(id, marked); return }
+    setInternalPagara(prev => { const next = new Set(prev); marked ? next.add(id) : next.delete(id); return next })
+  }
 
   const compWeekDateObjs = compWeekDates.map(d => new Date(d + 'T00:00:00'))
   const vencCompras = buildVencimientoSemanal(compras, compWeekDateObjs, 'vencimiento')
@@ -194,7 +203,7 @@ export default function VencimientoSemanalCompras({
                       ))}
                       <td className="table-cell text-center">
                         <input type="checkbox" checked={isPagara}
-                          onChange={e => { setPagaraSet(prev => { const next = new Set(prev); e.target.checked ? next.add(c.id) : next.delete(c.id); return next }) }}
+                          onChange={e => togglePagara(c.id, e.target.checked)}
                           className="w-4 h-4 accent-green-600 cursor-pointer" title="Marcar como Pagará" />
                       </td>
                     </tr>
