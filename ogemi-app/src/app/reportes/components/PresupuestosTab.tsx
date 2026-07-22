@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { formatMonto, formatDate, tramoColor } from '@/lib/utils'
 import { Download } from 'lucide-react'
 import {
@@ -12,9 +12,8 @@ import {
   exportXLSX, buildKpiSheet,
 } from '../reportes.utils'
 import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
-import VencimientoSemanalPresupuestos from './VencimientoSemanalPresupuestos'
 
-type PresupuestosSubTab = 'listado' | 'cartera' | 'porcliente' | 'pormes' | 'semanal'
+type PresupuestosSubTab = 'listado' | 'cartera' | 'porcliente' | 'pormes'
 
 interface PresupuestosTabProps extends FiltrosBarProps {
   presupuestosFiltrados: any[]
@@ -41,7 +40,6 @@ export default function PresupuestosTab({
           { key: 'cartera',    label: 'Cartera vencida' },
           { key: 'porcliente', label: 'Por cliente' },
           { key: 'pormes',     label: 'Por período' },
-          { key: 'semanal',    label: 'Vencimiento semanal' },
         ].map(s => (
           <button key={s.key} onClick={() => setPresupuestosTab(s.key as PresupuestosSubTab)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
@@ -165,23 +163,47 @@ export default function PresupuestosTab({
                 <th className="table-header">Tramo</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-100">
-                {carteraPresupuestos.map((c: any) => (
-                  <tr key={c.id} className="hover:bg-gray-50">
-                    <td className="table-cell font-mono">#{c.numero_presupuesto}</td>
-                    <td className="table-cell text-sm text-gray-600">{otPorNumero.get(c.numero_presupuesto) || '—'}</td>
-                    <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha)}</td>
-                    <td className="table-cell max-w-[200px]"><span className="truncate block">{c.cliente}</span></td>
-                    <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha_pago)}</td>
-                    <td className="table-cell text-right">{formatMonto(c.total)}</td>
-                    <td className="table-cell text-right font-semibold text-orange-600">{formatMonto(c.saldo_pendiente ?? c.total)}</td>
-                    <td className="table-cell text-right">
-                      <span className={c.dias_vencida > 0 ? 'text-red-600 font-medium' : 'text-green-600'}>
-                        {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
-                      </span>
-                    </td>
-                    <td className="table-cell"><span className={`badge ${tramoColor(normTramo(c.tramo))}`}>{TRAMO_LABELS[normTramo(c.tramo)]}</span></td>
-                  </tr>
-                ))}
+                {carteraPresupuestos.length === 0 ? (
+                  <tr><td colSpan={9} className="text-center py-8 text-gray-400">Sin cartera pendiente</td></tr>
+                ) : Object.entries(
+                    carteraPresupuestos.reduce((acc: Record<string, any[]>, c: any) => {
+                      const k = c.cliente || 'Sin nombre'
+                      ;(acc[k] = acc[k] || []).push(c)
+                      return acc
+                    }, {})
+                  )
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .map(([nombre, items]) => [nombre, (items as any[]).sort((a, b) => b.dias_vencida - a.dias_vencida)] as [string, any[]])
+                    .map(([nombre, items]) => (
+                      <Fragment key={nombre}>
+                        <tr className="bg-brand-50/40 border-t border-gray-200">
+                          <td colSpan={6} className="table-cell font-semibold text-brand-800">
+                            {nombre} <span className="text-xs text-gray-400 font-normal">({items.length} presupuesto{items.length === 1 ? '' : 's'})</span>
+                          </td>
+                          <td className="table-cell text-right font-bold text-brand-800">
+                            {formatMonto(items.reduce((s: number, c: any) => s + (c.saldo_pendiente ?? c.total), 0))}
+                          </td>
+                          <td colSpan={2} />
+                        </tr>
+                        {items.map((c: any) => (
+                          <tr key={c.id} className="hover:bg-gray-50">
+                            <td className="table-cell font-mono">#{c.numero_presupuesto}</td>
+                            <td className="table-cell text-sm text-gray-600">{otPorNumero.get(c.numero_presupuesto) || '—'}</td>
+                            <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha)}</td>
+                            <td className="table-cell max-w-[200px]"><span className="truncate block">{c.cliente}</span></td>
+                            <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha_pago)}</td>
+                            <td className="table-cell text-right">{formatMonto(c.total)}</td>
+                            <td className="table-cell text-right font-semibold text-orange-600">{formatMonto(c.saldo_pendiente ?? c.total)}</td>
+                            <td className="table-cell text-right">
+                              <span className={c.dias_vencida > 0 ? 'text-red-600 font-medium' : 'text-green-600'}>
+                                {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
+                              </span>
+                            </td>
+                            <td className="table-cell"><span className={`badge ${tramoColor(normTramo(c.tramo))}`}>{TRAMO_LABELS[normTramo(c.tramo)]}</span></td>
+                          </tr>
+                        ))}
+                      </Fragment>
+                    ))}
               </tbody>
             </table>
           </div>
@@ -356,9 +378,6 @@ export default function PresupuestosTab({
         </div>
       )}
 
-      {presupuestosTab === 'semanal' && (
-        <VencimientoSemanalPresupuestos presupuestos={presupuestos} />
-      )}
     </div>
   )
 }

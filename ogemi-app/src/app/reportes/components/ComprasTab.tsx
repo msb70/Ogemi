@@ -11,9 +11,8 @@ import {
   exportXLSX, buildKpiSheet,
 } from '../reportes.utils'
 import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
-import VencimientoSemanalCompras from './VencimientoSemanalCompras'
 
-type ComprasSubTab = 'listado' | 'cxp' | 'antiguedad' | 'porproveedor' | 'pormes' | 'semanal'
+type ComprasSubTab = 'listado' | 'cxp' | 'antiguedad' | 'porproveedor' | 'pormes'
 
 interface ComprasTabProps extends FiltrosBarProps {
   comprasFiltradas: any[]
@@ -58,7 +57,6 @@ export default function ComprasTab({
           { key: 'antiguedad',   label: 'Antigüedad de cartera' },
           { key: 'porproveedor', label: 'Por proveedor' },
           { key: 'pormes',       label: 'Por período' },
-          { key: 'semanal',      label: 'Vencimiento semanal' },
         ].map(s => (
           <button key={s.key} onClick={() => setComprasTab(s.key as ComprasSubTab)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
@@ -184,24 +182,48 @@ export default function ComprasTab({
                 <th className="table-header">Tramo</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-100">
-                {cxp.map((c: any) => (
-                  <tr key={c.id} className="hover:bg-gray-50">
-                    <td className="table-cell font-medium">{c.proveedor}</td>
-                    <td className="table-cell text-sm text-gray-500">{c.concepto || '—'}</td>
-                    <td className="table-cell text-sm text-gray-400">{formatDate(c.vencimiento)}</td>
-                    <td className="table-cell text-right">
-                      <span className={c.dias_vencida > 0 ? 'text-red-600 font-medium' : 'text-green-600'}>
-                        {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
-                      </span>
-                    </td>
-                    <td className="table-cell text-right font-semibold">{formatMonto(c.saldo_pendiente ?? c.total)}</td>
-                    <td className="table-cell">
-                      <span className="badge text-xs" style={{ backgroundColor: TRAMO_COLORS_HEX[normTramo(c.tramo)] + '20', color: TRAMO_COLORS_HEX[normTramo(c.tramo)] }}>
-                        {TRAMO_LABELS[normTramo(c.tramo)]}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {cxp.length === 0 ? (
+                  <tr><td colSpan={6} className="text-center py-8 text-gray-400">Sin cuentas por pagar</td></tr>
+                ) : Object.entries(
+                    cxp.reduce((acc: Record<string, any[]>, c: any) => {
+                      const k = c.proveedor || 'N/A'
+                      ;(acc[k] = acc[k] || []).push(c)
+                      return acc
+                    }, {})
+                  )
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .map(([nombre, items]) => [nombre, (items as any[]).sort((a, b) => b.dias_vencida - a.dias_vencida)] as [string, any[]])
+                    .map(([nombre, items]) => (
+                      <Fragment key={nombre}>
+                        <tr className="bg-brand-50/40 border-t border-gray-200">
+                          <td colSpan={4} className="table-cell font-semibold text-brand-800">
+                            {nombre} <span className="text-xs text-gray-400 font-normal">({items.length} compra{items.length === 1 ? '' : 's'})</span>
+                          </td>
+                          <td className="table-cell text-right font-bold text-brand-800">
+                            {formatMonto(items.reduce((s: number, c: any) => s + (c.saldo_pendiente ?? c.total), 0))}
+                          </td>
+                          <td />
+                        </tr>
+                        {items.map((c: any) => (
+                          <tr key={c.id} className="hover:bg-gray-50">
+                            <td className="table-cell font-medium">{c.proveedor}</td>
+                            <td className="table-cell text-sm text-gray-500">{c.concepto || '—'}</td>
+                            <td className="table-cell text-sm text-gray-400">{formatDate(c.vencimiento)}</td>
+                            <td className="table-cell text-right">
+                              <span className={c.dias_vencida > 0 ? 'text-red-600 font-medium' : 'text-green-600'}>
+                                {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
+                              </span>
+                            </td>
+                            <td className="table-cell text-right font-semibold">{formatMonto(c.saldo_pendiente ?? c.total)}</td>
+                            <td className="table-cell">
+                              <span className="badge text-xs" style={{ backgroundColor: TRAMO_COLORS_HEX[normTramo(c.tramo)] + '20', color: TRAMO_COLORS_HEX[normTramo(c.tramo)] }}>
+                                {TRAMO_LABELS[normTramo(c.tramo)]}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </Fragment>
+                    ))}
               </tbody>
             </table>
           </div>
@@ -527,9 +549,6 @@ export default function ComprasTab({
         </div>
       )}
 
-      {comprasTab === 'semanal' && (
-        <VencimientoSemanalCompras compras={compras} />
-      )}
     </div>
   )
 }

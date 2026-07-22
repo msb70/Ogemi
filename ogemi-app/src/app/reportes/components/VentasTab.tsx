@@ -29,7 +29,6 @@ const normTramo = (t: string) => (t === '91-120' || t === '+120') ? '+90' : t
 type VentasSubTab =
   | 'listado'
   | 'cartera'
-  | 'vencimiento_pivot'
   | 'estado_cuenta'
   | 'movimiento'
   | 'porcliente'
@@ -81,7 +80,6 @@ export default function VentasTab({
         {[
           { key: 'listado',           label: 'Listado' },
           { key: 'cartera',           label: 'Cartera vencida' },
-          { key: 'vencimiento_pivot', label: 'Vencimiento x semana' },
           { key: 'estado_cuenta',     label: 'Estado de cuenta' },
           { key: 'movimiento',        label: 'Movimiento' },
           { key: 'porcliente',        label: 'Por cliente' },
@@ -479,10 +477,6 @@ export default function VentasTab({
             )
           })()}
         </div>
-      )}
-
-      {ventasTab === 'vencimiento_pivot' && (
-        <PivotTab key="ventas-vencimiento-pivot" facturas={facturas} cartera={cartera} initialTab="semanal" hideTabs />
       )}
 
       {ventasTab === 'antiguedad_pivot' && (
