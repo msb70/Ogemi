@@ -389,7 +389,7 @@ function ReportesPage() {
         )}
 
         {tab === 'estado_cuenta' && (
-          <EstadoCuentaTab cartera={cartera} />
+          <EstadoCuentaTab cartera={cartera} facturas={facturas} />
         )}
 
         {tab === 'libros' && (
