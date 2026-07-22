@@ -149,6 +149,21 @@ export function getNextFridays(n = 4): Date[] {
 }
 
 /**
+ * Índice de semana para una fecha de vencimiento.
+ * Regla: lo vencido ANTES de la fecha de corte cae en la primera semana cuya
+ * fecha sea >= corte (la semana próxima), no en semanas ya pasadas. Si el corte
+ * queda después de todas las semanas (períodos históricos), se mantiene la
+ * asignación normal (primera semana >= vencimiento).
+ */
+function weekIdxFor(fd: Date, dates: Date[], cutoff?: Date): number {
+  if (cutoff && fd < cutoff) {
+    const idxNext = dates.findIndex(d => d >= cutoff)
+    if (idxNext !== -1) return idxNext
+  }
+  return dates.findIndex(d => fd <= d)
+}
+
+/**
  * Agrupa facturas/presupuestos/compras por semana de vencimiento.
  * Cada fila expone `saldo` = total − monto_pagado (abonos parciales descontados);
  * los totales semanales suman el saldo, no el total bruto del documento.
@@ -156,7 +171,8 @@ export function getNextFridays(n = 4): Date[] {
 export function buildVencimientoSemanal(
   items: Record<string, unknown>[],
   dates: Date[],
-  dateField: string
+  dateField: string,
+  cutoff?: Date
 ): {
   rows: (Record<string, unknown> & { fridayIdx: number; saldo: number })[]
   totals: number[]
@@ -171,7 +187,7 @@ export function buildVencimientoSemanal(
     })
     .map(item => {
       const fd = new Date((item[dateField] as string) + 'T00:00:00')
-      const fridayIdx = dates.findIndex(d => fd <= d)
+      const fridayIdx = weekIdxFor(fd, dates, cutoff)
       const saldo = ((item.total as number) || 0) - ((item.monto_pagado as number) || 0)
       return { ...item, fridayIdx, saldo }
     })
@@ -187,7 +203,8 @@ export function buildVencimientoSemanal(
 /** Variante específica para facturas (filtra también NC y total ≤ 0). */
 export function buildVencimientoViernes(
   facturas: Record<string, unknown>[],
-  fridays: Date[]
+  fridays: Date[],
+  cutoff?: Date
 ): {
   rows: (Record<string, unknown> & { fridayIdx: number })[]
   totals: number[]
@@ -202,7 +219,7 @@ export function buildVencimientoViernes(
     })
     .map((f): Record<string, unknown> & { fridayIdx: number } => {
       const fp = new Date((f.fecha_pago as string) + 'T00:00:00')
-      const fridayIdx = fridays.findIndex(fri => fp <= fri)
+      const fridayIdx = weekIdxFor(fp, fridays, cutoff)
       return { ...f, fridayIdx }
     })
     .sort((a, b) => ((a.fecha_pago as string) < (b.fecha_pago as string) ? -1 : 1))

@@ -337,9 +337,11 @@ function GastosFijosPage() {
   // ── Resumen del flujo de pago por semana ────────────────────────────────────
   const flujo = useMemo(() => {
     const dateObjs = semanaFechas.map(d => new Date(d + 'T00:00:00'))
-    const vencVentas = buildVencimientoViernes(facturasAll, dateObjs)
-    const vencPres = buildVencimientoSemanal(presupuestosAll, dateObjs, 'fecha_pago')
-    const vencComp = buildVencimientoSemanal(comprasAll, dateObjs, 'vencimiento')
+    // Lo vencido antes de la fecha de corte cae en la primera semana >= corte
+    const cutoff = new Date(fechaResumen + 'T00:00:00')
+    const vencVentas = buildVencimientoViernes(facturasAll, dateObjs, cutoff)
+    const vencPres = buildVencimientoSemanal(presupuestosAll, dateObjs, 'fecha_pago', cutoff)
+    const vencComp = buildVencimientoSemanal(comprasAll, dateObjs, 'vencimiento', cutoff)
 
     const cobrosVentas = dateObjs.map((_, i) =>
       vencVentas.rows.filter((r: any) => r.fridayIdx === i && !marcasVentas.has(r.id))
@@ -352,7 +354,7 @@ function GastosFijosPage() {
       comprasPagar.filter((r: any) => r.fridayIdx === i)
         .reduce((s: number, r: any) => s + (r.saldo || 0), 0))
     return { cobrosVentas, cobrosPres, pagosCompras, comprasPagar }
-  }, [semanaFechas, facturasAll, presupuestosAll, comprasAll, marcasVentas, marcasPresupuestos, marcasCompras])
+  }, [semanaFechas, fechaResumen, facturasAll, presupuestosAll, comprasAll, marcasVentas, marcasPresupuestos, marcasCompras])
 
   const flujoNetoSemana = SEMANAS.map((_, i) =>
     flujo.cobrosVentas[i] + flujo.cobrosPres[i] - flujo.pagosCompras[i] - totalesSemana[i])
@@ -575,6 +577,7 @@ function GastosFijosPage() {
                   noPagaraSet={marcasVentas}
                   onToggleNoPagara={(id, marked) => toggleMarca('venta', id, marked)}
                   onToggleManyNoPagara={(ids, marked) => toggleMarcaMany('venta', ids, marked)}
+                  cutoffDate={fechaResumen}
                 />
               )}
               {pestana === 'presupuestos' && (
@@ -585,6 +588,7 @@ function GastosFijosPage() {
                   noPagaraSet={marcasPresupuestos}
                   onToggleNoPagara={(id, marked) => toggleMarca('presupuesto', id, marked)}
                   onToggleManyNoPagara={(ids, marked) => toggleMarcaMany('presupuesto', ids, marked)}
+                  cutoffDate={fechaResumen}
                 />
               )}
               {pestana === 'compras' && (
@@ -595,6 +599,7 @@ function GastosFijosPage() {
                   pagaraSet={marcasCompras}
                   onTogglePagara={(id, marked) => toggleMarca('compra', id, marked)}
                   onToggleManyPagara={(ids, marked) => toggleMarcaMany('compra', ids, marked)}
+                  cutoffDate={fechaResumen}
                 />
               )}
             </>
@@ -918,8 +923,6 @@ function GastosFijosPage() {
                 <thead>
                   <tr className="border-b border-gray-200">
                     <th className="table-header">Proveedor</th>
-                    <th className="table-header">Concepto</th>
-                    <th className="table-header">Vencimiento</th>
                     {SEMANAS.map(semana => (
                       <th key={semana} className="table-header text-right">Semana {semana}</th>
                     ))}
@@ -930,10 +933,6 @@ function GastosFijosPage() {
                   {flujo.comprasPagar.map((c: any) => (
                     <tr key={c.id} className="hover:bg-gray-50">
                       <td className="table-cell text-sm font-medium">{c.proveedores?.nombre || '—'}</td>
-                      <td className="table-cell text-sm text-gray-500 max-w-[200px]">
-                        <span className="truncate block">{c.concepto || c.referencia || '—'}</span>
-                      </td>
-                      <td className="table-cell text-sm text-gray-500">{formatDate(c.vencimiento)}</td>
                       {SEMANAS.map((_, i) => (
                         <td key={i} className="table-cell text-right text-sm">
                           {c.fridayIdx === i
@@ -947,7 +946,7 @@ function GastosFijosPage() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
-                    <td colSpan={3} className="table-cell text-right text-sm text-gray-600">TOTAL A PAGAR</td>
+                    <td className="table-cell text-right text-sm text-gray-600">TOTAL A PAGAR</td>
                     {flujo.pagosCompras.map((v, i) => (
                       <td key={i} className="table-cell text-right text-red-600">{v > 0 ? `−${formatCurrency(v)}` : '—'}</td>
                     ))}

@@ -21,11 +21,13 @@ export interface VencimientoSemanalPresupuestosProps {
   noPagaraSet?: Set<string>
   onToggleNoPagara?: (id: string, marked: boolean) => void
   onToggleManyNoPagara?: (ids: string[], marked: boolean) => void
+  /** Fecha de corte: lo vencido antes de esta fecha cae en la primera semana >= corte. Default: hoy. */
+  cutoffDate?: string
 }
 
 export default function VencimientoSemanalPresupuestos({
   presupuestos, weekDates: weekDatesProp, setWeekDates: setWeekDatesProp,
-  noPagaraSet: noPagaraProp, onToggleNoPagara, onToggleManyNoPagara,
+  noPagaraSet: noPagaraProp, onToggleNoPagara, onToggleManyNoPagara, cutoffDate,
 }: VencimientoSemanalPresupuestosProps) {
   const [internalDates, setInternalDates] = useState<string[]>(() =>
     getNextFridays(4).map(d => d.toISOString().split('T')[0])
@@ -42,7 +44,8 @@ export default function VencimientoSemanalPresupuestos({
   }
 
   const presWeekDateObjs = presWeekDates.map(d => new Date(d + 'T00:00:00'))
-  const vencPresupuestos = buildVencimientoSemanal(presupuestos, presWeekDateObjs, 'fecha_pago')
+  const cutoff = new Date((cutoffDate || new Date().toISOString().split('T')[0]) + 'T00:00:00')
+  const vencPresupuestos = buildVencimientoSemanal(presupuestos, presWeekDateObjs, 'fecha_pago', cutoff)
 
   const presRows = vencPresupuestos.rows.filter((r: any) => {
     const matchSearch = !presSearch ||
