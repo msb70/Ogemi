@@ -1,9 +1,10 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { formatMonto, formatDate, tramoColor } from '@/lib/utils'
 import { Download } from 'lucide-react'
 import { CarteraVencida } from '@/types'
+import { createClient } from '@/lib/supabase'
 import { exportXLSX, buildKpiSheet, TRAMO_LABELS, normTramo, isNC } from '../reportes.utils'
 
 /**
@@ -164,7 +165,11 @@ export function EstadoCuentaCliente({ cartera }: { cartera: CarteraVencida[] }) 
 // ── Movimiento del cliente (todas las ventas) ────────────────────────────────
 
 export function MovimientoCliente({ facturas }: { facturas: any[] }) {
+  const supabase = useMemo(() => createClient(), [])
   const [cliente, setCliente] = useState('')
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
+  const [pagosByFactura, setPagosByFactura] = useState<Record<string, { numero_recibo: number | null; fecha: string }[]>>({})
   const hoy = new Date().toISOString().split('T')[0]
 
   // Ventas = facturas sin notas de crédito
@@ -177,13 +182,54 @@ export function MovimientoCliente({ facturas }: { facturas: any[] }) {
     [ventas],
   )
 
-  const movs = useMemo(
+  const movsAll = useMemo(
     () => ventas
       .filter((f: any) => f.clientes?.nombre === cliente)
       .slice()
       .sort((a: any, b: any) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : (Number(a.numero_factura) || 0) - (Number(b.numero_factura) || 0))),
     [ventas, cliente],
   )
+
+  // Rango por defecto: de la factura más antigua a la más reciente del cliente
+  useEffect(() => {
+    if (movsAll.length === 0) { setFechaDesde(''); setFechaHasta(''); return }
+    const fechas = movsAll.map((f: any) => f.fecha).filter(Boolean).sort()
+    setFechaDesde(fechas[0] || '')
+    setFechaHasta(fechas[fechas.length - 1] || '')
+  }, [movsAll])
+
+  // Recibo y fecha de pago de cada factura (tabla pagos)
+  useEffect(() => {
+    if (movsAll.length === 0) { setPagosByFactura({}); return }
+    const ids = movsAll.map((f: any) => f.id)
+    let cancel = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('pagos')
+        .select('factura_id, numero_recibo, fecha, monto')
+        .in('factura_id', ids)
+        .gt('monto', 0)
+        .order('fecha', { ascending: true })
+      if (cancel) return
+      const map: Record<string, { numero_recibo: number | null; fecha: string }[]> = {}
+      ;(data || []).forEach((p: any) => {
+        if (!map[p.factura_id]) map[p.factura_id] = []
+        map[p.factura_id].push({ numero_recibo: p.numero_recibo, fecha: p.fecha })
+      })
+      setPagosByFactura(map)
+    })()
+    return () => { cancel = true }
+  }, [movsAll, supabase])
+
+  // Consulta filtrada por el rango de fechas
+  const movs = useMemo(
+    () => movsAll.filter((f: any) =>
+      (!fechaDesde || f.fecha >= fechaDesde) && (!fechaHasta || f.fecha <= fechaHasta)),
+    [movsAll, fechaDesde, fechaHasta],
+  )
+
+  const recibosDe = (f: any) => pagosByFactura[f.id] || []
+  const formatRecibo = (n: number | null) => n != null ? `REC-${String(n).padStart(5, '0')}` : '—'
 
   // Saldo de una factura: solo pendientes deben dinero (total − retención − abonos)
   const saldoDe = (f: any) => f.estado === 'pendiente'
@@ -207,7 +253,7 @@ export function MovimientoCliente({ facturas }: { facturas: any[] }) {
 
   const exportExcel = () => {
     exportXLSX(`movimiento_${cliente.replace(/\s+/g, '_')}_${hoy}.xlsx`, [
-      buildKpiSheet(`Movimiento de cliente — ${cliente}`, `Todas las ventas al ${hoy}`, [
+      buildKpiSheet(`Movimiento de cliente — ${cliente}`, `${fechaDesde || 'inicio'} a ${fechaHasta || hoy}`, [
         ['# Facturas', movs.length],
         ['# Pagadas', pagadas.length],
         ['# Vencidas', vencidas.length],
@@ -216,12 +262,14 @@ export function MovimientoCliente({ facturas }: { facturas: any[] }) {
         ['Saldo deudor', saldoDeudor],
       ]),
       { name: 'Movimiento', rows: [
-        ['Fecha', 'N° Factura', 'Tipo Doc', 'Vencimiento', 'Estado', 'Total', 'Pagado', 'Saldo'],
+        ['Fecha', 'N° Factura', 'Tipo Doc', 'Vencimiento', 'Estado', 'Recibo', 'F. Pago', 'Total', 'Pagado', 'Saldo'],
         ...movs.map((f: any) => [
           f.fecha, f.numero_factura, f.tipo_documento, f.fecha_pago,
           f.estado === 'pagada' ? 'Cobrada'
             : f.estado === 'falta_retencion' ? 'Falta retención'
             : (f.fecha_pago && f.fecha_pago < hoy) ? 'Vencida' : 'Pendiente',
+          recibosDe(f).map(p => formatRecibo(p.numero_recibo)).join(', '),
+          recibosDe(f).map(p => p.fecha).join(', '),
           f.total, pagadoDe(f), saldoDe(f),
         ]),
       ] },
@@ -231,10 +279,26 @@ export function MovimientoCliente({ facturas }: { facturas: any[] }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <select className="input w-72" value={cliente} onChange={e => setCliente(e.target.value)}>
-          <option value="">Seleccionar cliente...</option>
-          {clientes.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select className="input w-72" value={cliente} onChange={e => setCliente(e.target.value)}>
+            <option value="">Seleccionar cliente...</option>
+            {clientes.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          {cliente && (
+            <>
+              <label className="flex items-center gap-1.5 text-xs text-gray-500">
+                Desde
+                <input type="date" className="input py-1.5 text-sm" value={fechaDesde}
+                  onChange={e => setFechaDesde(e.target.value)} />
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-gray-500">
+                Hasta
+                <input type="date" className="input py-1.5 text-sm" value={fechaHasta}
+                  onChange={e => setFechaHasta(e.target.value)} />
+              </label>
+            </>
+          )}
+        </div>
         {cliente && (
           <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={exportExcel}>
             <Download size={14} />Exportar Excel
@@ -267,7 +331,7 @@ export function MovimientoCliente({ facturas }: { facturas: any[] }) {
           <div className="card overflow-hidden">
             <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-                Movimiento · {cliente} · Todas las ventas al {formatDate(hoy)}
+                Movimiento · {cliente} · {formatDate(fechaDesde)} a {formatDate(fechaHasta)}
               </p>
             </div>
             <div className="overflow-x-auto">
@@ -279,6 +343,8 @@ export function MovimientoCliente({ facturas }: { facturas: any[] }) {
                     <th className="table-header">Tipo</th>
                     <th className="table-header">Vencimiento</th>
                     <th className="table-header">Estado</th>
+                    <th className="table-header">Recibo</th>
+                    <th className="table-header">F. Pago</th>
                     <th className="table-header text-right">Total</th>
                     <th className="table-header text-right">Pagado</th>
                     <th className="table-header text-right">Saldo</th>
@@ -286,9 +352,10 @@ export function MovimientoCliente({ facturas }: { facturas: any[] }) {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {movs.length === 0 ? (
-                    <tr><td colSpan={8} className="text-center py-8 text-gray-400">El cliente no tiene facturas</td></tr>
+                    <tr><td colSpan={10} className="text-center py-8 text-gray-400">El cliente no tiene facturas en el rango de fechas</td></tr>
                   ) : movs.map((f: any) => {
                     const saldo = saldoDe(f)
+                    const pagos = recibosDe(f)
                     return (
                       <tr key={f.id} className="hover:bg-gray-50">
                         <td className="table-cell text-sm">{formatDate(f.fecha)}</td>
@@ -298,6 +365,20 @@ export function MovimientoCliente({ facturas }: { facturas: any[] }) {
                           {formatDate(f.fecha_pago)}
                         </td>
                         <td className="table-cell">{estadoBadge(f)}</td>
+                        <td className="table-cell">
+                          {pagos.length > 0
+                            ? pagos.map((p, i) => (
+                                <span key={i} className="block font-mono text-xs text-gray-600">{formatRecibo(p.numero_recibo)}</span>
+                              ))
+                            : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="table-cell">
+                          {pagos.length > 0
+                            ? pagos.map((p, i) => (
+                                <span key={i} className="block text-xs text-gray-600">{formatDate(p.fecha)}</span>
+                              ))
+                            : <span className="text-gray-300">—</span>}
+                        </td>
                         <td className="table-cell text-right">{formatMonto(f.total)}</td>
                         <td className="table-cell text-right text-green-700">{pagadoDe(f) ? formatMonto(pagadoDe(f)) : ''}</td>
                         <td className="table-cell text-right font-semibold">{saldo > 0 ? formatMonto(saldo) : ''}</td>
@@ -307,7 +388,7 @@ export function MovimientoCliente({ facturas }: { facturas: any[] }) {
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-                    <td colSpan={5} className="table-cell text-right text-sm text-gray-600">TOTALES</td>
+                    <td colSpan={7} className="table-cell text-right text-sm text-gray-600">TOTALES</td>
                     <td className="table-cell text-right text-brand-700">{formatMonto(montoFacturado)}</td>
                     <td className="table-cell text-right text-green-700">{formatMonto(montoPagado)}</td>
                     <td className="table-cell text-right text-red-600">{formatMonto(saldoDeudor)}</td>
