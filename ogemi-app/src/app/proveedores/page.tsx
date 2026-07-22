@@ -17,7 +17,8 @@ function ProveedoresPage() {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
-  const [form, setForm] = useState({ nombre: '', dias_credito: '30' })
+  const emptyForm = { nombre: '', ruc: '', direccion: '', email: '', contacto: '', telefono: '', dias_credito: '30' }
+  const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const { puedeHacer } = useAuth()
@@ -40,10 +41,18 @@ function ProveedoresPage() {
   const handleOpenForm = (p?: Proveedor) => {
     if (p) {
       setEditId(p.id)
-      setForm({ nombre: p.nombre, dias_credito: String(p.dias_credito) })
+      setForm({
+        nombre: p.nombre,
+        ruc: p.ruc || '',
+        direccion: p.direccion || '',
+        email: p.email || '',
+        contacto: p.contacto || '',
+        telefono: p.telefono || '',
+        dias_credito: String(p.dias_credito),
+      })
     } else {
       setEditId(null)
-      setForm({ nombre: '', dias_credito: '30' })
+      setForm(emptyForm)
     }
     setShowForm(true)
   }
@@ -51,7 +60,7 @@ function ProveedoresPage() {
   const handleClose = () => {
     setShowForm(false)
     setEditId(null)
-    setForm({ nombre: '', dias_credito: '30' })
+    setForm(emptyForm)
   }
 
   const handleSave = async () => {
@@ -59,6 +68,11 @@ function ProveedoresPage() {
     setSaving(true)
     const payload = {
       nombre: form.nombre.trim(),
+      ruc: form.ruc.trim() || null,
+      direccion: form.direccion.trim() || null,
+      email: form.email.trim() || null,
+      contacto: form.contacto.trim() || null,
+      telefono: form.telefono.trim() || null,
       dias_credito: parseInt(form.dias_credito) || 30,
     }
     if (editId) {
@@ -86,9 +100,15 @@ function ProveedoresPage() {
     load()
   }
 
-  const filtered = proveedores.filter(p =>
-    p.nombre.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = proveedores.filter(p => {
+    const q = search.toLowerCase()
+    return !q ||
+      p.nombre.toLowerCase().includes(q) ||
+      (p.ruc || '').toLowerCase().includes(q) ||
+      (p.contacto || '').toLowerCase().includes(q) ||
+      (p.email || '').toLowerCase().includes(q) ||
+      (p.telefono || '').toLowerCase().includes(q)
+  })
 
   const activos = filtered.filter(p => p.activo)
   const inactivos = filtered.filter(p => !p.activo)
@@ -101,8 +121,11 @@ function ProveedoresPage() {
         ['Inactivos', proveedores.filter(p => !p.activo).length],
       ]),
       { name: 'Listado', rows: [
-        ['Nombre', 'Días crédito', 'Estado', 'Creado'],
-        ...filtered.map(p => [p.nombre, p.dias_credito, p.activo ? 'Activo' : 'Inactivo', formatDate(p.created_at)]),
+        ['Nombre', 'RUC', 'Dirección', 'Email', 'Contacto', 'Teléfono', 'Días crédito', 'Estado', 'Creado'],
+        ...filtered.map(p => [
+          p.nombre, p.ruc || '', p.direccion || '', p.email || '', p.contacto || '', p.telefono || '',
+          p.dias_credito, p.activo ? 'Activo' : 'Inactivo', formatDate(p.created_at),
+        ]),
       ] },
     ])
   }
@@ -153,19 +176,22 @@ function ProveedoresPage() {
               <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
                 <span className="text-sm font-medium text-gray-700">Activos ({activos.length})</span>
               </div>
+              <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
                     <th className="table-header">Nombre</th>
+                    <th className="table-header">Contacto</th>
+                    <th className="table-header">Teléfono</th>
+                    <th className="table-header">Email</th>
                     <th className="table-header text-center">Días de crédito</th>
-                    <th className="table-header">Creado</th>
                     <th className="table-header text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {activos.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="text-center py-10 text-gray-400">
+                      <td colSpan={6} className="text-center py-10 text-gray-400">
                         <Truck size={32} className="mx-auto mb-2 opacity-30" />
                         No hay proveedores activos
                       </td>
@@ -177,13 +203,22 @@ function ProveedoresPage() {
                           <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
                             <Truck size={14} className="text-orange-600" />
                           </div>
-                          <span className="font-medium text-gray-900">{p.nombre}</span>
+                          <div className="min-w-0">
+                            <span className="font-medium text-gray-900 block truncate max-w-[260px]">{p.nombre}</span>
+                            {p.ruc && <span className="text-xs text-gray-400 font-mono">{p.ruc}</span>}
+                          </div>
                         </div>
+                      </td>
+                      <td className="table-cell text-sm text-gray-600 max-w-[160px]">
+                        <span className="truncate block">{p.contacto || '—'}</span>
+                      </td>
+                      <td className="table-cell text-sm text-gray-600 whitespace-nowrap">{p.telefono || '—'}</td>
+                      <td className="table-cell text-sm text-gray-600 max-w-[200px]">
+                        <span className="truncate block">{p.email || '—'}</span>
                       </td>
                       <td className="table-cell text-center">
                         <span className="badge bg-blue-100 text-blue-700">{p.dias_credito} días</span>
                       </td>
-                      <td className="table-cell text-gray-400 text-sm">{formatDate(p.created_at)}</td>
                       <td className="table-cell text-right">
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
@@ -231,6 +266,7 @@ function ProveedoresPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
 
             {/* Inactivos */}
@@ -284,6 +320,54 @@ function ProveedoresPage() {
                   value={form.nombre}
                   onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
                   autoFocus
+                />
+              </div>
+              <div>
+                <label className="label">RUC</label>
+                <input
+                  className="input"
+                  placeholder="Ej: 123456-1-654321 DV 12"
+                  value={form.ruc}
+                  onChange={e => setForm(f => ({ ...f, ruc: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Dirección</label>
+                <input
+                  className="input"
+                  placeholder="Dirección del proveedor"
+                  value={form.direccion}
+                  onChange={e => setForm(f => ({ ...f, direccion: e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Contacto</label>
+                  <input
+                    className="input"
+                    placeholder="Nombre de contacto"
+                    value={form.contacto}
+                    onChange={e => setForm(f => ({ ...f, contacto: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="label">Teléfono</label>
+                  <input
+                    className="input"
+                    placeholder="Ej: 261-0000"
+                    value={form.telefono}
+                    onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="label">Email</label>
+                <input
+                  type="email"
+                  className="input"
+                  placeholder="correo@proveedor.com"
+                  value={form.email}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                 />
               </div>
               <div>

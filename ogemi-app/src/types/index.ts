@@ -25,6 +25,11 @@ export interface Cliente {
 export interface Proveedor {
   id: string;
   nombre: string;
+  ruc: string | null;
+  direccion: string | null;
+  email: string | null;
+  contacto: string | null;
+  telefono: string | null;
   dias_credito: number;
   activo: boolean;
   created_at: string;
