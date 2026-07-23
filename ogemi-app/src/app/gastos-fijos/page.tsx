@@ -66,6 +66,22 @@ const defaultWeekDates = (month: string): string[] => {
 }
 
 /**
+ * Anchos de columna compartidos para que Semana 1-4 y Total queden alineadas
+ * entre las tablas de flujo, gastos fijos y compras a pagar.
+ * Estructura: [concepto flexible] [4 semanas] [total] [estado/espaciador]
+ */
+const ColsSemana = () => (
+  <colgroup>
+    <col />
+    {SEMANAS.map(s => (
+      <col key={s} className="w-36" />
+    ))}
+    <col className="w-32" />
+    <col className="w-28" />
+  </colgroup>
+)
+
+/**
  * Input de monto sin flechas (type="text"): mientras se edita muestra el valor
  * crudo; al salir, formateado con separador de miles y 2 decimales.
  */
@@ -710,7 +726,8 @@ function GastosFijosPage() {
             <div className="p-6 text-center text-sm text-gray-400">Cargando datos...</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[980px] table-fixed">
+                <ColsSemana />
                 <thead>
                   <tr className="border-b border-gray-200">
                     <th className="table-header">Concepto</th>
@@ -723,6 +740,7 @@ function GastosFijosPage() {
                       </th>
                     ))}
                     <th className="table-header text-right">Total</th>
+                    <th className="table-header"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -742,6 +760,7 @@ function GastosFijosPage() {
                       <td className={`table-cell text-right font-semibold ${r.neg ? 'text-red-600' : 'text-green-700'}`}>
                         {r.neg ? '−' : ''}{formatCurrency(sum(r.vals))}
                       </td>
+                      <td className="table-cell"></td>
                     </tr>
                   ))}
                 </tbody>
@@ -756,6 +775,7 @@ function GastosFijosPage() {
                     <td className={`table-cell text-right ${sum(flujoNetoSemana) >= 0 ? 'text-green-800' : 'text-red-700'}`}>
                       {formatCurrency(sum(flujoNetoSemana))}
                     </td>
+                    <td className="table-cell"></td>
                   </tr>
                 </tfoot>
               </table>
@@ -801,7 +821,8 @@ function GastosFijosPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[980px] table-fixed">
+              <ColsSemana />
               <thead>
                 <tr className="border-b border-gray-200">
                   <th className="table-header">Gasto fijo</th>
@@ -811,7 +832,7 @@ function GastosFijosPage() {
                         <span>Semana {semana}</span>
                         <input
                           type="date"
-                          className="input py-1 text-xs max-w-[150px]"
+                          className="input py-1 text-xs max-w-[130px]"
                           value={semanaFechas[i] || ''}
                           onChange={event => updateFecha(i, event.target.value)}
                           title="Fecha de la semana (editable)"
@@ -919,14 +940,21 @@ function GastosFijosPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[980px] table-fixed">
+                <ColsSemana />
                 <thead>
                   <tr className="border-b border-gray-200">
                     <th className="table-header">Proveedor</th>
-                    {SEMANAS.map(semana => (
-                      <th key={semana} className="table-header text-right">Semana {semana}</th>
+                    {SEMANAS.map((semana, i) => (
+                      <th key={semana} className="table-header text-right">
+                        Semana {semana}
+                        <span className="block font-normal text-[10px] text-gray-400">
+                          {semanaFechas[i] ? formatDate(semanaFechas[i]) : ''}
+                        </span>
+                      </th>
                     ))}
                     <th className="table-header text-right">Total</th>
+                    <th className="table-header"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -941,6 +969,7 @@ function GastosFijosPage() {
                         </td>
                       ))}
                       <td className="table-cell text-right font-semibold text-red-600">−{formatCurrency(c.saldo)}</td>
+                      <td className="table-cell"></td>
                     </tr>
                   ))}
                 </tbody>
@@ -951,6 +980,7 @@ function GastosFijosPage() {
                       <td key={i} className="table-cell text-right text-red-600">{v > 0 ? `−${formatCurrency(v)}` : '—'}</td>
                     ))}
                     <td className="table-cell text-right text-red-600">−{formatCurrency(sum(flujo.pagosCompras))}</td>
+                    <td className="table-cell"></td>
                   </tr>
                 </tfoot>
               </table>
