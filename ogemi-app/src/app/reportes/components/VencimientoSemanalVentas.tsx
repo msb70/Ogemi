@@ -69,9 +69,9 @@ export default function VencimientoSemanalVentas({
         nombre,
         rows,
         weekTotals: weekDateObjs.map((_, i) =>
-          rows.filter((r: any) => r.fridayIdx === i).reduce((s: number, r: any) => s + (r.total || 0), 0)
+          rows.filter((r: any) => r.fridayIdx === i).reduce((s: number, r: any) => s + (r.saldo || 0), 0)
         ),
-        total: rows.reduce((s: number, r: any) => s + (r.total || 0), 0),
+        total: rows.reduce((s: number, r: any) => s + (r.saldo || 0), 0),
       }))
   })()
 
@@ -90,11 +90,11 @@ export default function VencimientoSemanalVentas({
 
   const totProbable = weekDateObjs.map((_, i) =>
     vencViernes.rows.filter((r: any) => r.fridayIdx === i && !noPagaraSet.has(r.id))
-      .reduce((s: number, r: any) => s + (r.total || 0), 0)
+      .reduce((s: number, r: any) => s + (r.saldo || 0), 0)
   )
   const totNoPaga = weekDateObjs.map((_, i) =>
     vencViernes.rows.filter((r: any) => r.fridayIdx === i && noPagaraSet.has(r.id))
-      .reduce((s: number, r: any) => s + (r.total || 0), 0)
+      .reduce((s: number, r: any) => s + (r.saldo || 0), 0)
   )
   const grandProbable = totProbable.reduce((s, t) => s + t, 0)
   const grandNoPaga = totNoPaga.reduce((s, t) => s + t, 0)
@@ -210,7 +210,14 @@ export default function VencimientoSemanalVentas({
                       {weekDateObjs.map((_, i) => (
                         <td key={i} className="table-cell text-right text-sm">
                           {f.fridayIdx === i
-                            ? <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>{formatMonto(f.total)}</span>
+                            ? <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>
+                                {formatMonto(f.saldo)}
+                                {(f.monto_pagado || 0) > 0 && (
+                                  <span className="block text-[10px] font-normal text-gray-400">
+                                    abonado {formatMonto(f.monto_pagado)} de {formatMonto(f.total)}
+                                  </span>
+                                )}
+                              </span>
                             : <span className="text-gray-200">—</span>}
                         </td>
                       ))}

@@ -361,7 +361,7 @@ function GastosFijosPage() {
 
     const cobrosVentas = dateObjs.map((_, i) =>
       vencVentas.rows.filter((r: any) => r.fridayIdx === i && !marcasVentas.has(r.id))
-        .reduce((s: number, r: any) => s + ((r.total as number) || 0), 0))
+        .reduce((s: number, r: any) => s + ((r.saldo as number) || 0), 0))
     const cobrosPres = dateObjs.map((_, i) =>
       vencPres.rows.filter((r: any) => r.fridayIdx === i && !marcasPresupuestos.has(r.id))
         .reduce((s: number, r: any) => s + (r.saldo || 0), 0))

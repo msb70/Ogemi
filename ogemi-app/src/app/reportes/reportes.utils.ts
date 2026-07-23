@@ -200,32 +200,40 @@ export function buildVencimientoSemanal(
   return { rows, totals, grandTotal: totals.reduce((s, t) => s + t, 0) }
 }
 
-/** Variante específica para facturas (filtra también NC y total ≤ 0). */
+/**
+ * Variante específica para facturas (filtra también NC y saldo ≤ 0).
+ * Cada fila expone `saldo` = total − retención − monto_pagado (lo que falta por
+ * cobrar en efectivo); los totales semanales suman el saldo, no el total bruto.
+ */
 export function buildVencimientoViernes(
   facturas: Record<string, unknown>[],
   fridays: Date[],
   cutoff?: Date
 ): {
-  rows: (Record<string, unknown> & { fridayIdx: number })[]
+  rows: (Record<string, unknown> & { fridayIdx: number; saldo: number })[]
   totals: number[]
   grandTotal: number
 } {
   const lastFriday = fridays[fridays.length - 1]
-  const rows: (Record<string, unknown> & { fridayIdx: number })[] = facturas
+  const rows: (Record<string, unknown> & { fridayIdx: number; saldo: number })[] = facturas
     .filter(f => {
       if (f.estado !== 'pendiente' || isNC(f.tipo_documento as string)) return false
       const fp = f.fecha_pago ? new Date((f.fecha_pago as string) + 'T00:00:00') : null
       return fp !== null && fp <= lastFriday
     })
-    .map((f): Record<string, unknown> & { fridayIdx: number } => {
+    .map((f): Record<string, unknown> & { fridayIdx: number; saldo: number } => {
       const fp = new Date((f.fecha_pago as string) + 'T00:00:00')
       const fridayIdx = weekIdxFor(fp, fridays, cutoff)
-      return { ...f, fridayIdx }
+      const saldo = ((f.total as number) || 0)
+        - ((f.retencion_monto as number) || 0)
+        - ((f.monto_pagado as number) || 0)
+      return { ...f, fridayIdx, saldo }
     })
+    .filter(r => r.saldo > 0)
     .sort((a, b) => ((a.fecha_pago as string) < (b.fecha_pago as string) ? -1 : 1))
 
   const totals = fridays.map((_, i) =>
-    rows.filter(r => r.fridayIdx === i).reduce((s, r) => s + ((r.total as number) || 0), 0)
+    rows.filter(r => r.fridayIdx === i).reduce((s, r) => s + r.saldo, 0)
   )
   return { rows, totals, grandTotal: totals.reduce((s, t) => s + t, 0) }
 }
