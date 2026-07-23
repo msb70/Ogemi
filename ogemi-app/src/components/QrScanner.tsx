@@ -55,6 +55,44 @@ function detectBrowser(): string {
   return 'Chrome'
 }
 
+/**
+ * Busca un QR renderizando las primeras páginas de un PDF (factura DGI en PDF).
+ * Prueba dos escalas por página porque el QR suele ser pequeño en la hoja.
+ */
+async function scanPdfForQr(blob: Blob, jsQR: any): Promise<string | null> {
+  const pdfjs = await import('pdfjs-dist')
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url
+  ).toString()
+  const loadingTask = pdfjs.getDocument({ data: await blob.arrayBuffer() })
+  const doc = await loadingTask.promise
+  try {
+    const maxPages = Math.min(doc.numPages, 3)
+    for (let p = 1; p <= maxPages; p++) {
+      const page = await doc.getPage(p)
+      for (const scale of [2.5, 4]) {
+        const viewport = page.getViewport({ scale })
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.ceil(viewport.width)
+        canvas.height = Math.ceil(viewport.height)
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })
+        if (!ctx) return null
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await page.render({ canvasContext: ctx, viewport, canvas } as any).promise
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'attemptBoth',
+        })
+        if (code?.data) return code.data
+      }
+    }
+  } finally {
+    loadingTask.destroy()
+  }
+  return null
+}
+
 export default function QrScanner({ onDetected, active }: QrScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -69,6 +107,19 @@ export default function QrScanner({ onDetected, active }: QrScannerProps) {
   const detectedRef = useRef(false)
   const browser = detectBrowser()
 
+  // Selección de cámara (en Mac, Continuity Camera del iPhone puede "ganarle"
+  // a la cámara integrada; este selector permite elegir y recuerda la elección)
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
+  const [currentDeviceId, setCurrentDeviceId] = useState('')
+  const [deviceId, setDeviceId] = useState<string>(() => {
+    if (typeof window === 'undefined') return ''
+    try { return localStorage.getItem('qr_camera_device') || '' } catch { return '' }
+  })
+  const selectCamera = (id: string) => {
+    setDeviceId(id)
+    try { localStorage.setItem('qr_camera_device', id) } catch { /* noop */ }
+  }
+
   const stopCamera = useCallback(() => {
     cancelAnimationFrame(rafRef.current)
     streamRef.current?.getTracks().forEach(t => t.stop())
@@ -77,50 +128,60 @@ export default function QrScanner({ onDetected, active }: QrScannerProps) {
   }, [])
 
   /**
-   * Decodifica el QR desde una imagen (archivo subido o captura pegada).
+   * Decodifica el QR desde una imagen o PDF (archivo subido o captura pegada).
    * Camino recomendado en computadoras: la webcam de una laptop rara vez
-   * enfoca bien el QR impreso, pero una foto/captura sí se lee.
+   * enfoca bien el QR impreso, pero una foto/captura/PDF sí se lee.
    */
   const decodeImageBlob = useCallback(async (blob: Blob) => {
     setImgBusy(true)
     setImgError(null)
     try {
       const jsQR = (await import('jsqr')).default
-      const url = URL.createObjectURL(blob)
-      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const el = new Image()
-        el.onload = () => resolve(el)
-        el.onerror = () => reject(new Error('No se pudo leer la imagen'))
-        el.src = url
-      })
-      const canvas = document.createElement('canvas')
-      const ctx = canvas.getContext('2d', { willReadFrequently: true })
+      const name = ((blob as File).name || '').toLowerCase()
+      const isPdf = blob.type === 'application/pdf' || name.endsWith('.pdf')
       let data: string | null = null
-      // Probar varias escalas: jsQR falla con imágenes muy grandes o muy pequeñas
-      for (const maxDim of [1000, 1600, 600, 2400]) {
-        const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight))
-        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale))
-        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
-        if (!ctx) break
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: 'attemptBoth',
+
+      if (isPdf) {
+        data = await scanPdfForQr(blob, jsQR)
+      } else {
+        const url = URL.createObjectURL(blob)
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const el = new Image()
+          el.onload = () => resolve(el)
+          el.onerror = () => reject(new Error('No se pudo leer la imagen'))
+          el.src = url
         })
-        if (code?.data) { data = code.data; break }
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })
+        // Probar varias escalas: jsQR falla con imágenes muy grandes o muy pequeñas
+        for (const maxDim of [1000, 1600, 600, 2400]) {
+          const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight))
+          canvas.width = Math.max(1, Math.round(img.naturalWidth * scale))
+          canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
+          if (!ctx) break
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'attemptBoth',
+          })
+          if (code?.data) { data = code.data; break }
+        }
+        URL.revokeObjectURL(url)
       }
-      URL.revokeObjectURL(url)
+
       if (!data) {
-        setImgError('No se encontró ningún código QR en la imagen. Intenta con una foto más cercana y nítida.')
+        setImgError(isPdf
+          ? 'No se encontró ningún código QR en el PDF. Verifica que sea la factura electrónica original.'
+          : 'No se encontró ningún código QR en la imagen. Intenta con una foto más cercana y nítida.')
       } else if (!data.includes('dgi-fep.mef.gob.pa')) {
-        setImgError('El QR de la imagen no corresponde a una factura electrónica de la DGI.')
+        setImgError('El QR del archivo no corresponde a una factura electrónica de la DGI.')
       } else {
         stopCamera()
         setStatus('idle')
         onDetected(data)
       }
     } catch (e: any) {
-      setImgError(e?.message || 'No se pudo procesar la imagen.')
+      setImgError(e?.message || 'No se pudo procesar el archivo.')
     } finally {
       setImgBusy(false)
     }
@@ -130,7 +191,8 @@ export default function QrScanner({ onDetected, active }: QrScannerProps) {
   useEffect(() => {
     if (!active) return
     const onPaste = (e: ClipboardEvent) => {
-      const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image/'))
+      const item = Array.from(e.clipboardData?.items || [])
+        .find(i => i.type.startsWith('image/') || i.type === 'application/pdf')
       const file = item?.getAsFile()
       if (file) { e.preventDefault(); decodeImageBlob(file) }
     }
@@ -190,17 +252,27 @@ export default function QrScanner({ onDetected, active }: QrScannerProps) {
 
       try {
         let stream: MediaStream
+        const size = { width: { ideal: 1280 }, height: { ideal: 720 } }
         try {
           stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+            // Cámara elegida por el usuario; si no hay, preferir la trasera
+            video: deviceId
+              ? { deviceId: { exact: deviceId }, ...size }
+              : { facingMode: 'environment', ...size },
           })
         } catch (e1: any) {
-          // Laptops/desktops sin cámara trasera: reintentar con cualquier cámara
+          // Cámara elegida desconectada o laptop sin cámara trasera: cualquier cámara
           if (e1?.name === 'NotAllowedError' || e1?.name === 'PermissionDeniedError') throw e1
           stream = await navigator.mediaDevices.getUserMedia({ video: true })
         }
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return }
         streamRef.current = stream
+        // Listar cámaras disponibles (las etiquetas aparecen tras dar permiso)
+        try {
+          setCurrentDeviceId(stream.getVideoTracks()[0]?.getSettings().deviceId || '')
+          const all = await navigator.mediaDevices.enumerateDevices()
+          if (!cancelled) setDevices(all.filter(d => d.kind === 'videoinput'))
+        } catch { /* enumerateDevices no soportado */ }
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           await videoRef.current.play()
@@ -221,7 +293,7 @@ export default function QrScanner({ onDetected, active }: QrScannerProps) {
       cancelled = true
       stopCamera()
     }
-  }, [active, retryCount, stopCamera])
+  }, [active, retryCount, deviceId, stopCamera])
 
   function handleRetry() {
     setScanError(null)
@@ -229,9 +301,23 @@ export default function QrScanner({ onDetected, active }: QrScannerProps) {
     setRetryCount(prev => prev + 1)
   }
 
-  // Subir imagen / pegar captura: alternativa a la cámara (ideal en computadora)
+  // Subir imagen o PDF / pegar captura: alternativa a la cámara (ideal en computadora)
   const uploadArea = (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
+      {devices.length > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <span className="text-xs text-gray-500">Cámara:</span>
+          <select
+            value={deviceId || currentDeviceId}
+            onChange={e => selectCamera(e.target.value)}
+            className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 max-w-[260px] focus:outline-none focus:border-gray-400"
+          >
+            {devices.map((d, i) => (
+              <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Cámara ${i + 1}`}</option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="flex items-center justify-center gap-2 flex-wrap">
         <button
           type="button"
@@ -240,7 +326,7 @@ export default function QrScanner({ onDetected, active }: QrScannerProps) {
           className="inline-flex items-center gap-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50"
         >
           {imgBusy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-          {imgBusy ? 'Leyendo imagen...' : 'Subir imagen del QR'}
+          {imgBusy ? 'Leyendo archivo...' : 'Subir imagen o PDF del QR'}
         </button>
         <span className="text-xs text-gray-400">o pega una captura (Ctrl+V)</span>
       </div>
@@ -248,7 +334,7 @@ export default function QrScanner({ onDetected, active }: QrScannerProps) {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,application/pdf,.pdf"
         className="hidden"
         onChange={e => {
           const f = e.target.files?.[0]
