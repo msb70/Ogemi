@@ -103,7 +103,7 @@ function MontoInput({ value, onChange, onCommit, disabled }: {
     <input
       type="text"
       inputMode="decimal"
-      className="input max-w-[120px] text-right ml-auto"
+      className="input max-w-[120px] text-right"
       value={display}
       disabled={disabled}
       onFocus={() => setEditing(true)}
@@ -827,8 +827,8 @@ function GastosFijosPage() {
                 <tr className="border-b border-gray-200">
                   <th className="table-header">Gasto fijo</th>
                   {SEMANAS.map((semana, i) => (
-                    <th key={semana} className="table-header text-right">
-                      <div className="flex flex-col items-end gap-1">
+                    <th key={semana} className="table-header">
+                      <div className="flex flex-col items-start gap-1">
                         <span>Semana {semana}</span>
                         <input
                           type="date"
