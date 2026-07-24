@@ -667,7 +667,7 @@ function ComprasPage() {
                         </td>
                         <td className="table-cell text-right font-semibold text-orange-600">
                           {c.estado === 'pagada'
-                            ? <span className="text-green-600 text-sm">Saldada</span>
+                            ? <span className="text-green-600" title="Saldada">{formatCurrency(0)}</span>
                             : formatCurrency(c.total - (c.monto_pagado || 0))}
                         </td>
                         <td className="table-cell">
