@@ -717,7 +717,7 @@ function FacturasPage() {
                       </td>
                       <td className="table-cell text-right font-semibold text-orange-600">
                         {f.estado === 'pagada'
-                          ? <span className="text-green-600 text-sm">Saldada</span>
+                          ? <span className="text-green-600" title="Saldada">{formatCurrency(0)}</span>
                           : f.estado === 'falta_retencion'
                             ? <span className="text-amber-600 text-sm" title={`Retención pendiente de comprobante: ${formatCurrency(f.retencion_monto || 0)}`}>Falta comprobante</span>
                             : formatCurrency(saldo)}
