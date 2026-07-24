@@ -28,9 +28,27 @@ export default function PresupuestosTab({
   search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta,
 }: PresupuestosTabProps) {
   const [presupuestosTab, setPresupuestosTab] = useState<PresupuestosSubTab>('listado')
+  const [agruparCliente, setAgruparCliente] = useState(false)
   // OT por número de presupuesto (la vista cartera_presupuestos no expone orden_trabajo)
   const otPorNumero = new Map<any, string>()
   presupuestos.forEach((p: any) => { if (p.orden_trabajo) otPorNumero.set(p.numero_presupuesto, p.orden_trabajo) })
+
+  const filaPresupuesto = (p: any) => (
+    <tr key={p.id} className="hover:bg-gray-50">
+      <td className="table-cell font-mono text-sm text-gray-500">#{p.numero_presupuesto}</td>
+      <td className="table-cell text-sm text-gray-600">{p.orden_trabajo || '—'}</td>
+      <td className="table-cell text-sm">{formatDate(p.fecha)}</td>
+      <td className="table-cell max-w-[200px]"><span className="truncate block">{p.clientes?.nombre}</span></td>
+      <td className="table-cell text-xs text-gray-400">{p.tipo_documento}</td>
+      <td className="table-cell text-right font-semibold">{formatMonto(p.total)}</td>
+      <td className="table-cell">
+        <span className={`badge ${p.estado === 'pagada' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+          {p.estado === 'pagada' ? 'Cobrado' : 'Pendiente'}
+        </span>
+      </td>
+      <td className="table-cell text-sm text-gray-400">{formatDate(p.fecha_pago)}</td>
+    </tr>
+  )
 
   return (
     <div className="p-6 space-y-4">
@@ -54,6 +72,11 @@ export default function PresupuestosTab({
         <div className="space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <FiltrosBar {...{ search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }} />
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+              <input type="checkbox" className="w-4 h-4 accent-brand-600 cursor-pointer"
+                checked={agruparCliente} onChange={e => setAgruparCliente(e.target.checked)} />
+              Agrupar por cliente
+            </label>
             <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() => {
               const total = presupuestosFiltrados.reduce((s, p) => s + (p.total || 0), 0)
               // Cobrado incluye abonos parciales de presupuestos pendientes
@@ -104,22 +127,30 @@ export default function PresupuestosTab({
               <tbody className="divide-y divide-gray-100">
                 {presupuestosFiltrados.length === 0 ? (
                   <tr><td colSpan={8} className="text-center py-8 text-gray-400">Sin resultados</td></tr>
-                ) : presupuestosFiltrados.map((p: any) => (
-                  <tr key={p.id} className="hover:bg-gray-50">
-                    <td className="table-cell font-mono text-sm text-gray-500">#{p.numero_presupuesto}</td>
-                    <td className="table-cell text-sm text-gray-600">{p.orden_trabajo || '—'}</td>
-                    <td className="table-cell text-sm">{formatDate(p.fecha)}</td>
-                    <td className="table-cell max-w-[200px]"><span className="truncate block">{p.clientes?.nombre}</span></td>
-                    <td className="table-cell text-xs text-gray-400">{p.tipo_documento}</td>
-                    <td className="table-cell text-right font-semibold">{formatMonto(p.total)}</td>
-                    <td className="table-cell">
-                      <span className={`badge ${p.estado === 'pagada' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                        {p.estado === 'pagada' ? 'Cobrado' : 'Pendiente'}
-                      </span>
-                    </td>
-                    <td className="table-cell text-sm text-gray-400">{formatDate(p.fecha_pago)}</td>
-                  </tr>
-                ))}
+                ) : agruparCliente ? (
+                  Object.entries(
+                    presupuestosFiltrados.reduce((acc: Record<string, any[]>, p: any) => {
+                      const k = p.clientes?.nombre || 'Sin nombre'
+                      ;(acc[k] = acc[k] || []).push(p)
+                      return acc
+                    }, {})
+                  )
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .map(([nombre, ps]) => (
+                      <Fragment key={nombre}>
+                        <tr className="bg-brand-50/40 border-t border-gray-200">
+                          <td colSpan={5} className="table-cell font-semibold text-brand-800">
+                            {nombre} <span className="text-xs text-gray-400 font-normal">({ps.length} presupuesto{ps.length === 1 ? '' : 's'})</span>
+                          </td>
+                          <td className="table-cell text-right font-bold text-brand-800">
+                            {formatMonto(ps.reduce((s, p) => s + (p.total || 0), 0))}
+                          </td>
+                          <td colSpan={2} />
+                        </tr>
+                        {ps.map(filaPresupuesto)}
+                      </Fragment>
+                    ))
+                ) : presupuestosFiltrados.map(filaPresupuesto)}
               </tbody>
             </table>
           </div>

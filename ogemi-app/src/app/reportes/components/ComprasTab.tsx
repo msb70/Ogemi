@@ -27,11 +27,35 @@ export default function ComprasTab({
   search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta,
 }: ComprasTabProps) {
   const [comprasTab, setComprasTab] = useState<ComprasSubTab>('listado')
+  const [agruparProveedor, setAgruparProveedor] = useState(false)
 
   // Listado ordenado por fecha de la factura descendente
   const comprasOrdenadas = [...comprasFiltradas].sort((a: any, b: any) =>
     a.fecha === b.fecha ? 0 : (a.fecha < b.fecha ? 1 : -1)
   )
+
+  const filaCompra = (c: any) => {
+    const abonado = c.monto_pagado || 0
+    const saldo = c.estado === 'pagada' ? 0 : (c.total || 0) - abonado
+    const abonoParcial = c.estado === 'pendiente' && abonado > 0
+    return (
+      <tr key={c.id} className="hover:bg-gray-50">
+        <td className="table-cell text-sm">{formatDate(c.fecha)}</td>
+        <td className="table-cell font-medium">{c.proveedores?.nombre}</td>
+        <td className="table-cell text-sm text-gray-500 max-w-[150px]"><span className="truncate block">{c.concepto || '—'}</span></td>
+        <td className="table-cell text-right">{formatMonto(c.monto)}</td>
+        <td className="table-cell text-right text-gray-400">{formatMonto(c.itbms)}</td>
+        <td className="table-cell text-right font-semibold">{formatMonto(c.total)}</td>
+        <td className={`table-cell text-right ${abonado > 0 ? 'text-green-600 font-medium' : 'text-gray-300'}`}>{abonado > 0 ? formatMonto(abonado) : '—'}</td>
+        <td className={`table-cell text-right font-semibold ${saldo > 0 ? 'text-orange-600' : 'text-gray-300'}`}>{saldo > 0 ? formatMonto(saldo) : '—'}</td>
+        <td className="table-cell">
+          <span className={`badge ${c.estado === 'pagada' ? 'bg-green-100 text-green-700' : abonoParcial ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'}`}>
+            {c.estado === 'pagada' ? 'Pagada' : abonoParcial ? 'Abono parcial' : 'Pendiente'}
+          </span>
+        </td>
+      </tr>
+    )
+  }
   // Antigüedad de cartera (pivot proveedor × tramo)
   const [antExpandidos, setAntExpandidos] = useState<Record<string, boolean>>({})
   const [antMostrarTodas, setAntMostrarTodas] = useState(false)
@@ -71,6 +95,11 @@ export default function ComprasTab({
         <div className="space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <FiltrosBar {...{ search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }} />
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+              <input type="checkbox" className="w-4 h-4 accent-brand-600 cursor-pointer"
+                checked={agruparProveedor} onChange={e => setAgruparProveedor(e.target.checked)} />
+              Agrupar por proveedor
+            </label>
             <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() => {
               const total = comprasFiltradas.reduce((s, c) => s + (c.total || 0), 0)
               // Pagado incluye abonos parciales de compras pendientes
@@ -126,28 +155,36 @@ export default function ComprasTab({
               <tbody className="divide-y divide-gray-100">
                 {comprasOrdenadas.length === 0 ? (
                   <tr><td colSpan={9} className="text-center py-8 text-gray-400">Sin resultados</td></tr>
-                ) : comprasOrdenadas.map((c: any) => {
-                  const abonado = c.monto_pagado || 0
-                  const saldo = c.estado === 'pagada' ? 0 : (c.total || 0) - abonado
-                  const abonoParcial = c.estado === 'pendiente' && abonado > 0
-                  return (
-                  <tr key={c.id} className="hover:bg-gray-50">
-                    <td className="table-cell text-sm">{formatDate(c.fecha)}</td>
-                    <td className="table-cell font-medium">{c.proveedores?.nombre}</td>
-                    <td className="table-cell text-sm text-gray-500 max-w-[150px]"><span className="truncate block">{c.concepto || '—'}</span></td>
-                    <td className="table-cell text-right">{formatMonto(c.monto)}</td>
-                    <td className="table-cell text-right text-gray-400">{formatMonto(c.itbms)}</td>
-                    <td className="table-cell text-right font-semibold">{formatMonto(c.total)}</td>
-                    <td className={`table-cell text-right ${abonado > 0 ? 'text-green-600 font-medium' : 'text-gray-300'}`}>{abonado > 0 ? formatMonto(abonado) : '—'}</td>
-                    <td className={`table-cell text-right font-semibold ${saldo > 0 ? 'text-orange-600' : 'text-gray-300'}`}>{saldo > 0 ? formatMonto(saldo) : '—'}</td>
-                    <td className="table-cell">
-                      <span className={`badge ${c.estado === 'pagada' ? 'bg-green-100 text-green-700' : abonoParcial ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'}`}>
-                        {c.estado === 'pagada' ? 'Pagada' : abonoParcial ? 'Abono parcial' : 'Pendiente'}
-                      </span>
-                    </td>
-                  </tr>
+                ) : agruparProveedor ? (
+                  Object.entries(
+                    comprasOrdenadas.reduce((acc: Record<string, any[]>, c: any) => {
+                      const k = c.proveedores?.nombre || 'Sin nombre'
+                      ;(acc[k] = acc[k] || []).push(c)
+                      return acc
+                    }, {})
                   )
-                })}
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .map(([nombre, cs]) => (
+                      <Fragment key={nombre}>
+                        <tr className="bg-brand-50/40 border-t border-gray-200">
+                          <td colSpan={5} className="table-cell font-semibold text-brand-800">
+                            {nombre} <span className="text-xs text-gray-400 font-normal">({cs.length} compra{cs.length === 1 ? '' : 's'})</span>
+                          </td>
+                          <td className="table-cell text-right font-bold text-brand-800">
+                            {formatMonto(cs.reduce((s, c) => s + (c.total || 0), 0))}
+                          </td>
+                          <td className="table-cell text-right font-bold text-green-700">
+                            {formatMonto(cs.reduce((s, c) => s + (c.monto_pagado || 0), 0))}
+                          </td>
+                          <td className="table-cell text-right font-bold text-orange-600">
+                            {formatMonto(cs.reduce((s, c) => s + (c.estado === 'pagada' ? 0 : (c.total || 0) - (c.monto_pagado || 0)), 0))}
+                          </td>
+                          <td />
+                        </tr>
+                        {cs.map(filaCompra)}
+                      </Fragment>
+                    ))
+                ) : comprasOrdenadas.map(filaCompra)}
               </tbody>
             </table>
           </div>
