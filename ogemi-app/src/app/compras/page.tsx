@@ -907,7 +907,7 @@ function ComprasPage() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
-                      <label className="label text-xs">Monto (USD)</label>
+                      <label className="label text-xs">Monto</label>
                       <input type="number" step="0.01" className="input text-sm" placeholder="0.00"
                         value={linea.monto} onChange={e => updateLinea(idx, 'monto', e.target.value)} />
                     </div>
@@ -991,12 +991,12 @@ function ComprasPage() {
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Monto sin ITBMS (USD) *</label>
+                  <label className="label">Monto sin ITBMS *</label>
                   <input type="number" step="0.01" className="input" placeholder="0.00" value={form.monto}
                     onChange={e => setForm(f => ({ ...f, monto: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="label">ITBMS (USD)</label>
+                  <label className="label">ITBMS</label>
                   <input type="number" step="0.01" className="input" placeholder="0.00" value={form.itbms}
                     onChange={e => setForm(f => ({ ...f, itbms: e.target.value }))} />
                 </div>

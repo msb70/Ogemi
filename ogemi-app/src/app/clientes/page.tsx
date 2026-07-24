@@ -89,7 +89,7 @@ function ClientesPage() {
     loadStats()
   }, [clientes])
 
-  const fmt = (n: number) => new Intl.NumberFormat('es-PA', { style: 'currency', currency: 'USD' }).format(n)
+  const fmt = (n: number) => new Intl.NumberFormat('es-PA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 
   const exportExcel = () => {
     exportXLSX(`clientes_${new Date().toISOString().split('T')[0]}.xlsx`, [

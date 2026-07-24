@@ -366,7 +366,7 @@ function AnticiposPage() {
                   />
                 </div>
                 <div>
-                  <label className="label">Monto (USD) *</label>
+                  <label className="label">Monto *</label>
                   <input
                     type="number"
                     step="0.01"

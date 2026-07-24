@@ -66,7 +66,7 @@ function ImportarPage() {
     setImporting(false)
   }
 
-  const fmt = (n: number) => new Intl.NumberFormat('es-PA', { style: 'currency', currency: 'USD' }).format(n)
+  const fmt = (n: number) => new Intl.NumberFormat('es-PA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 
   // Totales de la vista previa (antes de importar)
   const previewTotals = useMemo(() => {

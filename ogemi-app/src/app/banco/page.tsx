@@ -234,7 +234,7 @@ function BancoPage() {
                 <div><label className="label">Nombre</label><input className="input" value={nuevaCuenta.nombre} onChange={e => setNuevaCuenta(p => ({ ...p, nombre: e.target.value }))} /></div>
                 <div><label className="label">Banco</label><input className="input" value={nuevaCuenta.banco} onChange={e => setNuevaCuenta(p => ({ ...p, banco: e.target.value }))} /></div>
                 <div><label className="label">N° de cuenta</label><input className="input" value={nuevaCuenta.numero_cuenta} onChange={e => setNuevaCuenta(p => ({ ...p, numero_cuenta: e.target.value }))} /></div>
-                <div><label className="label">Saldo inicial (USD)</label><input type="number" className="input" value={nuevaCuenta.saldo_inicial} onChange={e => setNuevaCuenta(p => ({ ...p, saldo_inicial: e.target.value }))} /></div>
+                <div><label className="label">Saldo inicial</label><input type="number" className="input" value={nuevaCuenta.saldo_inicial} onChange={e => setNuevaCuenta(p => ({ ...p, saldo_inicial: e.target.value }))} /></div>
                 <div className="col-span-2 flex gap-2">
                   <button className="btn-primary" onClick={handleCrearCuenta}>Guardar</button>
                   <button className="btn-secondary" onClick={() => setShowNuevaCuenta(false)}>Cancelar</button>
@@ -497,7 +497,7 @@ function BancoPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Monto (USD)</label>
+                  <label className="label">Monto</label>
                   <input type="number" step="0.01" className="input" placeholder="0.00" value={nuevoForm.monto} onChange={e => setNuevoForm(p => ({ ...p, monto: e.target.value }))} />
                 </div>
                 <div>
@@ -575,7 +575,7 @@ function ReciboMovimiento({ movimiento }: { movimiento: any }) {
         <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Monto</p>
         <p className={`text-3xl font-bold ${esIngreso ? 'text-green-800' : 'text-red-700'}`}>
           {esIngreso ? '+' : '-'}
-          {new Intl.NumberFormat('es-PA', { style: 'currency', currency: 'USD' }).format(movimiento.monto)}
+          {new Intl.NumberFormat('es-PA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(movimiento.monto)}
         </p>
       </div>
 

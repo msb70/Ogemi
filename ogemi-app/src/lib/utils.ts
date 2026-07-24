@@ -6,10 +6,10 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatCurrency(amount: number): string {
+  // Sin simbolo de moneda: el usuario pidio quitar USD/US todos los modulos
   return new Intl.NumberFormat('es-PA', {
-    style: 'currency',
-    currency: 'USD',
     minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(amount)
 }
 
