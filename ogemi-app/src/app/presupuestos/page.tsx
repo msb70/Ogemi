@@ -5,7 +5,8 @@ import { createPortal } from 'react-dom'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
-import { formatCurrency, formatDate, tramoColor } from '@/lib/utils'
+// formatMonto: montos sin el símbolo USD/US$ (pedido del usuario)
+import { formatMonto as formatCurrency, formatDate, tramoColor } from '@/lib/utils'
 import { BancoCuenta, Cliente } from '@/types'
 import { Search, CheckCircle, Filter, X, Plus, Trash2, FileText, Download, Eye, Printer, RefreshCw, Pencil } from 'lucide-react'
 import type { CSSProperties } from 'react'
@@ -527,7 +528,7 @@ function PresupuestosPage() {
                     </td>
                     <td className="table-cell text-right font-semibold text-orange-600">
                       {p.estado === 'pagada'
-                        ? <span className="text-green-600 text-sm">Saldado</span>
+                        ? <span className="text-green-600" title="Saldado">{formatCurrency(0)}</span>
                         : formatCurrency(saldo)}
                     </td>
                     <td className="table-cell">

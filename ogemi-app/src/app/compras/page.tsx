@@ -5,7 +5,8 @@ import { createPortal } from 'react-dom'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
-import { formatCurrency, formatDate } from '@/lib/utils'
+// formatMonto: montos sin el símbolo USD/US$ (pedido del usuario)
+import { formatMonto as formatCurrency, formatDate } from '@/lib/utils'
 import { Compra, Proveedor, BancoCuenta } from '@/types'
 import {
   Plus, Search, X, Download, Filter,
