@@ -70,7 +70,7 @@ function ReportesPage() {
       supabase.from('compras').select('*, proveedores(nombre), banco_cuentas(nombre,banco)').order('fecha', { ascending: false }),
       supabase.from('cartera_vencida').select('*').order('dias_vencida', { ascending: false }),
       supabase.from('compras_vencidas').select('*').order('dias_vencida', { ascending: false }),
-      supabase.from('banco_cuentas').select('*').order('nombre'),
+      supabase.from('banco_cuentas').select('*').eq('activo', true).order('nombre'),
       supabase.from('presupuestos').select('*, clientes(nombre)').order('fecha', { ascending: false }),
       supabase.from('cartera_presupuestos').select('*').order('dias_vencida', { ascending: false }),
       supabase.from('notas_credito').select('*, clientes(nombre), factura_aplicada:facturas!factura_aplicada_id(numero_factura)').order('fecha', { ascending: false }),

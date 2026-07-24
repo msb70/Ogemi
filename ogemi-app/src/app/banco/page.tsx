@@ -51,7 +51,7 @@ function BancoPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const { data: cuentasData } = await supabase.from('banco_cuentas').select('*').order('nombre')
+    const { data: cuentasData } = await supabase.from('banco_cuentas').select('*').eq('activo', true).order('nombre')
     setCuentas(cuentasData || [])
 
     if (cuentasData && cuentasData.length > 0 && !cuentaSelected) {
