@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { withPagePermission } from '@/components/PermissionGuard'
 import { isNC, xlsxFromReporteArea } from './reportes.utils'
+import { resumenTarjeta, ResumenTarjeta } from '@/lib/tarjetas'
 
 import VentasTab      from './components/VentasTab'
 import PresupuestosTab from './components/PresupuestosTab'
@@ -44,6 +45,7 @@ function ReportesPage() {
   const [cuentas, setCuentas] = useState<any[]>([])
   const [cierres, setCierres] = useState<any[]>([])
   const [saldos, setSaldos] = useState<Record<string, number>>({})
+  const [tarjetas, setTarjetas] = useState<ResumenTarjeta[]>([])
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState('')
 
   // Flujo de caja (rango propio = año en curso + multi-cuenta)
@@ -93,13 +95,19 @@ function ReportesPage() {
 
     // N+1 known issue — sprint 4.6 scope: no fix here
     const saldosMap: Record<string, number> = {}
+    const tarjetasInfo: ResumenTarjeta[] = []
     for (const c of (cuentasData || [])) {
-      const { data: movs } = await supabase.from('banco_movimientos').select('tipo,monto').eq('cuenta_id', c.id)
+      const { data: movs } = await supabase.from('banco_movimientos').select('tipo,monto,fecha').eq('cuenta_id', c.id)
       const ing = movs?.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + m.monto, 0) || 0
       const egr = movs?.filter(m => m.tipo === 'egreso').reduce((s, m) => s + m.monto, 0) || 0
       saldosMap[c.id] = (c.saldo_inicial || 0) + ing - egr
+      if (c.tipo === 'tarjeta_credito') {
+        const r = resumenTarjeta(c, movs || [])
+        if (r) tarjetasInfo.push(r)
+      }
     }
     setSaldos(saldosMap)
+    setTarjetas(tarjetasInfo.sort((a, b) => a.fechaPago.localeCompare(b.fechaPago)))
     setLoading(false)
   }, [])
 
@@ -352,6 +360,7 @@ function ReportesPage() {
           <BancoTab
             cuentas={cuentas}
             saldos={saldos}
+            tarjetas={tarjetas}
             movimientos={movimientos}
             cierres={cierres}
             flujoMovs={flujoMovs}

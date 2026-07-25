@@ -157,6 +157,12 @@ export interface BancoCuenta {
   saldo_inicial: number;
   activo: boolean;
   created_at: string;
+  /** 'banco' (default) o 'tarjeta_credito' */
+  tipo?: 'banco' | 'tarjeta_credito';
+  /** Día del mes (1-31) de corte de la tarjeta */
+  dia_corte?: number | null;
+  /** Día del mes (1-31) de pago de la tarjeta */
+  dia_pago?: number | null;
 }
 
 export interface BancoMovimiento {

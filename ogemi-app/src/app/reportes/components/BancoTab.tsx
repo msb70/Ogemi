@@ -8,12 +8,14 @@ import {
   ResponsiveContainer, Legend,
 } from 'recharts'
 import { exportXLSX, buildKpiSheet } from '../reportes.utils'
+import { ResumenTarjeta } from '@/lib/tarjetas'
 
-type BancoSubTab = 'movimientos' | 'flujo' | 'cierres'
+type BancoSubTab = 'movimientos' | 'flujo' | 'cierres' | 'tarjetas'
 
 export interface BancoTabProps {
   cuentas: any[]
   saldos: Record<string, number>
+  tarjetas: ResumenTarjeta[]
   movimientos: any[]
   cierres: any[]
   flujoMovs: any[]
@@ -43,7 +45,7 @@ function Kpi({ label, value, color }: { label: string; value: string; color: str
 }
 
 export default function BancoTab({
-  cuentas, saldos, movimientos, cierres,
+  cuentas, saldos, tarjetas, movimientos, cierres,
   flujoMovs, flujoDesde, setFlujoDesde, flujoHasta, setFlujoHasta, flujoCuentas, setFlujoCuentas,
   cuentaSeleccionada, setCuentaSeleccionada,
   fechaDesde, setFechaDesde, fechaHasta, setFechaHasta,
@@ -106,6 +108,7 @@ export default function BancoTab({
         {[
           { key: 'movimientos', label: 'Movimientos' },
           { key: 'flujo',       label: 'Flujo de caja' },
+          { key: 'tarjetas',    label: 'Tarjetas de crédito' },
           { key: 'cierres',     label: 'Cierres de mes' },
         ].map(s => (
           <button key={s.key} onClick={() => handleTabChange(s.key as BancoSubTab)}
@@ -321,6 +324,96 @@ export default function BancoTab({
                       <td className="px-3 py-2 text-right text-green-700">{formatMonto(flIngMonto)}</td>
                       <td className="px-3 py-2 text-right text-red-600">{formatMonto(flEgrMonto)}</td>
                       <td className="px-3 py-2 text-right">{formatMonto(flIngMonto - flEgrMonto)}</td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bancoTab === 'tarjetas' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <p className="text-sm text-gray-500">
+              Monto a pagar por tarjeta: saldo del último corte menos los pagos aplicados después del corte.
+            </p>
+            <button className="btn-secondary text-sm py-1.5 flex items-center gap-1"
+              onClick={() => {
+                exportXLSX(`tarjetas_credito_${new Date().toISOString().split('T')[0]}.xlsx`, [
+                  buildKpiSheet('Tarjetas de crédito — A pagar', new Date().toISOString().split('T')[0], [
+                    ['Total a pagar', tarjetas.reduce((s, t) => s + t.aPagar, 0)],
+                    ['Deuda total actual', tarjetas.reduce((s, t) => s + t.deudaActual, 0)],
+                  ]),
+                  { name: 'Tarjetas', rows: [
+                    ['Tarjeta', 'Banco', 'Fecha corte', 'Saldo al corte', 'Pagos después del corte', 'A pagar', 'Fecha límite de pago', 'Consumos post-corte', 'Deuda actual'],
+                    ...tarjetas.map(t => [t.nombre, t.banco, t.fechaCorte, t.saldoAlCorte, t.pagosDespuesCorte, t.aPagar, t.fechaPago, t.consumosPostCorte, t.deudaActual]),
+                  ] },
+                ])
+              }}>
+              <Download size={14} />Exportar Excel
+            </button>
+          </div>
+
+          {/* KPIs */}
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <Kpi label="Tarjetas" value={String(tarjetas.length)} color="text-gray-800" />
+            <Kpi label="Total a pagar" value={formatMonto(tarjetas.reduce((s, t) => s + t.aPagar, 0))} color="text-red-600" />
+            <Kpi label="Deuda total actual" value={formatMonto(tarjetas.reduce((s, t) => s + t.deudaActual, 0))} color="text-gray-800" />
+          </div>
+
+          <div className="card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[880px]">
+                <thead><tr className="border-b border-gray-200">
+                  <th className="table-header">Tarjeta</th>
+                  <th className="table-header">Corte</th>
+                  <th className="table-header text-right">Saldo al corte</th>
+                  <th className="table-header text-right">Pagos post-corte</th>
+                  <th className="table-header text-right">A pagar</th>
+                  <th className="table-header">Pagar antes de</th>
+                  <th className="table-header text-right">Consumos post-corte</th>
+                  <th className="table-header text-right">Deuda actual</th>
+                </tr></thead>
+                <tbody className="divide-y divide-gray-100">
+                  {tarjetas.length === 0 ? (
+                    <tr><td colSpan={8} className="text-center py-8 text-gray-400">
+                      No hay cuentas tipo tarjeta de crédito. Créalas en Banco → Cuentas → Nueva cuenta.
+                    </td></tr>
+                  ) : tarjetas.map(t => (
+                    <tr key={t.cuentaId} className="hover:bg-gray-50">
+                      <td className="table-cell">
+                        <span className="font-medium">{t.nombre}</span>
+                        <span className="block text-xs text-gray-400">{t.banco}</span>
+                      </td>
+                      <td className="table-cell text-sm text-gray-500">{formatDate(t.fechaCorte)}</td>
+                      <td className="table-cell text-right">{formatMonto(t.saldoAlCorte)}</td>
+                      <td className="table-cell text-right text-green-700">{formatMonto(t.pagosDespuesCorte)}</td>
+                      <td className={`table-cell text-right font-bold ${t.aPagar > 0 ? 'text-red-600' : 'text-green-700'}`}>
+                        {formatMonto(t.aPagar)}
+                      </td>
+                      <td className="table-cell">
+                        <span className={`text-sm ${t.vencido ? 'text-red-600 font-semibold' : 'text-gray-600'}`}>
+                          {formatDate(t.fechaPago)}
+                        </span>
+                        {t.vencido && <span className="badge bg-red-100 text-red-700 ml-1.5">Vencido</span>}
+                      </td>
+                      <td className="table-cell text-right text-gray-500">{formatMonto(t.consumosPostCorte)}</td>
+                      <td className="table-cell text-right font-semibold">{formatMonto(t.deudaActual)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                {tarjetas.length > 0 && (
+                  <tfoot>
+                    <tr className="bg-gray-50 border-t border-gray-200 font-bold">
+                      <td className="px-3 py-2" colSpan={2}>Total</td>
+                      <td className="px-3 py-2 text-right">{formatMonto(tarjetas.reduce((s, t) => s + t.saldoAlCorte, 0))}</td>
+                      <td className="px-3 py-2 text-right text-green-700">{formatMonto(tarjetas.reduce((s, t) => s + t.pagosDespuesCorte, 0))}</td>
+                      <td className="px-3 py-2 text-right text-red-600">{formatMonto(tarjetas.reduce((s, t) => s + t.aPagar, 0))}</td>
+                      <td className="px-3 py-2"></td>
+                      <td className="px-3 py-2 text-right">{formatMonto(tarjetas.reduce((s, t) => s + t.consumosPostCorte, 0))}</td>
+                      <td className="px-3 py-2 text-right">{formatMonto(tarjetas.reduce((s, t) => s + t.deudaActual, 0))}</td>
                     </tr>
                   </tfoot>
                 )}

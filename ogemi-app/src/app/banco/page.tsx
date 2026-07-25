@@ -6,7 +6,7 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate, formatDateObj } from '@/lib/utils'
 import { BancoCuenta, BancoMovimiento } from '@/types'
-import { Plus, Building2, TrendingUp, TrendingDown, Printer, RefreshCw } from 'lucide-react'
+import { Plus, Building2, CreditCard, TrendingUp, TrendingDown, Printer, RefreshCw, Pencil } from 'lucide-react'
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
 import { withPagePermission } from '@/components/PermissionGuard'
@@ -31,9 +31,11 @@ function BancoPage() {
     referencia: '', cuenta_id: ''
   })
 
-  // Nueva cuenta
+  // Nueva cuenta / editar cuenta (si editCuentaId != null es edición)
+  const emptyCuentaForm = { nombre: '', banco: '', numero_cuenta: '', saldo_inicial: '0', tipo: 'banco', dia_corte: '', dia_pago: '' }
   const [showNuevaCuenta, setShowNuevaCuenta] = useState(false)
-  const [nuevaCuenta, setNuevaCuenta] = useState({ nombre: '', banco: '', numero_cuenta: '', saldo_inicial: '0' })
+  const [editCuentaId, setEditCuentaId] = useState<string | null>(null)
+  const [nuevaCuenta, setNuevaCuenta] = useState(emptyCuentaForm)
 
   // Recibo de movimiento
   const [reciboMovimiento, setReciboMovimiento] = useState<any | null>(null)
@@ -147,20 +149,51 @@ function BancoPage() {
     if (data) setReciboMovimiento(data)
   }
 
-  const handleCrearCuenta = async () => {
+  const esTarjetaForm = nuevaCuenta.tipo === 'tarjeta_credito'
+
+  const handleGuardarCuenta = async () => {
     if (!nuevaCuenta.nombre || !nuevaCuenta.banco) return
-    const { error } = await supabase.from('banco_cuentas').insert({
-      ...nuevaCuenta,
+    const diaCorte = parseInt(nuevaCuenta.dia_corte, 10)
+    const diaPago = parseInt(nuevaCuenta.dia_pago, 10)
+    if (esTarjetaForm && (!diaCorte || !diaPago || diaCorte < 1 || diaCorte > 31 || diaPago < 1 || diaPago > 31)) {
+      showToast('Para una tarjeta de crédito indica día de corte y día de pago (1-31)', 'error')
+      return
+    }
+    const row = {
+      nombre: nuevaCuenta.nombre,
+      banco: nuevaCuenta.banco,
+      numero_cuenta: nuevaCuenta.numero_cuenta || null,
       saldo_inicial: parseFloat(nuevaCuenta.saldo_inicial) || 0,
-    })
+      tipo: nuevaCuenta.tipo,
+      dia_corte: esTarjetaForm ? diaCorte : null,
+      dia_pago: esTarjetaForm ? diaPago : null,
+    }
+    const { error } = editCuentaId
+      ? await supabase.from('banco_cuentas').update(row).eq('id', editCuentaId)
+      : await supabase.from('banco_cuentas').insert(row)
     if (error) {
-      showToast(`Error al crear cuenta: ${error.message}`, 'error')
+      showToast(`Error al guardar cuenta: ${error.message}`, 'error')
     } else {
       setShowNuevaCuenta(false)
-      setNuevaCuenta({ nombre: '', banco: '', numero_cuenta: '', saldo_inicial: '0' })
-      showToast('Cuenta creada', 'success')
+      setEditCuentaId(null)
+      setNuevaCuenta(emptyCuentaForm)
+      showToast(editCuentaId ? 'Cuenta actualizada' : 'Cuenta creada', 'success')
       loadData()
     }
+  }
+
+  const handleEditarCuenta = (c: BancoCuenta) => {
+    setEditCuentaId(c.id)
+    setNuevaCuenta({
+      nombre: c.nombre,
+      banco: c.banco,
+      numero_cuenta: c.numero_cuenta || '',
+      saldo_inicial: String(c.saldo_inicial ?? 0),
+      tipo: c.tipo || 'banco',
+      dia_corte: c.dia_corte ? String(c.dia_corte) : '',
+      dia_pago: c.dia_pago ? String(c.dia_pago) : '',
+    })
+    setShowNuevaCuenta(true)
   }
 
   const tabs: { key: Tab; label: string }[] = [
@@ -224,45 +257,104 @@ function BancoPage() {
         {tab === 'cuentas' && (
           <div className="space-y-4">
             <div className="flex justify-end">
-              <button className="btn-secondary flex items-center gap-2" onClick={() => setShowNuevaCuenta(true)}>
+              <button className="btn-secondary flex items-center gap-2" onClick={() => { setEditCuentaId(null); setNuevaCuenta(emptyCuentaForm); setShowNuevaCuenta(true) }}>
                 <Plus size={16} />Nueva cuenta
               </button>
             </div>
 
             {showNuevaCuenta && (
               <div className="card p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {editCuentaId && (
+                  <div className="col-span-2 text-sm font-semibold text-gray-700">Editar cuenta</div>
+                )}
                 <div><label className="label">Nombre</label><input className="input" value={nuevaCuenta.nombre} onChange={e => setNuevaCuenta(p => ({ ...p, nombre: e.target.value }))} /></div>
                 <div><label className="label">Banco</label><input className="input" value={nuevaCuenta.banco} onChange={e => setNuevaCuenta(p => ({ ...p, banco: e.target.value }))} /></div>
                 <div><label className="label">N° de cuenta</label><input className="input" value={nuevaCuenta.numero_cuenta} onChange={e => setNuevaCuenta(p => ({ ...p, numero_cuenta: e.target.value }))} /></div>
                 <div><label className="label">Saldo inicial</label><input type="number" className="input" value={nuevaCuenta.saldo_inicial} onChange={e => setNuevaCuenta(p => ({ ...p, saldo_inicial: e.target.value }))} /></div>
+                <div>
+                  <label className="label">Tipo de cuenta</label>
+                  <select className="input" value={nuevaCuenta.tipo} onChange={e => setNuevaCuenta(p => ({ ...p, tipo: e.target.value }))}>
+                    <option value="banco">Cuenta bancaria</option>
+                    <option value="tarjeta_credito">Tarjeta de crédito</option>
+                  </select>
+                </div>
+                {esTarjetaForm && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">Día de corte</label>
+                      <input type="number" min={1} max={31} className="input" placeholder="Ej: 15" value={nuevaCuenta.dia_corte} onChange={e => setNuevaCuenta(p => ({ ...p, dia_corte: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="label">Día de pago</label>
+                      <input type="number" min={1} max={31} className="input" placeholder="Ej: 3" value={nuevaCuenta.dia_pago} onChange={e => setNuevaCuenta(p => ({ ...p, dia_pago: e.target.value }))} />
+                    </div>
+                  </div>
+                )}
+                {esTarjetaForm && (
+                  <div className="col-span-2 text-xs text-gray-500">
+                    Cada mes: el corte es el día indicado y el pago vence el día de pago siguiente al corte.
+                    Los consumos se registran como <span className="font-semibold">egresos</span> y los pagos a la tarjeta como <span className="font-semibold">ingresos</span>.
+                  </div>
+                )}
                 <div className="col-span-2 flex gap-2">
-                  <button className="btn-primary" onClick={handleCrearCuenta}>Guardar</button>
-                  <button className="btn-secondary" onClick={() => setShowNuevaCuenta(false)}>Cancelar</button>
+                  <button className="btn-primary" onClick={handleGuardarCuenta}>Guardar</button>
+                  <button className="btn-secondary" onClick={() => { setShowNuevaCuenta(false); setEditCuentaId(null); setNuevaCuenta(emptyCuentaForm) }}>Cancelar</button>
                 </div>
               </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {cuentas.map(c => (
+              {cuentas.map(c => {
+                const esTarjeta = c.tipo === 'tarjeta_credito'
+                const saldo = saldos[c.id] || 0
+                const deuda = -saldo
+                return (
                 <div key={c.id} className="card p-5 cursor-pointer hover:border-brand-300 transition-colors"
                   onClick={() => { setCuentaSelected(c.id); setTab('movimientos') }}>
                   <div className="flex items-start justify-between mb-3">
-                    <div className="w-10 h-10 bg-brand-100 rounded-xl flex items-center justify-center">
-                      <Building2 size={20} className="text-brand-600" />
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${esTarjeta ? 'bg-purple-100' : 'bg-brand-100'}`}>
+                      {esTarjeta
+                        ? <CreditCard size={20} className="text-purple-600" />
+                        : <Building2 size={20} className="text-brand-600" />}
                     </div>
-                    <span className={`badge ${c.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                      {c.activo ? 'Activa' : 'Inactiva'}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {esTarjeta && (
+                        <span className="badge bg-purple-100 text-purple-700">Tarjeta</span>
+                      )}
+                      <span className={`badge ${c.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {c.activo ? 'Activa' : 'Inactiva'}
+                      </span>
+                      <button
+                        onClick={e => { e.stopPropagation(); handleEditarCuenta(c) }}
+                        className="text-gray-300 hover:text-brand-600 transition-colors"
+                        title="Editar cuenta"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    </div>
                   </div>
                   <h3 className="font-semibold text-gray-900">{c.nombre}</h3>
                   <p className="text-sm text-gray-500">{c.banco}</p>
                   {c.numero_cuenta && <p className="text-xs text-gray-400 mt-0.5">{c.numero_cuenta}</p>}
+                  {esTarjeta && c.dia_corte && c.dia_pago && (
+                    <p className="text-xs text-purple-600 mt-1">Corte: día {c.dia_corte} · Pago: día {c.dia_pago}</p>
+                  )}
                   <div className="mt-4 pt-3 border-t border-gray-100">
-                    <p className="text-xs text-gray-500">Saldo disponible</p>
-                    <p className="text-xl font-bold text-brand-700">{formatCurrency(saldos[c.id] || 0)}</p>
+                    {esTarjeta ? (
+                      <>
+                        <p className="text-xs text-gray-500">Deuda actual</p>
+                        <p className={`text-xl font-bold ${deuda > 0 ? 'text-red-600' : 'text-green-700'}`}>{formatCurrency(deuda)}</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-gray-500">Saldo disponible</p>
+                        <p className="text-xl font-bold text-brand-700">{formatCurrency(saldo)}</p>
+                      </>
+                    )}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}
