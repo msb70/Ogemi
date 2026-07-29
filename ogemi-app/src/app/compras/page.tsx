@@ -22,13 +22,18 @@ import QrScanner from '@/components/QrScanner'
 import { withPagePermission } from '@/components/PermissionGuard'
 
 type Tab = 'listado' | 'vencidas'
-type EstadoFilter = 'todos' | 'pendiente' | 'pagada'
+type EstadoFilter = 'todos' | 'pendiente' | 'vencida' | 'pagada'
 
 interface LineaPago {
+  origen: 'cuenta' | 'nota_credito'
   cuenta_id: string
+  nc_id: string
   monto: string
   referencia: string
 }
+
+const lineaVacia = (cuentaId: string): LineaPago =>
+  ({ origen: 'cuenta', cuenta_id: cuentaId, nc_id: '', monto: '', referencia: '' })
 
 const TRAMO_COLORS: Record<string, string> = {
   'corriente': '#22c55e', '1-30': '#facc15',
@@ -60,7 +65,8 @@ function ComprasPage() {
   const [selectedCompra, setSelectedCompra] = useState<Compra | null>(null)
   const [showPagoModal, setShowPagoModal] = useState(false)
   const [fechaPago, setFechaPago] = useState('')
-  const [lineas, setLineas] = useState<LineaPago[]>([{ cuenta_id: '', monto: '', referencia: '' }])
+  const [lineas, setLineas] = useState<LineaPago[]>([lineaVacia('')])
+  const [ncsProveedor, setNcsProveedor] = useState<Compra[]>([])
   const [savingPago, setSavingPago] = useState(false)
   const [pagosExistentes, setPagosExistentes] = useState<any[]>([])
   const [pagoReversados, setPagoReversados] = useState<Set<string>>(new Set())
@@ -140,6 +146,10 @@ function ComprasPage() {
   }
 
   const handleOpenForm = (c?: Compra) => {
+    if (c && c.compra_aplicada_id) {
+      showToast('Esta nota de crédito ya está aplicada como pago. Reversa ese pago antes de editarla.', 'error')
+      return
+    }
     if (c) {
       setEditId(c.id)
       setForm({
@@ -217,15 +227,25 @@ function ComprasPage() {
   const openPagarModal = async (c: Compra) => {
     setSelectedCompra(c)
     setFechaPago(new Date().toISOString().split('T')[0])
-    setLineas([{ cuenta_id: cuentas[0]?.id || '', monto: '', referencia: '' }])
+    setLineas([lineaVacia(cuentas[0]?.id || '')])
+    setNcsProveedor([])
     setShowPagoModal(true)
-    const [{ data }, { data: reversos }] = await Promise.all([
+    const [{ data }, { data: reversos }, { data: ncsData }] = await Promise.all([
       supabase.from('pagos').select('*, banco_cuentas(nombre, banco)')
         .eq('compra_id', c.id).order('fecha', { ascending: false }),
       supabase.from('pago_reversos').select('pago_id').eq('compra_id', c.id),
+      // NC del proveedor disponibles (total negativo, aún no aplicadas)
+      supabase.from('compras')
+        .select('id, fecha, referencia, concepto, total, documento_afectado')
+        .eq('proveedor_id', c.proveedor_id)
+        .ilike('tipo_documento', '%credito%')
+        .lt('total', 0)
+        .is('compra_aplicada_id', null)
+        .order('fecha'),
     ])
     setPagosExistentes(data || [])
     setPagoReversados(new Set((reversos || []).map(r => r.pago_id)))
+    setNcsProveedor((ncsData || []) as Compra[])
   }
 
   const openDetalle = async (c: Compra) => {
@@ -235,7 +255,7 @@ function ComprasPage() {
     const [{ data: pagosData }, { data: reversos }] = await Promise.all([
       supabase
         .from('pagos')
-        .select('id, fecha, monto, referencia, banco_cuentas(nombre, banco, numero_cuenta)')
+        .select('id, fecha, monto, referencia, credito_compra_id, banco_cuentas(nombre, banco, numero_cuenta)')
         .eq('compra_id', c.id)
         .order('fecha', { ascending: true }),
       supabase.from('pago_reversos').select('pago_id').eq('compra_id', c.id),
@@ -278,25 +298,65 @@ function ComprasPage() {
     load(); loadVencidas()
   }
 
-  const addLinea = () => setLineas(p => [...p, { cuenta_id: cuentas[0]?.id || '', monto: '', referencia: '' }])
+  const addLinea = () => setLineas(p => [...p, lineaVacia(cuentas[0]?.id || '')])
   const removeLinea = (idx: number) => setLineas(p => p.filter((_, i) => i !== idx))
   const updateLinea = (idx: number, field: keyof LineaPago, value: string) =>
-    setLineas(p => p.map((l, i) => i === idx ? { ...l, [field]: value } : l))
+    setLineas(p => p.map((l, i) => {
+      if (i !== idx) return l
+      const next = { ...l, [field]: value }
+      // Al elegir origen NC, el monto queda fijo al total de la NC (uso único)
+      if (field === 'origen') {
+        next.cuenta_id = value === 'cuenta' ? (cuentas[0]?.id || '') : ''
+        next.nc_id = ''
+        next.monto = ''
+      }
+      if (field === 'nc_id') {
+        const nc = ncsProveedor.find(n => n.id === value)
+        next.monto = nc ? Math.abs(nc.total).toFixed(2) : ''
+      }
+      return next
+    }))
+
+  // Ids de NC ya elegidas en otras líneas (para no ofrecerlas dos veces)
+  const ncsUsadas = (idx: number) =>
+    new Set(lineas.filter((l, i) => i !== idx && l.origen === 'nota_credito' && l.nc_id).map(l => l.nc_id))
 
   const handleRegistrarAbono = async () => {
     if (!selectedCompra) return
-    const validas = lineas.filter(l => l.cuenta_id && parseFloat(l.monto) > 0)
+    const validas = lineas.filter(l =>
+      parseFloat(l.monto) > 0 && (l.origen === 'cuenta' ? l.cuenta_id : l.nc_id)
+    )
     if (validas.length === 0) return
     setSavingPago(true)
-    const { error } = await supabase.from('pagos').insert(
-      validas.map(l => ({
+
+    // 1) Notas de crédito: vía RPC (uso único + validación de saldo en DB)
+    for (const l of validas.filter(x => x.origen === 'nota_credito')) {
+      const { error: eNC } = await supabase.rpc('aplicar_nc_compra', {
+        p_nc_id: l.nc_id,
+        p_compra_id: selectedCompra.id,
+        p_fecha: fechaPago,
+      })
+      if (eNC) {
+        setSavingPago(false)
+        showToast(`No se pudo aplicar la nota de crédito: ${eNC.message}`, 'error')
+        return
+      }
+    }
+
+    // 2) Cuentas bancarias: pagos normales
+    const pagosInsert = validas
+      .filter(l => l.origen === 'cuenta')
+      .map(l => ({
         compra_id: selectedCompra.id,
         cuenta_id: l.cuenta_id,
         monto: parseFloat(l.monto),
         fecha: fechaPago,
         referencia: l.referencia || null,
       }))
-    )
+    const { error } = pagosInsert.length > 0
+      ? await supabase.from('pagos').insert(pagosInsert)
+      : { error: null }
+
     setSavingPago(false)
     if (error) {
       showToast(`Error al registrar abono: ${error.message}`, 'error')
@@ -415,11 +475,16 @@ function ComprasPage() {
     ])
   }
 
+  const hoyStr = new Date().toISOString().split('T')[0]
   const filtered = compras.filter(c => {
     const prov = (c.proveedores as any)?.nombre || ''
     const matchSearch = !search || prov.toLowerCase().includes(search.toLowerCase()) ||
       (c.concepto || '').toLowerCase().includes(search.toLowerCase())
-    const matchEstado = estadoFilter === 'todos' || c.estado === estadoFilter
+    const esVencida = c.estado === 'pendiente' && !!c.vencimiento && c.vencimiento < hoyStr && c.total > 0
+    const matchEstado =
+      estadoFilter === 'todos' ? true :
+      estadoFilter === 'vencida' ? esVencida :
+      c.estado === estadoFilter
     const matchDesde = !fechaDesde || c.fecha >= fechaDesde
     const matchHasta = !fechaHasta || c.fecha <= fechaHasta
     return matchSearch && matchEstado && matchDesde && matchHasta
@@ -519,6 +584,7 @@ function ComprasPage() {
                 onChange={e => setEstadoFilter(e.target.value as EstadoFilter)}>
                 <option value="todos">Todos los estados</option>
                 <option value="pendiente">Pendientes</option>
+                <option value="vencida">Vencidas</option>
                 <option value="pagada">Pagadas</option>
               </select>
               <div className="flex items-center gap-2">
@@ -556,12 +622,19 @@ function ComprasPage() {
                         {esNotaCredito(c.tipo_documento) && <span className="badge bg-purple-100 text-purple-700 mr-1">NC</span>}
                         {(c.proveedores as any)?.nombre || '—'}
                       </p>
-                      <span className={`badge flex items-center gap-1 flex-shrink-0 ${
-                        c.estado === 'pagada' ? 'bg-green-100 text-green-700' : vencida ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
-                      }`}>
-                        {c.estado === 'pagada' ? <CheckCircle size={11} /> : <Clock size={11} />}
-                        {c.estado === 'pagada' ? 'Pagada' : vencida ? 'Vencida' : 'Pendiente'}
-                      </span>
+                      {esNotaCredito(c.tipo_documento) ? (
+                        <span className="badge flex items-center gap-1 flex-shrink-0 bg-purple-100 text-purple-700">
+                          {c.compra_aplicada_id ? <CheckCircle size={11} /> : <Clock size={11} />}
+                          {c.compra_aplicada_id ? 'Aplicada' : 'Disponible'}
+                        </span>
+                      ) : (
+                        <span className={`badge flex items-center gap-1 flex-shrink-0 ${
+                          c.estado === 'pagada' ? 'bg-green-100 text-green-700' : vencida ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                        }`}>
+                          {c.estado === 'pagada' ? <CheckCircle size={11} /> : <Clock size={11} />}
+                          {c.estado === 'pagada' ? 'Pagada' : vencida ? 'Vencida' : 'Pendiente'}
+                        </span>
+                      )}
                     </div>
                     {c.concepto && <p className="text-xs text-gray-500 mb-2 line-clamp-2">{c.concepto}</p>}
                     <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
@@ -590,7 +663,7 @@ function ComprasPage() {
                           aria-label="Editar">
                           <Pencil size={15} />
                         </button>
-                        {c.estado === 'pendiente' && (
+                        {c.estado === 'pendiente' && !esNotaCredito(c.tipo_documento) && (
                           <button
                             onClick={() => openPagarModal(c)}
                             className="flex items-center gap-1 text-sm text-green-700 font-medium border border-green-300 bg-green-50 rounded-lg px-3 py-2"
@@ -671,12 +744,19 @@ function ComprasPage() {
                             : formatCurrency(c.total - (c.monto_pagado || 0))}
                         </td>
                         <td className="table-cell">
-                          <span className={`badge flex items-center gap-1 w-fit ${
-                            c.estado === 'pagada' ? 'bg-green-100 text-green-700' : vencida ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
-                          }`}>
-                            {c.estado === 'pagada' ? <CheckCircle size={11} /> : <Clock size={11} />}
-                            {c.estado === 'pagada' ? 'Pagada' : vencida ? 'Vencida' : 'Pendiente'}
-                          </span>
+                          {esNotaCredito(c.tipo_documento) ? (
+                            <span className="badge flex items-center gap-1 w-fit bg-purple-100 text-purple-700">
+                              {c.compra_aplicada_id ? <CheckCircle size={11} /> : <Clock size={11} />}
+                              {c.compra_aplicada_id ? 'Aplicada' : 'Disponible'}
+                            </span>
+                          ) : (
+                            <span className={`badge flex items-center gap-1 w-fit ${
+                              c.estado === 'pagada' ? 'bg-green-100 text-green-700' : vencida ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                            }`}>
+                              {c.estado === 'pagada' ? <CheckCircle size={11} /> : <Clock size={11} />}
+                              {c.estado === 'pagada' ? 'Pagada' : vencida ? 'Vencida' : 'Pendiente'}
+                            </span>
+                          )}
                         </td>
                         <td className="table-cell text-right">
                           <div className="flex items-center justify-end gap-1">
@@ -690,7 +770,7 @@ function ComprasPage() {
                               title="Editar">
                               <Pencil size={14} />
                             </button>
-                            {c.estado === 'pendiente' && (
+                            {c.estado === 'pendiente' && !esNotaCredito(c.tipo_documento) && (
                               <button
                                 onClick={() => openPagarModal(c)}
                                 className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 font-medium border border-green-200 rounded-lg px-2 py-1"
@@ -852,14 +932,17 @@ function ComprasPage() {
                 <div className="space-y-1.5">
                   {pagosExistentes.map(p => {
                     const reversado = pagoReversados.has(p.id)
+                    const esNCPago = !!p.credito_compra_id
                     return (
-                      <div key={p.id} className={`flex justify-between items-center text-sm rounded-lg px-3 py-2 ${reversado ? 'bg-gray-100' : 'bg-green-50'}`}>
-                        <span className={reversado ? 'text-gray-400 line-through' : 'text-gray-600'}>{formatDate(p.fecha)} · {p.banco_cuentas?.nombre}</span>
+                      <div key={p.id} className={`flex justify-between items-center text-sm rounded-lg px-3 py-2 ${reversado ? 'bg-gray-100' : esNCPago ? 'bg-purple-50' : 'bg-green-50'}`}>
+                        <span className={reversado ? 'text-gray-400 line-through' : 'text-gray-600'}>
+                          {formatDate(p.fecha)} · {esNCPago ? 'Nota de crédito' : p.banco_cuentas?.nombre}
+                        </span>
                         <div className="flex items-center gap-2">
-                          <span className={`font-medium ${reversado ? 'text-gray-400 line-through' : 'text-green-700'}`}>{formatCurrency(p.monto)}</span>
+                          <span className={`font-medium ${reversado ? 'text-gray-400 line-through' : esNCPago ? 'text-purple-700' : 'text-green-700'}`}>{formatCurrency(p.monto)}</span>
                           {reversado ? (
                             <span className="badge bg-gray-200 text-gray-500 text-xs">Reversado</span>
-                          ) : isAdmin ? (
+                          ) : isAdmin && !esNCPago ? (
                             <button onClick={() => openEditCobro(p)}
                               className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-800 font-medium"
                               title="Editar este pago (admin)">
@@ -887,7 +970,10 @@ function ComprasPage() {
                   <Plus size={13} /> Agregar cuenta
                 </button>
               </div>
-              {lineas.map((linea, idx) => (
+              {lineas.map((linea, idx) => {
+                const usadas = ncsUsadas(idx)
+                const ncsElegibles = ncsProveedor.filter(n => !usadas.has(n.id))
+                return (
                 <div key={idx} className="border border-gray-200 rounded-xl p-3 space-y-2">
                   <div className="flex justify-between">
                     <span className="text-xs text-gray-500">Pago {idx + 1}</span>
@@ -898,33 +984,64 @@ function ComprasPage() {
                     )}
                   </div>
                   <div>
-                    <label className="label text-xs">Cuenta</label>
-                    <select className="input text-sm" value={linea.cuenta_id}
-                      onChange={e => updateLinea(idx, 'cuenta_id', e.target.value)}>
-                      <option value="">Seleccionar...</option>
-                      {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>)}
+                    <label className="label text-xs">Origen</label>
+                    <select className="input text-sm" value={linea.origen}
+                      onChange={e => updateLinea(idx, 'origen', e.target.value)}>
+                      <option value="cuenta">Cuenta bancaria</option>
+                      <option value="nota_credito" disabled={ncsProveedor.length === 0}>
+                        {ncsProveedor.length === 0 ? 'Nota de crédito (sin disponibles)' : 'Nota de crédito'}
+                      </option>
                     </select>
                   </div>
+                  {linea.origen === 'cuenta' ? (
+                    <div>
+                      <label className="label text-xs">Cuenta</label>
+                      <select className="input text-sm" value={linea.cuenta_id}
+                        onChange={e => updateLinea(idx, 'cuenta_id', e.target.value)}>
+                        <option value="">Seleccionar...</option>
+                        {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>)}
+                      </select>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="label text-xs">Nota de crédito del proveedor</label>
+                      <select className="input text-sm" value={linea.nc_id}
+                        onChange={e => updateLinea(idx, 'nc_id', e.target.value)}>
+                        <option value="">Seleccionar NC...</option>
+                        {ncsElegibles.map(n => (
+                          <option key={n.id} value={n.id}>
+                            {formatDate(n.fecha)} · {n.referencia || n.concepto || 'NC'} · {formatCurrency(Math.abs(n.total))}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[11px] text-purple-700 mt-1">
+                        La NC se aplica por su monto total y no pasa por banco.
+                      </p>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
                       <label className="label text-xs">Monto</label>
                       <input type="number" step="0.01" className="input text-sm" placeholder="0.00"
-                        value={linea.monto} onChange={e => updateLinea(idx, 'monto', e.target.value)} />
+                        value={linea.monto} readOnly={linea.origen === 'nota_credito'}
+                        onChange={e => updateLinea(idx, 'monto', e.target.value)} />
                     </div>
                     <div>
                       <label className="label text-xs">Referencia</label>
                       <input className="input text-sm" placeholder="Cheque, transferencia..."
-                        value={linea.referencia} onChange={e => updateLinea(idx, 'referencia', e.target.value)} />
+                        value={linea.referencia} disabled={linea.origen === 'nota_credito'}
+                        onChange={e => updateLinea(idx, 'referencia', e.target.value)} />
                     </div>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
 
             <div className="flex gap-3">
               <button className="btn-secondary flex-1" onClick={() => setShowPagoModal(false)}>Cancelar</button>
               <button className="btn-primary flex-1" onClick={handleRegistrarAbono}
-                disabled={savingPago || lineas.every(l => !l.cuenta_id || !l.monto)}>
+                disabled={savingPago || lineas.every(l => !l.monto || (l.origen === 'cuenta' ? !l.cuenta_id : !l.nc_id))}>
                 {savingPago ? 'Guardando...' : 'Registrar pago'}
               </button>
             </div>
@@ -1327,7 +1444,9 @@ function CompraDetalle({
                     <tr key={p.id} className={rev ? 'text-gray-400 line-through' : ''}>
                       <td className="px-3 py-2">{formatDate(p.fecha)}{rev ? ' (reversado)' : ''}</td>
                       <td className="px-3 py-2">
-                        {`${p.banco_cuentas?.nombre || '—'}${p.banco_cuentas?.banco ? ' · ' + p.banco_cuentas.banco : ''}${p.banco_cuentas?.numero_cuenta ? ' · ' + p.banco_cuentas.numero_cuenta : ''}`}
+                        {p.credito_compra_id
+                          ? 'Nota de crédito'
+                          : `${p.banco_cuentas?.nombre || '—'}${p.banco_cuentas?.banco ? ' · ' + p.banco_cuentas.banco : ''}${p.banco_cuentas?.numero_cuenta ? ' · ' + p.banco_cuentas.numero_cuenta : ''}`}
                       </td>
                       <td className="px-3 py-2">{p.referencia || '—'}</td>
                       <td className="px-3 py-2 text-right font-medium">{formatCurrency(p.monto)}</td>

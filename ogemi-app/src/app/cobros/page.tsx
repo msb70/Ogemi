@@ -25,6 +25,21 @@ interface SelNC {
   factura_id: string
 }
 
+interface AnticipoDisp {
+  id: string
+  fecha: string
+  monto: number
+  saldo: number
+  numero_deposito: string | null
+  cuenta_id: string | null
+}
+
+interface SelAnticipo {
+  checked: boolean
+  factura_id: string
+  monto: string // editable: los anticipos se pueden aplicar parcialmente
+}
+
 function CobrosPage() {
   const supabase = createClient()
   const { toast, showToast, hideToast } = useToast()
@@ -39,11 +54,13 @@ function CobrosPage() {
   // Datos del cliente seleccionado
   const [facturas, setFacturas] = useState<Factura[]>([])
   const [ncs, setNcs] = useState<NotaCredito[]>([])
+  const [anticipos, setAnticipos] = useState<AnticipoDisp[]>([])
   const [loading, setLoading] = useState(false)
 
-  // Selección de facturas y NC
+  // Selección de facturas, NC y anticipos
   const [sel, setSel] = useState<Record<string, SelFactura>>({})
   const [ncSel, setNcSel] = useState<Record<string, SelNC>>({})
+  const [antSel, setAntSel] = useState<Record<string, SelAnticipo>>({})
 
   // Datos del cobro
   const [cuentas, setCuentas] = useState<BancoCuenta[]>([])
@@ -86,8 +103,9 @@ function CobrosPage() {
     setShowDropdown(false)
     setSel({})
     setNcSel({})
+    setAntSel({})
     setLoading(true)
-    const [{ data: fData }, { data: ncData }] = await Promise.all([
+    const [{ data: fData }, { data: ncData }, { data: antData }] = await Promise.all([
       supabase
         .from('facturas')
         .select('*')
@@ -102,9 +120,17 @@ function CobrosPage() {
         .eq('cliente_id', c.id)
         .eq('estado', 'disponible')
         .order('fecha', { ascending: true }),
+      supabase
+        .from('anticipos_saldos')
+        .select('id, fecha, monto, saldo, numero_deposito, cuenta_id')
+        .eq('cliente_id', c.id)
+        .eq('estado', 'activo')
+        .gt('saldo', 0)
+        .order('fecha', { ascending: true }),
     ])
     setFacturas(fData || [])
     setNcs(ncData || [])
+    setAnticipos((antData || []) as AnticipoDisp[])
     setLoading(false)
   }
 
@@ -113,8 +139,10 @@ function CobrosPage() {
     setClienteSearch('')
     setFacturas([])
     setNcs([])
+    setAnticipos([])
     setSel({})
     setNcSel({})
+    setAntSel({})
     setReferencia('')
   }
 
@@ -130,9 +158,24 @@ function CobrosPage() {
     return map
   }, [ncs, ncSel])
 
-  /** Máximo en efectivo cobrable a una factura = saldo − NC asignadas */
+  // Anticipos asignados (marcados) por factura
+  const antPorFactura = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const a of anticipos) {
+      const s = antSel[a.id]
+      if (s?.checked && s.factura_id) {
+        map[s.factura_id] = (map[s.factura_id] || 0) + (parseFloat(s.monto) || 0)
+      }
+    }
+    return map
+  }, [anticipos, antSel])
+
+  /** Créditos (NC + anticipos) asignados a una factura */
+  const creditosFactura = (fid: string) => (ncPorFactura[fid] || 0) + (antPorFactura[fid] || 0)
+
+  /** Máximo en efectivo cobrable a una factura = saldo − NC − anticipos asignados */
   const maxEfectivo = (f: Factura) =>
-    Math.max(0, Math.round((saldoFactura(f) - (ncPorFactura[f.id] || 0)) * 100) / 100)
+    Math.max(0, Math.round((saldoFactura(f) - creditosFactura(f.id)) * 100) / 100)
 
   const toggleFactura = (f: Factura) => {
     setSel(prev => {
@@ -152,7 +195,7 @@ function CobrosPage() {
       if (cur?.checked) return { ...prev, [nc.id]: { checked: false, factura_id: '' } }
       // Default: primera factura seleccionada con saldo suficiente, si no la primera pendiente que quepa
       const candidata = facturas.find(f =>
-        saldoFactura(f) - (ncPorFactura[f.id] || 0) >= (nc.total || 0) - 0.001
+        saldoFactura(f) - creditosFactura(f.id) >= (nc.total || 0) - 0.001
       )
       return { ...prev, [nc.id]: { checked: true, factura_id: candidata?.id || '' } }
     })
@@ -162,7 +205,35 @@ function CobrosPage() {
     setNcSel(prev => ({ ...prev, [nc.id]: { checked: true, factura_id: facturaId } }))
   }
 
-  // Al cambiar asignaciones de NC, recortar montos en efectivo que ya no quepan
+  const toggleAnt = (a: AnticipoDisp) => {
+    setAntSel(prev => {
+      const cur = prev[a.id]
+      if (cur?.checked) return { ...prev, [a.id]: { checked: false, factura_id: '', monto: '' } }
+      // Default: primera factura con saldo disponible; monto = min(saldo anticipo, saldo restante)
+      const candidata = facturas.find(f => saldoFactura(f) - creditosFactura(f.id) > 0.001)
+      const restante = candidata ? saldoFactura(candidata) - creditosFactura(candidata.id) : 0
+      const monto = Math.max(0, Math.min(a.saldo, restante))
+      return { ...prev, [a.id]: { checked: true, factura_id: candidata?.id || '', monto: monto > 0 ? monto.toFixed(2) : '' } }
+    })
+  }
+
+  const setAntFactura = (a: AnticipoDisp, facturaId: string) => {
+    setAntSel(prev => {
+      const cur = prev[a.id]
+      const f = facturas.find(x => x.id === facturaId)
+      // Recalcular monto por defecto al cambiar de factura (sin contar este anticipo)
+      const otros = creditosFactura(facturaId) - (cur?.factura_id === facturaId ? (parseFloat(cur?.monto || '') || 0) : 0)
+      const restante = f ? saldoFactura(f) - otros : 0
+      const monto = Math.max(0, Math.min(a.saldo, restante))
+      return { ...prev, [a.id]: { checked: true, factura_id: facturaId, monto: monto > 0 ? monto.toFixed(2) : (cur?.monto || '') } }
+    })
+  }
+
+  const setAntMonto = (a: AnticipoDisp, monto: string) => {
+    setAntSel(prev => ({ ...prev, [a.id]: { checked: true, factura_id: prev[a.id]?.factura_id || '', monto } }))
+  }
+
+  // Al cambiar asignaciones de NC/anticipos, recortar montos en efectivo que ya no quepan
   useEffect(() => {
     setSel(prev => {
       let changed = false
@@ -179,18 +250,20 @@ function CobrosPage() {
       return changed ? next : prev
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ncPorFactura])
+  }, [ncPorFactura, antPorFactura])
 
   const seleccionadas = facturas.filter(f => sel[f.id]?.checked)
   const totalEfectivo = seleccionadas.reduce((s, f) => s + (parseFloat(sel[f.id]?.monto || '') || 0), 0)
   const ncsMarcadas = ncs.filter(n => ncSel[n.id]?.checked)
   const totalNC = ncsMarcadas.reduce((s, n) => s + (n.total || 0), 0)
+  const antsMarcados = anticipos.filter(a => antSel[a.id]?.checked)
+  const totalAnticipo = antsMarcados.reduce((s, a) => s + (parseFloat(antSel[a.id]?.monto || '') || 0), 0)
 
   const errores: string[] = []
   for (const f of seleccionadas) {
     const m = parseFloat(sel[f.id]?.monto || '') || 0
     const max = maxEfectivo(f)
-    if (m <= 0 && !(ncPorFactura[f.id] > 0)) errores.push(`Factura #${f.numero_factura}: indica un monto.`)
+    if (m <= 0 && !(creditosFactura(f.id) > 0)) errores.push(`Factura #${f.numero_factura}: indica un monto.`)
     if (m > max + 0.009) errores.push(`Factura #${f.numero_factura}: el monto supera el saldo (${formatCurrency(max)}).`)
   }
   for (const nc of ncsMarcadas) {
@@ -199,18 +272,31 @@ function CobrosPage() {
     else {
       const f = facturas.find(x => x.id === s.factura_id)
       if (f) {
-        const otrasNC = ncsMarcadas
-          .filter(o => o.id !== nc.id && ncSel[o.id]?.factura_id === f.id)
-          .reduce((acc, o) => acc + (o.total || 0), 0)
-        if ((nc.total || 0) + otrasNC > saldoFactura(f) + 0.001) {
+        const otrosCreditos = creditosFactura(f.id) - (nc.total || 0)
+        if ((nc.total || 0) + otrosCreditos > saldoFactura(f) + 0.001) {
           errores.push(`NC ${nc.numero || ''}: excede el saldo de la factura #${f.numero_factura}.`)
         }
       }
     }
   }
+  for (const a of antsMarcados) {
+    const s = antSel[a.id]
+    const m = parseFloat(s.monto) || 0
+    const etiqueta = `Anticipo ${a.numero_deposito || formatDate(a.fecha)}`
+    if (!s.factura_id) errores.push(`${etiqueta}: selecciona la factura a la que se aplica.`)
+    if (m <= 0) errores.push(`${etiqueta}: indica un monto.`)
+    if (m > a.saldo + 0.009) errores.push(`${etiqueta}: el monto supera su saldo (${formatCurrency(a.saldo)}).`)
+    if (s.factura_id && m > 0) {
+      const f = facturas.find(x => x.id === s.factura_id)
+      if (f && creditosFactura(f.id) > saldoFactura(f) + 0.001) {
+        errores.push(`${etiqueta}: los créditos asignados exceden el saldo de la factura #${f.numero_factura}.`)
+      }
+    }
+  }
   if (totalEfectivo > 0 && !cuentaId) errores.push('Selecciona la cuenta bancaria del depósito.')
 
-  const puedeGuardar = !saving && errores.length === 0 && (totalEfectivo > 0 || ncsMarcadas.length > 0)
+  const puedeGuardar = !saving && errores.length === 0 &&
+    (totalEfectivo > 0 || ncsMarcadas.length > 0 || antsMarcados.length > 0)
 
   const handleRegistrar = async () => {
     if (!cliente || !puedeGuardar) return
@@ -222,6 +308,11 @@ function CobrosPage() {
       nota_credito_id: nc.id,
       factura_id: ncSel[nc.id].factura_id,
     }))
+    const anticiposPayload = antsMarcados.map(a => ({
+      anticipo_id: a.id,
+      factura_id: antSel[a.id].factura_id,
+      monto: parseFloat(antSel[a.id].monto) || 0,
+    }))
     const { data, error } = await supabase.rpc('registrar_cobro_lote', {
       p_cliente_id: cliente.id,
       p_fecha: fecha,
@@ -229,17 +320,19 @@ function CobrosPage() {
       p_referencia: referencia.trim() || null,
       p_pagos: pagos,
       p_ncs: ncsPayload,
+      p_anticipos: anticiposPayload,
     })
     setSaving(false)
     if (error) {
       showToast(`No se pudo registrar el cobro: ${error.message}`, 'error')
       return
     }
-    const r = data as { pagadas_completas?: number; abonadas?: number; total_efectivo?: number; ncs_aplicadas?: number }
+    const r = data as { pagadas_completas?: number; abonadas?: number; total_efectivo?: number; ncs_aplicadas?: number; total_anticipo?: number }
     showToast(
       `Cobro registrado: ${r?.pagadas_completas || 0} factura(s) pagadas, ${r?.abonadas || 0} abonada(s)` +
       ((r?.total_efectivo || 0) > 0 ? ` · Banco: ${formatCurrency(r?.total_efectivo || 0)}` : '') +
-      ((r?.ncs_aplicadas || 0) > 0 ? ` · ${r?.ncs_aplicadas} NC aplicada(s)` : ''),
+      ((r?.ncs_aplicadas || 0) > 0 ? ` · ${r?.ncs_aplicadas} NC aplicada(s)` : '') +
+      ((r?.total_anticipo || 0) > 0 ? ` · Anticipos: ${formatCurrency(r?.total_anticipo || 0)}` : ''),
       'success'
     )
     setReferencia('')
@@ -346,7 +439,7 @@ function CobrosPage() {
                       const s = sel[f.id]
                       const checked = !!s?.checked
                       const saldo = saldoFactura(f)
-                      const ncAsig = ncPorFactura[f.id] || 0
+                      const ncAsig = creditosFactura(f.id)
                       const dias = getDiasVencida(f)
                       const tramo = classifyTramo(dias)
                       const monto = parseFloat(s?.monto || '') || 0
@@ -383,7 +476,7 @@ function CobrosPage() {
                                   onChange={e => setMonto(f, e.target.value)}
                                 />
                                 <span className={`text-[10px] font-medium ${esCompleto ? 'text-green-600' : 'text-blue-600'}`}>
-                                  {ncAsig > 0 && `+ NC ${formatCurrency(ncAsig)} · `}
+                                  {ncAsig > 0 && `+ Créditos ${formatCurrency(ncAsig)} · `}
                                   {esCompleto ? 'Pago completo' : 'Abono'}
                                 </span>
                               </div>
@@ -441,8 +534,56 @@ function CobrosPage() {
               </div>
             )}
 
+            {/* Anticipos disponibles */}
+            {anticipos.length > 0 && (
+              <div className="card overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-100">
+                  <p className="text-sm font-semibold text-gray-700">Anticipos disponibles ({anticipos.length})</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Se pueden aplicar parcialmente a una factura y no pasan por banco.</p>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {anticipos.map(a => {
+                    const s = antSel[a.id]
+                    const checked = !!s?.checked
+                    return (
+                      <div key={a.id} className={`flex flex-wrap items-center gap-3 px-4 py-3 ${checked ? 'bg-teal-50/50' : ''}`}>
+                        <input type="checkbox" className="w-4 h-4 accent-teal-600 cursor-pointer"
+                          checked={checked} onChange={() => toggleAnt(a)} />
+                        <span className="text-sm font-medium">Anticipo {a.numero_deposito || 's/n'}</span>
+                        <span className="text-xs text-gray-400">{formatDate(a.fecha)}</span>
+                        <span className="text-sm font-semibold text-teal-700">Saldo {formatCurrency(a.saldo)}</span>
+                        {checked && (
+                          <div className="flex flex-wrap items-center gap-2 ml-auto">
+                            <span className="text-xs text-gray-500">Aplicar a</span>
+                            <select
+                              className="input text-sm py-1.5 w-56"
+                              value={s.factura_id}
+                              onChange={e => setAntFactura(a, e.target.value)}
+                            >
+                              <option value="">Seleccionar factura...</option>
+                              {facturas.map(f => (
+                                <option key={f.id} value={f.id}>
+                                  #{f.numero_factura} · saldo {formatCurrency(saldoFactura(f))}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              type="number" step="0.01" min="0" max={a.saldo}
+                              className="input text-sm py-1.5 w-28 text-right"
+                              value={s.monto}
+                              onChange={e => setAntMonto(a, e.target.value)}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Resumen y registro */}
-            {(seleccionadas.length > 0 || ncsMarcadas.length > 0) && (
+            {(seleccionadas.length > 0 || ncsMarcadas.length > 0 || antsMarcados.length > 0) && (
               <div className="card p-5">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                   <div>
@@ -464,10 +605,16 @@ function CobrosPage() {
                   </div>
                 </div>
 
-                <div className="bg-gray-50 rounded-xl p-4 mb-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <div className="bg-gray-50 rounded-xl p-4 mb-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
                   <div>
                     <p className="text-xs text-gray-500 uppercase font-semibold">Facturas</p>
-                    <p className="font-bold text-gray-900">{seleccionadas.length + ncsMarcadas.filter(nc => !seleccionadas.some(f => f.id === ncSel[nc.id]?.factura_id)).length}</p>
+                    <p className="font-bold text-gray-900">{
+                      new Set([
+                        ...seleccionadas.map(f => f.id),
+                        ...ncsMarcadas.map(nc => ncSel[nc.id]?.factura_id).filter(Boolean),
+                        ...antsMarcados.map(a => antSel[a.id]?.factura_id).filter(Boolean),
+                      ]).size
+                    }</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase font-semibold">Efectivo (banco)</p>
@@ -478,8 +625,12 @@ function CobrosPage() {
                     <p className="font-bold text-purple-700">{formatCurrency(totalNC)}</p>
                   </div>
                   <div>
+                    <p className="text-xs text-gray-500 uppercase font-semibold">Anticipos</p>
+                    <p className="font-bold text-teal-700">{formatCurrency(totalAnticipo)}</p>
+                  </div>
+                  <div>
                     <p className="text-xs text-gray-500 uppercase font-semibold">Total aplicado</p>
-                    <p className="font-bold text-gray-900">{formatCurrency(totalEfectivo + totalNC)}</p>
+                    <p className="font-bold text-gray-900">{formatCurrency(totalEfectivo + totalNC + totalAnticipo)}</p>
                   </div>
                 </div>
 

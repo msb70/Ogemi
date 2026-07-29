@@ -245,6 +245,7 @@ export async function importarLibroVentas(
       monto: Math.abs(f.monto),
       itbms: Math.abs(f.itbms),
       estado: 'disponible' as const,
+      documento_afectado: f.documento_afectado,
       notas: f.documento_afectado != null
         ? `Importada del libro de ventas. Doc afectado #${f.documento_afectado}`
         : 'Importada del libro de ventas',
@@ -268,7 +269,16 @@ export async function importarLibroVentas(
       }
     }
   }
+  // 5c. Auto-aplicar las NC disponibles a su factura afectada (mismo cliente,
+  //     saldo suficiente). Idempotente: también aplica NC de corridas previas
+  //     que quedaron disponibles.
   result.ncs_aplicadas = 0
+  const { data: autoNC, error: eAuto } = await supabase.rpc('auto_aplicar_ncs_disponibles')
+  if (eAuto) {
+    result.errores.push(`No se pudieron auto-aplicar las NC: ${eAuto.message}`)
+  } else {
+    result.ncs_aplicadas = (autoNC as { aplicadas?: number } | null)?.aplicadas || 0
+  }
 
   // Redondear a 2 decimales para evitar ruido de coma flotante
   result.monto_ventas = redondear(result.monto_ventas)

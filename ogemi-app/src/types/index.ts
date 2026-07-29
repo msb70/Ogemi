@@ -76,6 +76,8 @@ export interface NotaCredito {
   itbms: number;
   total: number;
   estado: NotaCreditoEstado;
+  /** Número de la factura afectada (para auto-aplicación al importar) */
+  documento_afectado?: number | null;
   factura_aplicada_id: string | null;
   pago_id: string | null;
   notas: string | null;
@@ -142,6 +144,8 @@ export interface Compra {
   fecha_pago: string | null;
   notas: string | null;
   monto_pagado: number;
+  /** Si esta compra es una NC (total negativo): compra a la que fue aplicada como pago */
+  compra_aplicada_id?: string | null;
   created_at: string;
   updated_at: string;
   // Joins

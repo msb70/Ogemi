@@ -248,7 +248,14 @@ function ImportarPage() {
               </div>
               <div className="bg-purple-50 rounded-xl p-4 text-center">
                 <p className="text-2xl font-bold text-purple-700">{fmt(result.monto_notas_credito)}</p>
-                <p className="text-xs text-gray-500 mt-1">Notas de crédito</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Notas de crédito
+                  {(result.ncs_aplicadas || 0) > 0 && (
+                    <span className="block text-purple-700 font-medium mt-0.5">
+                      {result.ncs_aplicadas} aplicada{result.ncs_aplicadas === 1 ? '' : 's'} a su factura
+                    </span>
+                  )}
+                </p>
               </div>
               <div className="bg-green-50 rounded-xl p-4 text-center">
                 <p className="text-2xl font-bold text-green-700">{fmt(result.monto_neto)}</p>
