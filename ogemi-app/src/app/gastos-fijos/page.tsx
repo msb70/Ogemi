@@ -144,6 +144,9 @@ function GastosFijosPage() {
   const [marcasVentas, setMarcasVentas] = useState<Set<string>>(new Set())
   const [marcasPresupuestos, setMarcasPresupuestos] = useState<Set<string>>(new Set())
   const [marcasCompras, setMarcasCompras] = useState<Set<string>>(new Set())
+  // Montos parciales proyectados por compra marcada "Pagará" (doc_id → monto).
+  // Solo hay entrada si el usuario fijó un monto menor al saldo; ausente = saldo completo.
+  const [montosPagaraCompras, setMontosPagaraCompras] = useState<Record<string, number>>({})
 
   const periodo = useMemo(() => monthToPeriod(periodoMes), [periodoMes])
 
@@ -308,21 +311,26 @@ function GastosFijosPage() {
   const loadMarcas = useCallback(async () => {
     const { data, error } = await supabase
       .from('flujo_pago_marcas')
-      .select('tipo, doc_id')
+      .select('tipo, doc_id, monto')
       .eq('periodo', periodo)
     if (error) {
       showToast(`Error al cargar marcas del flujo: ${error.message}`, 'error')
       return
     }
     const v = new Set<string>(), p = new Set<string>(), c = new Set<string>()
-    ;(data || []).forEach((m: { tipo: TipoMarca; doc_id: string }) => {
+    const montos: Record<string, number> = {}
+    ;(data || []).forEach((m: { tipo: TipoMarca; doc_id: string; monto: number | null }) => {
       if (m.tipo === 'venta') v.add(m.doc_id)
       else if (m.tipo === 'presupuesto') p.add(m.doc_id)
-      else if (m.tipo === 'compra') c.add(m.doc_id)
+      else if (m.tipo === 'compra') {
+        c.add(m.doc_id)
+        if (m.monto != null) montos[m.doc_id] = Number(m.monto)
+      }
     })
     setMarcasVentas(v)
     setMarcasPresupuestos(p)
     setMarcasCompras(c)
+    setMontosPagaraCompras(montos)
   }, [periodo, showToast, supabase])
 
   useEffect(() => { loadMarcas() }, [loadMarcas])
@@ -336,6 +344,13 @@ function GastosFijosPage() {
       return next
     })
     apply(marked)
+    // Al desmarcar una compra se descarta también su monto parcial proyectado
+    if (tipo === 'compra' && !marked) {
+      setMontosPagaraCompras(prev => {
+        if (!(id in prev)) return prev
+        const next = { ...prev }; delete next[id]; return next
+      })
+    }
     const { error } = marked
       ? await supabase.from('flujo_pago_marcas')
           .upsert({ periodo, tipo, doc_id: id }, { onConflict: 'periodo,tipo,doc_id', ignoreDuplicates: true })
@@ -356,6 +371,13 @@ function GastosFijosPage() {
       ids.forEach(id => marked ? next.add(id) : next.delete(id))
       return next
     })
+    if (tipo === 'compra' && !marked) {
+      setMontosPagaraCompras(prev => {
+        const next = { ...prev }
+        ids.forEach(id => { delete next[id] })
+        return next
+      })
+    }
     const { error } = marked
       ? await supabase.from('flujo_pago_marcas')
           .upsert(ids.map(id => ({ periodo, tipo, doc_id: id })), { onConflict: 'periodo,tipo,doc_id', ignoreDuplicates: true })
@@ -364,6 +386,22 @@ function GastosFijosPage() {
     if (error) {
       await loadMarcas() // resincronizar con la BD
       showToast(`Error al guardar las marcas: ${error.message}`, 'error')
+    }
+  }, [periodo, loadMarcas, showToast, supabase])
+
+  // Fijar el monto parcial proyectado de una compra marcada "Pagará".
+  // null = volver al saldo completo. Se persiste en flujo_pago_marcas.monto.
+  const setMontoPagaraCompra = useCallback(async (id: string, monto: number | null) => {
+    setMontosPagaraCompras(prev => {
+      const next = { ...prev }
+      if (monto == null) delete next[id]; else next[id] = monto
+      return next
+    })
+    const { error } = await supabase.from('flujo_pago_marcas')
+      .upsert({ periodo, tipo: 'compra', doc_id: id, monto }, { onConflict: 'periodo,tipo,doc_id' })
+    if (error) {
+      await loadMarcas() // resincronizar con la BD
+      showToast(`Error al guardar el monto a pagar: ${error.message}`, 'error')
     }
   }, [periodo, loadMarcas, showToast, supabase])
 
@@ -382,10 +420,18 @@ function GastosFijosPage() {
     const cobrosPres = dateObjs.map((_, i) =>
       vencPres.rows.filter((r: any) => r.fridayIdx === i && !marcasPresupuestos.has(r.id))
         .reduce((s: number, r: any) => s + (r.saldo || 0), 0))
-    const comprasPagar = vencComp.rows.filter((r: any) => marcasCompras.has(r.id))
+    // Compras marcadas "Pagará": el monto proyectado es el parcial fijado por el
+    // usuario (si existe) o el saldo completo. El flujo usa ese monto proyectado.
+    const comprasPagar = vencComp.rows
+      .filter((r: any) => marcasCompras.has(r.id))
+      .map((r: any) => {
+        const saldo = (r.saldo as number) || 0
+        const m = montosPagaraCompras[r.id]
+        return { ...r, pagoProyectado: m != null ? Math.min(m, saldo) : saldo }
+      })
     const pagosCompras = dateObjs.map((_, i) =>
       comprasPagar.filter((r: any) => r.fridayIdx === i)
-        .reduce((s: number, r: any) => s + (r.saldo || 0), 0))
+        .reduce((s: number, r: any) => s + (r.pagoProyectado || 0), 0))
 
     // Pago de tarjetas de crédito: el monto a pagar cae en la semana de su fecha
     // de pago (misma regla de corte que el resto: lo vencido antes del corte cae
@@ -402,7 +448,7 @@ function GastosFijosPage() {
       pagosTarjetas[idx] += t.aPagar
     }
     return { cobrosVentas, cobrosPres, pagosCompras, comprasPagar, pagosTarjetas }
-  }, [semanaFechas, fechaResumen, facturasAll, presupuestosAll, comprasAll, marcasVentas, marcasPresupuestos, marcasCompras, tarjetas])
+  }, [semanaFechas, fechaResumen, facturasAll, presupuestosAll, comprasAll, marcasVentas, marcasPresupuestos, marcasCompras, montosPagaraCompras, tarjetas])
 
   const flujoNetoSemana = SEMANAS.map((_, i) =>
     flujo.cobrosVentas[i] + flujo.cobrosPres[i] - flujo.pagosCompras[i] - flujo.pagosTarjetas[i] - totalesSemana[i])
@@ -648,6 +694,8 @@ function GastosFijosPage() {
                   pagaraSet={marcasCompras}
                   onTogglePagara={(id, marked) => toggleMarca('compra', id, marked)}
                   onToggleManyPagara={(ids, marked) => toggleMarcaMany('compra', ids, marked)}
+                  pagaraMontos={montosPagaraCompras}
+                  onChangeMontoPagara={setMontoPagaraCompra}
                   cutoffDate={fechaResumen}
                 />
               )}
@@ -1003,11 +1051,18 @@ function GastosFijosPage() {
                       {SEMANAS.map((_, i) => (
                         <td key={i} className="table-cell text-right text-sm">
                           {c.fridayIdx === i
-                            ? <span className="font-medium text-red-600">−{formatCurrency(c.saldo)}</span>
+                            ? (
+                              <span className="font-medium text-red-600">
+                                −{formatCurrency(c.pagoProyectado)}
+                                {c.pagoProyectado < (c.saldo || 0) && (
+                                  <span className="block text-[10px] font-normal text-gray-400">de {formatCurrency(c.saldo)}</span>
+                                )}
+                              </span>
+                            )
                             : <span className="text-gray-200">—</span>}
                         </td>
                       ))}
-                      <td className="table-cell text-right font-semibold text-red-600">−{formatCurrency(c.saldo)}</td>
+                      <td className="table-cell text-right font-semibold text-red-600">−{formatCurrency(c.pagoProyectado)}</td>
                       <td className="table-cell"></td>
                     </tr>
                   ))}

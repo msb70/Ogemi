@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
@@ -91,6 +91,7 @@ function FacturasPage() {
   const [searchInput, setSearchInput] = useState('')   // valor del input (sin debounce)
   const [search, setSearch] = useState('')             // valor comprometido que va al server
   const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('todos')
+  const [agruparCliente, setAgruparCliente] = useState(false)
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
   const [page, setPage] = useState(0)
@@ -555,6 +556,102 @@ function FacturasPage() {
   // Usar classifyTramo de utils para mantener única fuente de verdad
   const getTramo = (dias: number): string => classifyTramo(dias)
 
+  // Fila del listado de facturas; reutilizada por la vista agrupada por cliente
+  const filaFactura = (f: Factura) => {
+                  const esNC = esNotaCredito(f)
+                  const dias = f.estado === 'pendiente' && !esNC ? getDiasVencida(f) : 0
+                  const tramo = f.estado === 'pendiente' && !esNC ? getTramo(dias) : null
+                  const tipoCorto = f.tipo_documento.includes('CREDITO') ? 'N. CRÉDITO' : 'FACTURA'
+                  const montoPagado = f.monto_pagado || 0
+                  const saldo = cobrableFactura(f) - montoPagado
+                  const badge = estadoBadge(f)
+                  return (
+                    <tr key={f.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="table-cell font-mono font-medium">#{f.numero_factura}</td>
+                      <td className="table-cell text-gray-500">{formatDate(f.fecha)}</td>
+                      <td className="table-cell max-w-[180px]">
+                        <span className="truncate block" title={f.clientes?.nombre}>{f.clientes?.nombre}</span>
+                      </td>
+                      <td className="table-cell">
+                        <span className={`badge ${tipoCorto === 'N. CRÉDITO' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {tipoCorto}
+                        </span>
+                      </td>
+                      <td className="table-cell text-right font-semibold">{formatCurrency(f.total)}</td>
+                      <td className="table-cell text-right text-green-600">
+                        {montoPagado > 0 ? formatCurrency(montoPagado) : '—'}
+                      </td>
+                      <td className="table-cell text-right font-semibold text-orange-600">
+                        {f.estado === 'pagada'
+                          ? <span className="text-green-600" title="Saldada">{formatCurrency(0)}</span>
+                          : f.estado === 'falta_retencion'
+                            ? <span className="text-amber-600 text-sm" title={`Retención pendiente de comprobante: ${formatCurrency(f.retencion_monto || 0)}`}>Falta comprobante</span>
+                            : formatCurrency(saldo)}
+                      </td>
+                      <td className="table-cell">
+                        <div className="flex flex-col">
+                          <span className="text-xs">{formatDate(f.fecha_pago)}</span>
+                          {tramo && f.estado === 'pendiente' && (
+                            <span className={`badge mt-0.5 text-xs ${tramoColor(tramo)}`}>{tramo}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="table-cell">
+                        <span className={`badge ${badge.cls}`}>{badge.txt}</span>
+                      </td>
+                      <td className="table-cell">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => openDetalle(f)}
+                            className="flex items-center gap-1 text-sm text-brand-600 hover:text-brand-800 font-medium"
+                            title="Ver detalle"
+                          >
+                            <Eye size={15} /> Ver
+                          </button>
+                          {f.estado === 'pendiente' && f.total > 0 && (
+                            <button
+                              onClick={() => openPagoModal(f)}
+                              className="flex items-center gap-1.5 text-sm text-green-600 hover:text-green-800 font-medium"
+                            >
+                              <CheckCircle size={15} />
+                              {montoPagado > 0 ? 'Abonar' : 'Cobrar'}
+                            </button>
+                          )}
+                          {tipoCorto === 'FACTURA' && (
+                            <PermissionGuard modulo="facturas" accion="editar" silent>
+                              <button
+                                onClick={() => openRetencion(f)}
+                                className={`flex items-center gap-1 text-sm font-medium ${
+                                  f.estado === 'falta_retencion'
+                                    ? 'text-amber-600 hover:text-amber-800'
+                                    : 'text-gray-400 hover:text-brand-600'
+                                }`}
+                                title="Retención de ITBMS"
+                              >
+                                <Percent size={14} /> {f.estado === 'falta_retencion' ? 'Comprobante' : 'Retención'}
+                              </button>
+                            </PermissionGuard>
+                          )}
+                          {isAdmin && (
+                            <>
+                              <button onClick={() => openEditFactura(f)}
+                                className="flex items-center gap-1 text-xs text-gray-400 hover:text-brand-600"
+                                title="Editar monto (admin)">
+                                <Pencil size={14} /> Editar
+                              </button>
+                              <button onClick={() => handleEliminarFactura(f)}
+                                className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700"
+                                title="Borrar factura (admin)">
+                                <Trash2 size={14} /> Borrar
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+  }
+
   return (
     <AppLayout>
       {toast && <Toast {...toast} onClose={hideToast} />}
@@ -666,6 +763,14 @@ function FacturasPage() {
             </button>
           ))}
         </div>
+        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+          <input type="checkbox" className="w-4 h-4 accent-brand-600 cursor-pointer"
+            checked={agruparCliente} onChange={e => setAgruparCliente(e.target.checked)} />
+          Agrupar por cliente
+          {agruparCliente && totalCount > PAGE_SIZE && (
+            <span className="text-xs text-gray-400 font-normal">(agrupa la página actual)</span>
+          )}
+        </label>
       </div>
 
       {/* Table */}
@@ -692,100 +797,36 @@ function FacturasPage() {
               ) : facturas.length === 0 ? (
                 <tr><td colSpan={10} className="text-center py-12 text-gray-400">Sin resultados</td></tr>
               ) : (
-                facturas.map(f => {
-                  const esNC = esNotaCredito(f)
-                  const dias = f.estado === 'pendiente' && !esNC ? getDiasVencida(f) : 0
-                  const tramo = f.estado === 'pendiente' && !esNC ? getTramo(dias) : null
-                  const tipoCorto = f.tipo_documento.includes('CREDITO') ? 'N. CRÉDITO' : 'FACTURA'
-                  const montoPagado = f.monto_pagado || 0
-                  const saldo = cobrableFactura(f) - montoPagado
-                  const badge = estadoBadge(f)
-                  return (
-                    <tr key={f.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="table-cell font-mono font-medium">#{f.numero_factura}</td>
-                      <td className="table-cell text-gray-500">{formatDate(f.fecha)}</td>
-                      <td className="table-cell max-w-[180px]">
-                        <span className="truncate block" title={f.clientes?.nombre}>{f.clientes?.nombre}</span>
-                      </td>
-                      <td className="table-cell">
-                        <span className={`badge ${tipoCorto === 'N. CRÉDITO' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                          {tipoCorto}
-                        </span>
-                      </td>
-                      <td className="table-cell text-right font-semibold">{formatCurrency(f.total)}</td>
-                      <td className="table-cell text-right text-green-600">
-                        {montoPagado > 0 ? formatCurrency(montoPagado) : '—'}
-                      </td>
-                      <td className="table-cell text-right font-semibold text-orange-600">
-                        {f.estado === 'pagada'
-                          ? <span className="text-green-600" title="Saldada">{formatCurrency(0)}</span>
-                          : f.estado === 'falta_retencion'
-                            ? <span className="text-amber-600 text-sm" title={`Retención pendiente de comprobante: ${formatCurrency(f.retencion_monto || 0)}`}>Falta comprobante</span>
-                            : formatCurrency(saldo)}
-                      </td>
-                      <td className="table-cell">
-                        <div className="flex flex-col">
-                          <span className="text-xs">{formatDate(f.fecha_pago)}</span>
-                          {tramo && f.estado === 'pendiente' && (
-                            <span className={`badge mt-0.5 text-xs ${tramoColor(tramo)}`}>{tramo}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="table-cell">
-                        <span className={`badge ${badge.cls}`}>{badge.txt}</span>
-                      </td>
-                      <td className="table-cell">
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => openDetalle(f)}
-                            className="flex items-center gap-1 text-sm text-brand-600 hover:text-brand-800 font-medium"
-                            title="Ver detalle"
-                          >
-                            <Eye size={15} /> Ver
-                          </button>
-                          {f.estado === 'pendiente' && f.total > 0 && (
-                            <button
-                              onClick={() => openPagoModal(f)}
-                              className="flex items-center gap-1.5 text-sm text-green-600 hover:text-green-800 font-medium"
-                            >
-                              <CheckCircle size={15} />
-                              {montoPagado > 0 ? 'Abonar' : 'Cobrar'}
-                            </button>
-                          )}
-                          {tipoCorto === 'FACTURA' && (
-                            <PermissionGuard modulo="facturas" accion="editar" silent>
-                              <button
-                                onClick={() => openRetencion(f)}
-                                className={`flex items-center gap-1 text-sm font-medium ${
-                                  f.estado === 'falta_retencion'
-                                    ? 'text-amber-600 hover:text-amber-800'
-                                    : 'text-gray-400 hover:text-brand-600'
-                                }`}
-                                title="Retención de ITBMS"
-                              >
-                                <Percent size={14} /> {f.estado === 'falta_retencion' ? 'Comprobante' : 'Retención'}
-                              </button>
-                            </PermissionGuard>
-                          )}
-                          {isAdmin && (
-                            <>
-                              <button onClick={() => openEditFactura(f)}
-                                className="flex items-center gap-1 text-xs text-gray-400 hover:text-brand-600"
-                                title="Editar monto (admin)">
-                                <Pencil size={14} /> Editar
-                              </button>
-                              <button onClick={() => handleEliminarFactura(f)}
-                                className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700"
-                                title="Borrar factura (admin)">
-                                <Trash2 size={14} /> Borrar
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                agruparCliente ? (
+                  Object.entries(
+                    facturas.reduce((acc: Record<string, Factura[]>, f) => {
+                      const k = f.clientes?.nombre || 'Sin nombre'
+                      ;(acc[k] = acc[k] || []).push(f)
+                      return acc
+                    }, {})
                   )
-                })
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .map(([nombre, fs]) => (
+                      <Fragment key={nombre}>
+                        <tr className="bg-brand-50/40 border-t border-gray-200">
+                          <td colSpan={4} className="table-cell font-semibold text-brand-800">
+                            {nombre} <span className="text-xs text-gray-400 font-normal">({fs.length} doc{fs.length === 1 ? '' : 's'}.)</span>
+                          </td>
+                          <td className="table-cell text-right font-bold text-brand-800">
+                            {formatCurrency(fs.reduce((s, f) => s + (f.total || 0), 0))}
+                          </td>
+                          <td className="table-cell text-right font-bold text-green-700">
+                            {formatCurrency(fs.reduce((s, f) => s + (f.monto_pagado || 0), 0))}
+                          </td>
+                          <td className="table-cell text-right font-bold text-orange-600">
+                            {formatCurrency(fs.reduce((s, f) => s + (f.estado === 'pendiente' ? cobrableFactura(f) - (f.monto_pagado || 0) : 0), 0))}
+                          </td>
+                          <td colSpan={3} />
+                        </tr>
+                        {fs.map(filaFactura)}
+                      </Fragment>
+                    ))
+                ) : facturas.map(filaFactura)
               )}
             </tbody>
           </table>

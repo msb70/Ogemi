@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
@@ -55,6 +55,8 @@ function ComprasPage() {
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [agruparProveedor, setAgruparProveedor] = useState(false)
+  const [agruparProveedorCxp, setAgruparProveedorCxp] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -505,6 +507,111 @@ function ComprasPage() {
     monto: vencidas.filter((c: any) => c.tramo === tramo).reduce((s: number, c: any) => s + c.total, 0),
   }))
 
+  // Fila de cuentas por pagar (escritorio); reutilizada por la vista agrupada
+  const filaVencida = (c: any) => (
+    <tr key={c.id} className="hover:bg-gray-50">
+      <td className="table-cell text-gray-500 text-sm">{formatDate(c.fecha)}</td>
+      <td className="table-cell font-medium">{c.proveedor}</td>
+      <td className="table-cell text-gray-500">{c.concepto || '—'}</td>
+      <td className="table-cell text-gray-500 text-sm">{formatDate(c.vencimiento)}</td>
+      <td className="table-cell text-right">
+        <span className={c.dias_vencida > 0 ? 'text-red-600 font-medium' : 'text-green-600'}>
+          {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
+        </span>
+      </td>
+      <td className="table-cell text-right font-semibold">{formatCurrency(c.total)}</td>
+      <td className="table-cell">
+        <span className="badge text-xs" style={{
+          backgroundColor: TRAMO_COLORS[c.tramo] + '20',
+          color: TRAMO_COLORS[c.tramo],
+        }}>
+          {TRAMO_LABELS[c.tramo]}
+        </span>
+      </td>
+    </tr>
+  )
+
+  // Fila del listado de compras (escritorio); reutilizada por la vista agrupada
+  const filaCompraListado = (c: Compra) => {
+                    const hoy = new Date().toISOString().split('T')[0]
+                    const vencida = c.vencimiento && c.estado === 'pendiente' && c.vencimiento < hoy
+                    return (
+                      <tr key={c.id} className={`hover:bg-gray-50 ${vencida ? 'bg-red-50/30' : ''}`}>
+                        <td className="table-cell text-gray-500 text-sm">{formatDate(c.fecha)}</td>
+                        <td className="table-cell font-medium">
+                          {esNotaCredito(c.tipo_documento) && <span className="badge bg-purple-100 text-purple-700 mr-1">NC</span>}
+                          {(c.proveedores as any)?.nombre || '—'}
+                        </td>
+                        <td className="table-cell text-gray-500 max-w-[160px]">
+                          <span className="truncate block" title={c.concepto || ''}>{c.concepto || '—'}</span>
+                        </td>
+                        <td className="table-cell text-sm">
+                          {c.vencimiento ? (
+                            <span className={vencida ? 'text-red-600 font-medium' : 'text-gray-500'}>
+                              {formatDate(c.vencimiento)}
+                            </span>
+                          ) : '—'}
+                        </td>
+                        <td className="table-cell text-right">{formatCurrency(c.monto)}</td>
+                        <td className="table-cell text-right text-gray-500">{formatCurrency(c.itbms)}</td>
+                        <td className="table-cell text-right font-semibold">{formatCurrency(c.total)}</td>
+                        <td className="table-cell text-right text-green-600">
+                          {(c.monto_pagado || 0) > 0 ? formatCurrency(c.monto_pagado || 0) : '—'}
+                        </td>
+                        <td className="table-cell text-right font-semibold text-orange-600">
+                          {c.estado === 'pagada'
+                            ? <span className="text-green-600" title="Saldada">{formatCurrency(0)}</span>
+                            : formatCurrency(c.total - (c.monto_pagado || 0))}
+                        </td>
+                        <td className="table-cell">
+                          {esNotaCredito(c.tipo_documento) ? (
+                            <span className="badge flex items-center gap-1 w-fit bg-purple-100 text-purple-700">
+                              {c.compra_aplicada_id ? <CheckCircle size={11} /> : <Clock size={11} />}
+                              {c.compra_aplicada_id ? 'Aplicada' : 'Disponible'}
+                            </span>
+                          ) : (
+                            <span className={`badge flex items-center gap-1 w-fit ${
+                              c.estado === 'pagada' ? 'bg-green-100 text-green-700' : vencida ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                            }`}>
+                              {c.estado === 'pagada' ? <CheckCircle size={11} /> : <Clock size={11} />}
+                              {c.estado === 'pagada' ? 'Pagada' : vencida ? 'Vencida' : 'Pendiente'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="table-cell text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => openDetalle(c)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50"
+                              title="Ver detalle">
+                              <Eye size={14} />
+                            </button>
+                            <button onClick={() => handleOpenForm(c)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50"
+                              title="Editar">
+                              <Pencil size={14} />
+                            </button>
+                            {c.estado === 'pendiente' && !esNotaCredito(c.tipo_documento) && (
+                              <button
+                                onClick={() => openPagarModal(c)}
+                                className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 font-medium border border-green-200 rounded-lg px-2 py-1"
+                              >
+                                <CheckCircle size={12} />
+                                {(c.monto_pagado || 0) > 0 ? 'Abonar' : 'Pagar'}
+                              </button>
+                            )}
+                            {isAdmin && (
+                              <button onClick={() => handleEliminarCompra(c)}
+                                className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50"
+                                title="Borrar compra (admin)">
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+  }
+
   return (
     <AppLayout>
       {toast && <Toast {...toast} onClose={hideToast} />}
@@ -595,6 +702,11 @@ function ComprasPage() {
                 <input type="date" className="input text-sm w-[150px]" value={fechaHasta}
                   onChange={e => setFechaHasta(e.target.value)} />
               </div>
+              <label className="hidden md:flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+                <input type="checkbox" className="w-4 h-4 accent-brand-600 cursor-pointer"
+                  checked={agruparProveedor} onChange={e => setAgruparProveedor(e.target.checked)} />
+                Agrupar por proveedor
+              </label>
               {(search || estadoFilter !== 'todos' || fechaDesde || fechaHasta) && (
                 <button className="text-sm text-brand-600 hover:text-brand-800"
                   onClick={() => { setSearch(''); setEstadoFilter('todos'); setFechaDesde(''); setFechaHasta('') }}>
@@ -712,85 +824,36 @@ function ComprasPage() {
                       <ShoppingCart size={32} className="mx-auto mb-2 opacity-30" />
                       Sin compras registradas
                     </td></tr>
-                  ) : filtered.map(c => {
-                    const hoy = new Date().toISOString().split('T')[0]
-                    const vencida = c.vencimiento && c.estado === 'pendiente' && c.vencimiento < hoy
-                    return (
-                      <tr key={c.id} className={`hover:bg-gray-50 ${vencida ? 'bg-red-50/30' : ''}`}>
-                        <td className="table-cell text-gray-500 text-sm">{formatDate(c.fecha)}</td>
-                        <td className="table-cell font-medium">
-                          {esNotaCredito(c.tipo_documento) && <span className="badge bg-purple-100 text-purple-700 mr-1">NC</span>}
-                          {(c.proveedores as any)?.nombre || '—'}
-                        </td>
-                        <td className="table-cell text-gray-500 max-w-[160px]">
-                          <span className="truncate block" title={c.concepto || ''}>{c.concepto || '—'}</span>
-                        </td>
-                        <td className="table-cell text-sm">
-                          {c.vencimiento ? (
-                            <span className={vencida ? 'text-red-600 font-medium' : 'text-gray-500'}>
-                              {formatDate(c.vencimiento)}
-                            </span>
-                          ) : '—'}
-                        </td>
-                        <td className="table-cell text-right">{formatCurrency(c.monto)}</td>
-                        <td className="table-cell text-right text-gray-500">{formatCurrency(c.itbms)}</td>
-                        <td className="table-cell text-right font-semibold">{formatCurrency(c.total)}</td>
-                        <td className="table-cell text-right text-green-600">
-                          {(c.monto_pagado || 0) > 0 ? formatCurrency(c.monto_pagado || 0) : '—'}
-                        </td>
-                        <td className="table-cell text-right font-semibold text-orange-600">
-                          {c.estado === 'pagada'
-                            ? <span className="text-green-600" title="Saldada">{formatCurrency(0)}</span>
-                            : formatCurrency(c.total - (c.monto_pagado || 0))}
-                        </td>
-                        <td className="table-cell">
-                          {esNotaCredito(c.tipo_documento) ? (
-                            <span className="badge flex items-center gap-1 w-fit bg-purple-100 text-purple-700">
-                              {c.compra_aplicada_id ? <CheckCircle size={11} /> : <Clock size={11} />}
-                              {c.compra_aplicada_id ? 'Aplicada' : 'Disponible'}
-                            </span>
-                          ) : (
-                            <span className={`badge flex items-center gap-1 w-fit ${
-                              c.estado === 'pagada' ? 'bg-green-100 text-green-700' : vencida ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
-                            }`}>
-                              {c.estado === 'pagada' ? <CheckCircle size={11} /> : <Clock size={11} />}
-                              {c.estado === 'pagada' ? 'Pagada' : vencida ? 'Vencida' : 'Pendiente'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="table-cell text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button onClick={() => openDetalle(c)}
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50"
-                              title="Ver detalle">
-                              <Eye size={14} />
-                            </button>
-                            <button onClick={() => handleOpenForm(c)}
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50"
-                              title="Editar">
-                              <Pencil size={14} />
-                            </button>
-                            {c.estado === 'pendiente' && !esNotaCredito(c.tipo_documento) && (
-                              <button
-                                onClick={() => openPagarModal(c)}
-                                className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 font-medium border border-green-200 rounded-lg px-2 py-1"
-                              >
-                                <CheckCircle size={12} />
-                                {(c.monto_pagado || 0) > 0 ? 'Abonar' : 'Pagar'}
-                              </button>
-                            )}
-                            {isAdmin && (
-                              <button onClick={() => handleEliminarCompra(c)}
-                                className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50"
-                                title="Borrar compra (admin)">
-                                <Trash2 size={14} />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                  ) : agruparProveedor ? (
+                    Object.entries(
+                      filtered.reduce((acc: Record<string, Compra[]>, c) => {
+                        const k = (c.proveedores as any)?.nombre || 'Sin nombre'
+                        ;(acc[k] = acc[k] || []).push(c)
+                        return acc
+                      }, {})
                     )
-                  })}
+                      .sort((a, b) => a[0].localeCompare(b[0]))
+                      .map(([nombre, cs]) => (
+                        <Fragment key={nombre}>
+                          <tr className="bg-brand-50/40 border-t border-gray-200">
+                            <td colSpan={6} className="table-cell font-semibold text-brand-800">
+                              {nombre} <span className="text-xs text-gray-400 font-normal">({cs.length} compra{cs.length === 1 ? '' : 's'})</span>
+                            </td>
+                            <td className="table-cell text-right font-bold text-brand-800">
+                              {formatCurrency(cs.reduce((s, c) => s + (c.total || 0), 0))}
+                            </td>
+                            <td className="table-cell text-right font-bold text-green-700">
+                              {formatCurrency(cs.reduce((s, c) => s + (c.estado === 'pagada' ? (c.total || 0) : (c.monto_pagado || 0)), 0))}
+                            </td>
+                            <td className="table-cell text-right font-bold text-orange-600">
+                              {formatCurrency(cs.reduce((s, c) => s + (c.estado === 'pendiente' ? (c.total || 0) - (c.monto_pagado || 0) : 0), 0))}
+                            </td>
+                            <td colSpan={2} />
+                          </tr>
+                          {cs.map(filaCompraListado)}
+                        </Fragment>
+                      ))
+                  ) : filtered.map(filaCompraListado)}
                 </tbody>
               </table>
             </div>
@@ -852,6 +915,15 @@ function ComprasPage() {
               ))}
             </div>
 
+            {/* Agrupar por proveedor (solo escritorio) */}
+            <div className="hidden md:flex justify-end">
+              <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+                <input type="checkbox" className="w-4 h-4 accent-brand-600 cursor-pointer"
+                  checked={agruparProveedorCxp} onChange={e => setAgruparProveedorCxp(e.target.checked)} />
+                Agrupar por proveedor
+              </label>
+            </div>
+
             {/* Tabla (solo escritorio) */}
             <div className="card overflow-hidden hidden md:block">
               <table className="w-full">
@@ -869,28 +941,31 @@ function ComprasPage() {
                 <tbody className="divide-y divide-gray-100">
                   {vencidas.length === 0 ? (
                     <tr><td colSpan={7} className="text-center py-10 text-gray-400">Sin cuentas pendientes</td></tr>
-                  ) : vencidas.map((c: any) => (
-                    <tr key={c.id} className="hover:bg-gray-50">
-                      <td className="table-cell text-gray-500 text-sm">{formatDate(c.fecha)}</td>
-                      <td className="table-cell font-medium">{c.proveedor}</td>
-                      <td className="table-cell text-gray-500">{c.concepto || '—'}</td>
-                      <td className="table-cell text-gray-500 text-sm">{formatDate(c.vencimiento)}</td>
-                      <td className="table-cell text-right">
-                        <span className={c.dias_vencida > 0 ? 'text-red-600 font-medium' : 'text-green-600'}>
-                          {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
-                        </span>
-                      </td>
-                      <td className="table-cell text-right font-semibold">{formatCurrency(c.total)}</td>
-                      <td className="table-cell">
-                        <span className="badge text-xs" style={{
-                          backgroundColor: TRAMO_COLORS[c.tramo] + '20',
-                          color: TRAMO_COLORS[c.tramo],
-                        }}>
-                          {TRAMO_LABELS[c.tramo]}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  ) : agruparProveedorCxp ? (
+                    Object.entries(
+                      vencidas.reduce((acc: Record<string, any[]>, c: any) => {
+                        const k = c.proveedor || 'Sin nombre'
+                        ;(acc[k] = acc[k] || []).push(c)
+                        return acc
+                      }, {})
+                    )
+                      .sort((a, b) => a[0].localeCompare(b[0]))
+                      .map(([nombre, items]) => [nombre, (items as any[]).sort((a, b) => b.dias_vencida - a.dias_vencida)] as [string, any[]])
+                      .map(([nombre, items]) => (
+                        <Fragment key={nombre}>
+                          <tr className="bg-brand-50/40 border-t border-gray-200">
+                            <td colSpan={5} className="table-cell font-semibold text-brand-800">
+                              {nombre} <span className="text-xs text-gray-400 font-normal">({items.length} compra{items.length === 1 ? '' : 's'})</span>
+                            </td>
+                            <td className="table-cell text-right font-bold text-brand-800">
+                              {formatCurrency(items.reduce((s: number, c: any) => s + (c.total || 0), 0))}
+                            </td>
+                            <td />
+                          </tr>
+                          {items.map(filaVencida)}
+                        </Fragment>
+                      ))
+                  ) : vencidas.map(filaVencida)}
                 </tbody>
               </table>
             </div>

@@ -21,6 +21,10 @@ export interface VencimientoSemanalComprasProps {
   pagaraSet?: Set<string>
   onTogglePagara?: (id: string, marked: boolean) => void
   onToggleManyPagara?: (ids: string[], marked: boolean) => void
+  /** Montos parciales proyectados por compra marcada (id → monto). Ausente = saldo completo. */
+  pagaraMontos?: Record<string, number>
+  /** Cambia el monto proyectado de una compra marcada. null = volver al saldo completo. */
+  onChangeMontoPagara?: (id: string, monto: number | null) => void
   /** Fecha de corte: lo vencido antes de esta fecha cae en la primera semana >= corte. Default: hoy. */
   cutoffDate?: string
 }
@@ -29,9 +33,45 @@ export interface VencimientoSemanalComprasProps {
  * Vencimiento semanal de compras. A diferencia de ventas/presupuestos,
  * el check aquí es "Pagará": marcada = esta compra SÍ se pagará esa semana.
  */
+/**
+ * Input del monto a pagar proyectado: por defecto el saldo completo; si se
+ * escribe un valor menor queda como monto parcial (resaltado en ámbar).
+ * Vacío, 0 o >= saldo vuelven al saldo completo.
+ */
+function MontoPagaraInput({ saldo, value, onCommit }: {
+  saldo: number
+  value: number | undefined
+  onCommit: (v: number | null) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [raw, setRaw] = useState('')
+  const efectivo = value != null ? Math.min(value, saldo) : saldo
+  const esParcial = value != null && value < saldo
+  const display = editing
+    ? raw
+    : efectivo.toLocaleString('es-PA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return (
+    <input
+      type="text" inputMode="decimal"
+      className={`input py-1 text-right text-sm max-w-[110px] ${esParcial ? 'border-amber-400 text-amber-700 font-semibold' : ''}`}
+      value={display}
+      onFocus={() => { setRaw(String(efectivo)); setEditing(true) }}
+      onChange={e => setRaw(e.target.value)}
+      onBlur={() => {
+        setEditing(false)
+        const num = parseFloat(raw.replace(/,/g, ''))
+        if (isNaN(num) || num <= 0 || num >= saldo) onCommit(null)
+        else onCommit(Math.round(num * 100) / 100)
+      }}
+      title="Monto a pagar esa semana (por defecto el saldo completo)"
+    />
+  )
+}
+
 export default function VencimientoSemanalCompras({
   compras, weekDates: weekDatesProp, setWeekDates: setWeekDatesProp,
-  pagaraSet: pagaraProp, onTogglePagara, onToggleManyPagara, cutoffDate,
+  pagaraSet: pagaraProp, onTogglePagara, onToggleManyPagara,
+  pagaraMontos, onChangeMontoPagara, cutoffDate,
 }: VencimientoSemanalComprasProps) {
   const [internalDates, setInternalDates] = useState<string[]>(() =>
     getNextFridays(4).map(d => d.toISOString().split('T')[0])
@@ -93,10 +133,18 @@ export default function VencimientoSemanalCompras({
     })
   }
 
+  // Monto proyectado a pagar de una fila marcada: el parcial si existe, si no el saldo.
+  const montoPagara = (r: any) => {
+    const saldo = r.saldo ?? r.total ?? 0
+    const m = pagaraMontos?.[r.id]
+    return m != null ? Math.min(m, saldo) : saldo
+  }
+
   // Check invertido: marcada = Pagará. Lo no marcado se considera "No pagará".
+  // Los totales "Pagará" usan el monto proyectado (parcial si se editó).
   const compTotPagara = compWeekDateObjs.map((_, i) =>
     vencCompras.rows.filter((r: any) => r.fridayIdx === i && pagaraSet.has(r.id))
-      .reduce((s: number, r: any) => s + (r.saldo ?? r.total ?? 0), 0)
+      .reduce((s: number, r: any) => s + montoPagara(r), 0)
   )
   const compTotNoPaga = compWeekDateObjs.map((_, i) => (vencCompras.totals[i] || 0) - compTotPagara[i])
   const compGrandPagara = compTotPagara.reduce((s, t) => s + t, 0)
@@ -181,6 +229,7 @@ export default function VencimientoSemanalCompras({
                     <span className="font-normal text-[10px] opacity-80">{formatDateObj(fri).slice(0, 5)}</span>
                   </th>
                 ))}
+                <th className="table-header text-right min-w-[120px] text-[11px]">Monto a pagar</th>
                 <th className="table-header text-center min-w-[60px] text-[11px]">
                   <div className="flex flex-col items-center gap-1">
                     <span>Pagará</span>
@@ -195,7 +244,7 @@ export default function VencimientoSemanalCompras({
             <tbody className="divide-y divide-gray-100">
               {compGroups.flatMap((g) => [
                 <tr key={`h-${g.nombre}`} className="bg-gray-100 border-t-2 border-gray-300">
-                  <td colSpan={4 + compWeekDateObjs.length + 1} className="table-cell sticky left-0 bg-gray-100 z-10 font-bold text-gray-800 text-sm">
+                  <td colSpan={4 + compWeekDateObjs.length + 2} className="table-cell sticky left-0 bg-gray-100 z-10 font-bold text-gray-800 text-sm">
                     {g.nombre}
                     <span className="text-xs font-normal text-gray-400"> · {g.rows.length} {g.rows.length === 1 ? 'compra' : 'compras'} · {formatMonto(g.total)}</span>
                   </td>
@@ -226,6 +275,19 @@ export default function VencimientoSemanalCompras({
                             : <span className="text-gray-200">—</span>}
                         </td>
                       ))}
+                      <td className="table-cell text-right">
+                        {isPagara ? (
+                          onChangeMontoPagara ? (
+                            <MontoPagaraInput
+                              saldo={c.saldo ?? c.total ?? 0}
+                              value={pagaraMontos?.[c.id]}
+                              onCommit={v => onChangeMontoPagara(c.id, v)}
+                            />
+                          ) : (
+                            <span className="text-sm font-medium text-green-700">{formatMonto(montoPagara(c))}</span>
+                          )
+                        ) : <span className="text-gray-200">—</span>}
+                      </td>
                       <td className="table-cell text-center">
                         <input type="checkbox" checked={isPagara}
                           onChange={e => togglePagara(c.id, e.target.checked)}
@@ -239,7 +301,7 @@ export default function VencimientoSemanalCompras({
                   {g.weekTotals.map((t, i) => (
                     <td key={i} className="table-cell text-right text-gray-700">{t > 0 ? formatMonto(t) : '—'}</td>
                   ))}
-                  <td className="table-cell" />
+                  <td className="table-cell" colSpan={2} />
                 </tr>,
               ])}
             </tbody>
@@ -249,21 +311,21 @@ export default function VencimientoSemanalCompras({
                 {vencCompras.totals.map((t, i) => (
                   <td key={i} className="table-cell text-right text-brand-800">{t > 0 ? formatMonto(t) : '—'}</td>
                 ))}
-                <td className="table-cell" />
+                <td className="table-cell" colSpan={2} />
               </tr>
               <tr className="bg-green-50 text-xs font-semibold">
                 <td colSpan={4} className="table-cell text-right sticky left-0 bg-green-50 z-10 text-green-700">↳ Pagará</td>
                 {compTotPagara.map((t, i) => (
                   <td key={i} className="table-cell text-right text-green-700">{t > 0 ? formatMonto(t) : '—'}</td>
                 ))}
-                <td className="table-cell" />
+                <td className="table-cell" colSpan={2} />
               </tr>
               <tr className="bg-red-50 text-xs font-semibold">
                 <td colSpan={4} className="table-cell text-right sticky left-0 bg-red-50 z-10 text-red-600">↳ No pagará</td>
                 {compTotNoPaga.map((t, i) => (
                   <td key={i} className="table-cell text-right text-red-600">{t > 0 ? formatMonto(t) : '—'}</td>
                 ))}
-                <td className="table-cell" />
+                <td className="table-cell" colSpan={2} />
               </tr>
             </tfoot>
           </table>
