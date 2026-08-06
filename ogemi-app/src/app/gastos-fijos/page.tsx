@@ -150,7 +150,7 @@ function GastosFijosPage() {
   const totalesSemana = useMemo(
     () =>
       SEMANAS.map(s =>
-        gastos.reduce((sum, gasto) => sum + (parseFloat(montos[gasto.id]?.[s] || '0') || 0), 0)
+        gastos.filter(g => g.activo).reduce((sum, gasto) => sum + (parseFloat(montos[gasto.id]?.[s] || '0') || 0), 0)
       ),
     [gastos, montos]
   )
