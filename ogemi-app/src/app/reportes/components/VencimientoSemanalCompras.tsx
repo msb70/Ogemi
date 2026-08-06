@@ -55,7 +55,12 @@ function MontoPagaraInput({ saldo, value, onCommit }: {
       type="text" inputMode="decimal"
       className={`input py-1 text-right text-sm max-w-[110px] ${esParcial ? 'border-amber-400 text-amber-700 font-semibold' : ''}`}
       value={display}
-      onFocus={() => { setRaw(String(efectivo)); setEditing(true) }}
+      onFocus={e => {
+        setRaw(String(efectivo)); setEditing(true)
+        // Seleccionar el valor al enfocar: al escribir se reemplaza (no hay que borrar)
+        const t = e.target
+        requestAnimationFrame(() => t.select())
+      }}
       onChange={e => setRaw(e.target.value)}
       onBlur={() => {
         setEditing(false)

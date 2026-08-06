@@ -107,7 +107,12 @@ function MontoInput({ value, onChange, onCommit, disabled }: {
       className="input max-w-[120px] text-right"
       value={display}
       disabled={disabled}
-      onFocus={() => setEditing(true)}
+      onFocus={e => {
+        setEditing(true)
+        // Seleccionar el valor al enfocar: al escribir se reemplaza (no hay que borrar el 0)
+        const t = e.target
+        requestAnimationFrame(() => t.select())
+      }}
       onBlur={() => { setEditing(false); onCommit?.(value) }}
       onChange={e => onChange(e.target.value.replace(/,/g, ''))}
     />
