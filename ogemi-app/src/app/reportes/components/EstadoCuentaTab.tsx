@@ -73,7 +73,9 @@ export function EstadoCuentaCliente({ cartera }: { cartera: CarteraVencida[] }) 
   }
 
   return (
-    <div className="space-y-4">
+    // La clase estado-cuenta-print permite al CSS de impresión detectar esta vista
+    // (oculta la línea "Período" del encabezado del PDF via :has)
+    <div className="space-y-4 estado-cuenta-print">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <select className="input w-72" value={cliente} onChange={e => setCliente(e.target.value)}>
           <option value="">Seleccionar cliente...</option>
@@ -92,7 +94,8 @@ export function EstadoCuentaCliente({ cartera }: { cartera: CarteraVencida[] }) 
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          {/* Los KPIs no salen en el PDF (pedido del usuario: estado de cuenta limpio) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 print:hidden">
             {[
               { label: 'Facturas pendientes', val: `${pendientes.length} (${vencidas.length} vencidas)`, color: 'text-gray-700' },
               { label: 'Total facturado',     val: formatMonto(totFacturado), color: 'text-brand-700' },
@@ -146,7 +149,8 @@ export function EstadoCuentaCliente({ cartera }: { cartera: CarteraVencida[] }) 
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
+                {/* estado-cuenta-totales: en el PDF esta fila se imprime más grande */}
+                <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold estado-cuenta-totales">
                   <td colSpan={4} className="table-cell text-right text-sm text-gray-600">TOTALES</td>
                   <td className="table-cell text-right text-brand-700">{formatMonto(totFacturado)}</td>
                   <td className="table-cell text-right text-green-700">{formatMonto(totAbonado)}</td>

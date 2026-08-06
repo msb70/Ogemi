@@ -76,7 +76,8 @@ export default function VentasTab({
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex gap-2 flex-wrap">
+      {/* En el PDF del Estado de cuenta el menú de sub-pestañas no se imprime */}
+      <div className={`flex gap-2 flex-wrap ${ventasTab === 'estado_cuenta' ? 'print:hidden' : ''}`}>
         {[
           { key: 'listado',           label: 'Listado' },
           { key: 'cartera',           label: 'Cartera vencida' },

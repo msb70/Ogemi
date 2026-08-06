@@ -320,7 +320,7 @@ function ReportesPage() {
               <div style={{ fontSize: 11, color: '#6b7280' }}>Impresos Comerciales S.A. · Sistema Ogemi</div>
             </div>
             <div style={{ textAlign: 'right', fontSize: 10, color: '#6b7280' }}>
-              <div>Período: {fechaDesde} a {fechaHasta}</div>
+              <div className="print-periodo">Período: {fechaDesde} a {fechaHasta}</div>
               <div>Generado: {new Date().toLocaleString('es-PA')}</div>
             </div>
           </div>
@@ -430,6 +430,14 @@ function ReportesPage() {
             line-height: 1.25 !important;
           }
           #reporte-print .badge { padding: 0 4px !important; font-size: 8.5px !important; }
+          /* ── Estado de cuenta: PDF limpio (sin línea Período) y TOTALES más grandes ── */
+          #reporte-print:has(.estado-cuenta-print) .print-periodo { display: none !important; }
+          #reporte-print .estado-cuenta-totales td {
+            font-size: 13px !important;
+            font-weight: 700 !important;
+            padding: 6px 6px !important;
+            line-height: 1.3 !important;
+          }
           @page { margin: 10mm; }
         }
       `}</style>
