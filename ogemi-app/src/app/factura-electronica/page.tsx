@@ -38,6 +38,7 @@ function FacturaElectronicaPage() {
   const [search, setSearch] = useState('')
   const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('todos')
   const [timbrando, setTimbrando] = useState<string | null>(null)
+  const [ambienteActivo, setAmbienteActivo] = useState<'pruebas' | 'produccion' | null>(null)
   const [detalle, setDetalle] = useState<FeDocumento | null>(null)
 
   // artículos
@@ -47,8 +48,10 @@ function FacturaElectronicaPage() {
 
   // config
   const [configForm, setConfigForm] = useState({
-    pin: '', usuario: '', clave: '', codigo_sucursal: '001', nro_terminal: '1',
-    endpoint_url: '', activo: false,
+    ambiente: 'pruebas' as 'pruebas' | 'produccion',
+    pin: '', usuario: '', clave: '', endpoint_url: '',
+    pin_prod: '', usuario_prod: '', clave_prod: '', endpoint_url_prod: '',
+    codigo_sucursal: '001', nro_terminal: '1', activo: false,
   })
   const [savingConfig, setSavingConfig] = useState(false)
 
@@ -65,14 +68,20 @@ function FacturaElectronicaPage() {
     ])
     setDocs((docsData || []) as FeDocumento[])
     setArticulos((artData || []) as FeArticulo[])
+    const { data: amb } = await supabase.rpc('fe_ambiente_activo')
+    setAmbienteActivo(amb === 'produccion' ? 'produccion' : amb ? 'pruebas' : null)
     if (esAdmin) {
       const { data: cfg } = await supabase.from('fe_config').select('*').eq('id', true).single()
       if (cfg) {
         setConfig(cfg as FeConfig)
         setConfigForm({
+          ambiente: cfg.ambiente === 'produccion' ? 'produccion' : 'pruebas',
           pin: cfg.pin || '', usuario: cfg.usuario || '', clave: cfg.clave || '',
+          endpoint_url: cfg.endpoint_url || '',
+          pin_prod: cfg.pin_prod || '', usuario_prod: cfg.usuario_prod || '', clave_prod: cfg.clave_prod || '',
+          endpoint_url_prod: cfg.endpoint_url_prod || cfg.endpoint_url || '',
           codigo_sucursal: cfg.codigo_sucursal || '001', nro_terminal: cfg.nro_terminal || '1',
-          endpoint_url: cfg.endpoint_url || '', activo: cfg.activo,
+          activo: cfg.activo,
         })
       }
     }
@@ -160,12 +169,17 @@ function FacturaElectronicaPage() {
   const saveConfig = async () => {
     setSavingConfig(true)
     const { error } = await supabase.from('fe_config').update({
+      ambiente: configForm.ambiente,
       pin: configForm.pin.trim() || null,
       usuario: configForm.usuario.trim() || null,
       clave: configForm.clave.trim() || null,
+      endpoint_url: configForm.endpoint_url.trim(),
+      pin_prod: configForm.pin_prod.trim() || null,
+      usuario_prod: configForm.usuario_prod.trim() || null,
+      clave_prod: configForm.clave_prod.trim() || null,
+      endpoint_url_prod: configForm.endpoint_url_prod.trim(),
       codigo_sucursal: configForm.codigo_sucursal.trim() || '001',
       nro_terminal: configForm.nro_terminal.trim() || '1',
-      endpoint_url: configForm.endpoint_url.trim(),
       activo: configForm.activo,
     }).eq('id', true)
     setSavingConfig(false)
@@ -174,7 +188,8 @@ function FacturaElectronicaPage() {
     loadData()
   }
 
-  const pacListo = config?.activo && config?.pin
+  const esProduccion = ambienteActivo === 'produccion'
+  const pacListo = config?.activo && (config?.ambiente === 'produccion' ? config?.pin_prod : config?.pin)
 
   return (
     <AppLayout>
@@ -192,6 +207,14 @@ function FacturaElectronicaPage() {
       />
 
       <div className="p-4 md:p-6 space-y-4">
+        {ambienteActivo && (
+          <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${esProduccion ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${esProduccion ? 'bg-red-500' : 'bg-amber-500'}`} />
+            {esProduccion
+              ? 'Ambiente de PRODUCCIÓN — los documentos timbrados tienen validez fiscal ante la DGI.'
+              : 'Ambiente de PRUEBAS — los documentos se timbran contra la DGI de test, sin validez fiscal.'}
+          </div>
+        )}
         {esAdmin && !pacListo && (
           <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
             <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
@@ -375,22 +398,85 @@ function FacturaElectronicaPage() {
         {tab === 'config' && esAdmin && (
           <div className="bg-white rounded-xl border border-gray-200 p-5 max-w-xl space-y-4">
             <p className="text-sm text-gray-500">Credenciales de integración con el PAC TheFactory (CFE Premium Soft). La clave solo es visible para administradores y se usa únicamente desde el servidor.</p>
+
+            {/* Switch de ambiente */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">Ambiente activo</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setConfigForm(f => ({ ...f, ambiente: 'pruebas' }))}
+                  className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${configForm.ambiente === 'pruebas' ? 'bg-amber-50 border-amber-400 text-amber-800 ring-1 ring-amber-400' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}>
+                  Pruebas
+                  <span className="block text-[11px] font-normal">DGI test — sin validez fiscal</span>
+                </button>
+                <button type="button" onClick={() => setConfigForm(f => ({ ...f, ambiente: 'produccion' }))}
+                  className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${configForm.ambiente === 'produccion' ? 'bg-red-50 border-red-400 text-red-800 ring-1 ring-red-400' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}>
+                  Producción
+                  <span className="block text-[11px] font-normal">Documentos fiscales reales</span>
+                </button>
+              </div>
+              {configForm.ambiente === 'produccion' && (
+                <p className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  En producción cada documento timbrado genera un CUFE real ante la DGI. Verifica las credenciales antes de guardar.
+                </p>
+              )}
+            </div>
+
+            {/* Credenciales de pruebas */}
+            <fieldset className={`rounded-lg border p-3 space-y-3 ${configForm.ambiente === 'pruebas' ? 'border-amber-300 bg-amber-50/40' : 'border-gray-200'}`}>
+              <legend className="text-xs font-semibold text-amber-700 px-1">Credenciales de PRUEBAS</legend>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">PIN</label>
+                  <input value={configForm.pin} onChange={e => setConfigForm(f => ({ ...f, pin: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Usuario</label>
+                  <input value={configForm.usuario} onChange={e => setConfigForm(f => ({ ...f, usuario: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Clave</label>
+                  <input type="password" value={configForm.clave} onChange={e => setConfigForm(f => ({ ...f, clave: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div className="col-span-3">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Endpoint (pruebas)</label>
+                  <input value={configForm.endpoint_url} onChange={e => setConfigForm(f => ({ ...f, endpoint_url: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono text-xs" />
+                </div>
+              </div>
+            </fieldset>
+
+            {/* Credenciales de producción */}
+            <fieldset className={`rounded-lg border p-3 space-y-3 ${configForm.ambiente === 'produccion' ? 'border-red-300 bg-red-50/40' : 'border-gray-200'}`}>
+              <legend className="text-xs font-semibold text-red-700 px-1">Credenciales de PRODUCCIÓN</legend>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">PIN</label>
+                  <input value={configForm.pin_prod} onChange={e => setConfigForm(f => ({ ...f, pin_prod: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Usuario</label>
+                  <input value={configForm.usuario_prod} onChange={e => setConfigForm(f => ({ ...f, usuario_prod: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Clave</label>
+                  <input type="password" value={configForm.clave_prod} onChange={e => setConfigForm(f => ({ ...f, clave_prod: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div className="col-span-3">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Endpoint (producción)</label>
+                  <input value={configForm.endpoint_url_prod} onChange={e => setConfigForm(f => ({ ...f, endpoint_url_prod: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono text-xs" />
+                </div>
+              </div>
+            </fieldset>
+
+            {/* Comunes */}
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">PIN (licencia CFE)</label>
-                <input value={configForm.pin} onChange={e => setConfigForm(f => ({ ...f, pin: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Usuario</label>
-                <input value={configForm.usuario} onChange={e => setConfigForm(f => ({ ...f, usuario: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Clave</label>
-                <input type="password" value={configForm.clave} onChange={e => setConfigForm(f => ({ ...f, clave: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-              </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Código de sucursal</label>
                 <input value={configForm.codigo_sucursal} onChange={e => setConfigForm(f => ({ ...f, codigo_sucursal: e.target.value }))}
@@ -400,11 +486,6 @@ function FacturaElectronicaPage() {
                 <label className="block text-xs font-medium text-gray-600 mb-1">Punto de facturación (terminal)</label>
                 <input value={configForm.nro_terminal} onChange={e => setConfigForm(f => ({ ...f, nro_terminal: e.target.value }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Endpoint</label>
-                <input value={configForm.endpoint_url} onChange={e => setConfigForm(f => ({ ...f, endpoint_url: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono text-xs" />
               </div>
             </div>
             <label className="flex items-center gap-2 text-sm text-gray-700">

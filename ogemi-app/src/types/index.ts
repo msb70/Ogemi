@@ -282,14 +282,21 @@ export interface CompraVencida {
 
 export type FeEstado = 'borrador' | 'enviando' | 'aceptado' | 'rechazado';
 
+export type FeAmbiente = 'pruebas' | 'produccion';
+
 export interface FeConfig {
   id: boolean;
+  ambiente: FeAmbiente;
   pin: string | null;
   usuario: string | null;
   clave: string | null;
+  endpoint_url: string;
+  pin_prod: string | null;
+  usuario_prod: string | null;
+  clave_prod: string | null;
+  endpoint_url_prod: string;
   codigo_sucursal: string;
   nro_terminal: string;
-  endpoint_url: string;
   activo: boolean;
   updated_at: string;
 }

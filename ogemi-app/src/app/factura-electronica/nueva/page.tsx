@@ -62,6 +62,7 @@ function NuevaFEForm() {
   const [referencia, setReferencia] = useState({ fe_id: '', cufe: '', fecha: '' })
   const [notas, setNotas] = useState('')
 
+  const [ambienteActivo, setAmbienteActivo] = useState<'pruebas' | 'produccion' | null>(null)
   const { toast, showToast, hideToast } = useToast()
   const supabase = createClient()
 
@@ -85,6 +86,8 @@ function NuevaFEForm() {
     setClientes((cli || []) as Cliente[])
     setArticulos((art || []) as FeArticulo[])
     setFeAceptadas((fes || []) as FeDocumento[])
+    const { data: amb } = await supabase.rpc('fe_ambiente_activo')
+    setAmbienteActivo(amb === 'produccion' ? 'produccion' : amb ? 'pruebas' : null)
 
     if (editId) {
       const { data: doc } = await supabase
@@ -296,7 +299,11 @@ function NuevaFEForm() {
     <AppLayout>
       <Header
         title={editId ? `Editar documento ${documento}` : 'Nuevo documento electrónico'}
-        subtitle="Factura electrónica / Nota de crédito electrónica — TheFactory Panamá"
+        subtitle={ambienteActivo === 'produccion'
+          ? 'PRODUCCIÓN — los documentos timbrados tienen validez fiscal (DGI)'
+          : ambienteActivo === 'pruebas'
+            ? 'AMBIENTE DE PRUEBAS — timbrado contra DGI test, sin validez fiscal'
+            : 'Factura electrónica / Nota de crédito electrónica — TheFactory Panamá'}
       />
       <div className="p-4 md:p-6 space-y-4 max-w-5xl">
 

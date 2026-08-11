@@ -41,11 +41,15 @@ export async function POST(req: NextRequest) {
 
     const admin = createAdminClient()
 
-    // 2) Configuración del PAC
+    // 2) Configuración del PAC — selecciona credenciales según ambiente activo
     const { data: config } = await admin.from('fe_config').select('*').eq('id', true).single()
-    if (!config?.activo || !config.pin || !config.usuario || !config.clave) {
+    const esProduccion = config?.ambiente === 'produccion'
+    const cred = esProduccion
+      ? { pin: config?.pin_prod, usuario: config?.usuario_prod, clave: config?.clave_prod, endpoint: config?.endpoint_url_prod || config?.endpoint_url }
+      : { pin: config?.pin, usuario: config?.usuario, clave: config?.clave, endpoint: config?.endpoint_url }
+    if (!config?.activo || !cred.pin || !cred.usuario || !cred.clave || !cred.endpoint) {
       return NextResponse.json({
-        error: 'El PAC no está configurado o está inactivo. Un administrador debe completar pin/usuario/clave en Configuración y activarlo.',
+        error: `El PAC no está configurado o está inactivo para el ambiente de ${esProduccion ? 'PRODUCCIÓN' : 'PRUEBAS'}. Un administrador debe completar pin/usuario/clave de ese ambiente en Configuración y activarlo.`,
       }, { status: 422 })
     }
 
@@ -95,9 +99,9 @@ export async function POST(req: NextRequest) {
 
     // 5) Payload JSON según manual TheFactory
     const payload = {
-      pin: config.pin,
-      usuario: config.usuario,
-      clave: config.clave,
+      pin: cred.pin,
+      usuario: cred.usuario,
+      clave: cred.clave,
       operti: {
         documento: doc.documento,
         codigo_sucursal: config.codigo_sucursal,
@@ -143,7 +147,7 @@ export async function POST(req: NextRequest) {
 
     let textoRespuesta = ''
     try {
-      const pacRes = await fetch(config.endpoint_url, {
+      const pacRes = await fetch(cred.endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
