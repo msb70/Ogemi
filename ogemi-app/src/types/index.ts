@@ -367,6 +367,7 @@ export interface FeDocumento {
   fecha_cufe: string | null;
   url_dgi: string | null;
   respuesta_pac: string | null;
+  ambiente: 'pruebas' | 'produccion' | null;
   factura_id: string | null;
   nota_credito_id: string | null;
   created_at: string;

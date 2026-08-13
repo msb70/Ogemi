@@ -287,7 +287,14 @@ function FacturaElectronicaPage() {
                         <td className="px-4 py-3 text-gray-700 max-w-[220px] truncate">{d.nombre_cliente}</td>
                         <td className="px-4 py-3 text-right font-medium">{formatCurrency(d.totalfinal)}</td>
                         <td className="px-4 py-3">
-                          <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${ESTADO_BADGE[d.estado] || ''}`}>{d.estado}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${ESTADO_BADGE[d.estado] || ''}`}>{d.estado}</span>
+                            {d.ambiente === 'pruebas' && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300" title="Timbrado en ambiente de PRUEBAS: no está en cobros ni en reportes">
+                                PRUEBA
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           {d.cufe ? (
@@ -513,6 +520,11 @@ function FacturaElectronicaPage() {
               <p><span className="text-gray-500">Tipo:</span> {FE_TIPO_DOC.find(t => t.codigo === detalle.tipo_doc)?.nombre}</p>
               <p><span className="text-gray-500">Cliente:</span> {detalle.nombre_cliente} {detalle.ruc ? `(RUC ${detalle.ruc} DV ${detalle.dv})` : ''}</p>
               <p><span className="text-gray-500">Neto:</span> {formatCurrency(detalle.totneto)} · <span className="text-gray-500">ITBMS:</span> {formatCurrency(detalle.totimpuest)} · <span className="text-gray-500">Total:</span> <strong>{formatCurrency(detalle.totalfinal)}</strong></p>
+              {detalle.ambiente === 'pruebas' && (
+                <p className="text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1 text-xs">
+                  Timbrado en ambiente de PRUEBAS: no está registrado en cobros y no aparece en ningún reporte.
+                </p>
+              )}
               {detalle.cufe && <p className="break-all"><span className="text-gray-500">CUFE:</span> <span className="font-mono text-xs">{detalle.cufe}</span></p>}
               {detalle.url_dgi && <p><a href={detalle.url_dgi} target="_blank" rel="noopener noreferrer" className="text-brand-600 underline text-xs">Consultar en DGI</a></p>}
               {detalle.respuesta_pac && (

@@ -8,8 +8,10 @@ import { parseRespuestaPAC } from '@/lib/fe-catalogos'
  * - Corre server-side para no exponer pin/usuario/clave del PAC al navegador.
  * - Body: { documento_id: string }
  * - Respuesta del PAC (texto plano): tipo|mensaje|cufe|fecha_cufe|url_dgi (tipo 2 = éxito)
- * - Si el timbrado es exitoso, registra el documento en cobros:
+ * - Si el timbrado es exitoso EN PRODUCCIÓN, registra el documento en cobros:
  *   FE (01/02/03/08/10) → tabla facturas; NC (04/06) → tabla notas_credito.
+ * - En ambiente de PRUEBAS el documento se timbra pero NO se registra en cobros,
+ *   por lo que no aparece en ningún reporte (cartera, ventas, banco, etc.).
  */
 
 const fmt = (n: number) => (Math.round((n + Number.EPSILON) * 100) / 100).toFixed(2)
@@ -173,20 +175,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, mensaje: r.mensaje, respuesta: textoRespuesta.slice(0, 500) }, { status: 422 })
     }
 
-    // Éxito: guardar CUFE y registrar en cobros
+    // Éxito: guardar CUFE (con el ambiente en que se timbró) y registrar en cobros
     const updates: Record<string, unknown> = {
       estado: 'aceptado',
       cufe: r.cufe,
       fecha_cufe: r.fecha_cufe,
       url_dgi: r.url_dgi,
       respuesta_pac: textoRespuesta.slice(0, 2000),
+      ambiente: esProduccion ? 'produccion' : 'pruebas',
     }
 
     const esNC = ['04', '06'].includes(doc.tipo_doc)
     const esFactura = ['01', '02', '03', '08', '10'].includes(doc.tipo_doc)
     let integracion = ''
 
-    if (esFactura && !doc.factura_id) {
+    // Los documentos timbrados en PRUEBAS no se integran a cobros: no deben
+    // aparecer en facturas, notas de crédito ni en ningún reporte del sistema.
+    if (!esProduccion) {
+      integracion = 'Documento de PRUEBAS: no se registró en cobros y no aparecerá en reportes.'
+    }
+
+    if (esProduccion && esFactura && !doc.factura_id) {
       const numeroInt = parseInt(doc.documento, 10)
       const { data: existente } = await admin
         .from('facturas').select('id').eq('numero_factura', numeroInt).limit(1)
@@ -216,7 +225,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (esNC && !doc.nota_credito_id) {
+    if (esProduccion && esNC && !doc.nota_credito_id) {
       const { data: nc, error: ncErr } = await admin.from('notas_credito').insert({
         numero: doc.documento,
         cliente_id: doc.cliente_id,
