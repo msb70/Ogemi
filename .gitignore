@@ -55,3 +55,14 @@ vencimiento-semanal.html
 # Snapshots de playwright
 *.yml
 .Rhistory
+
+# Respaldos de la base de datos (contienen datos reales de clientes: NUNCA al repo publico)
+backups/
+*.dump
+*.sql.gz
+
+# Otros artefactos sueltos
+*.pdf
+*.png
+*.json.bak
+.fuse_hidden*

@@ -18,6 +18,10 @@ export interface Cliente {
   tipo_cliente: string;
   direccion: string | null;
   email: string | null;
+  // Contacto
+  telefono: string | null;
+  telefono_movil: string | null;
+  contacto: string | null;
   created_at: string;
   updated_at: string;
 }
