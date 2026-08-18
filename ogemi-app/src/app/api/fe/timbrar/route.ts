@@ -71,7 +71,8 @@ export async function POST(req: NextRequest) {
 
     // 4) Validaciones según manual
     if (lineas.length === 0) return NextResponse.json({ error: 'El documento no tiene líneas de detalle.' }, { status: 422 })
-    if (pagosDoc.length === 0) return NextResponse.json({ error: 'El documento no tiene formas de pago.' }, { status: 422 })
+    const esCredito = !!doc.es_credito
+    if (!esCredito && pagosDoc.length === 0) return NextResponse.json({ error: 'El documento no tiene formas de pago.' }, { status: 422 })
     if (['01', '03'].includes(doc.tipo_cliente) && (!doc.ruc || !doc.dv)) {
       return NextResponse.json({ error: 'RUC y DV son obligatorios para clientes contribuyentes/gobierno.' }, { status: 422 })
     }
@@ -94,9 +95,33 @@ export async function POST(req: NextRequest) {
         error: `Los totales no cuadran con las líneas (neto ${fmt(neto)} / total ${fmt(totalFinal)} vs encabezado ${fmt(Number(doc.totneto))} / ${fmt(Number(doc.totalfinal))}).`,
       }, { status: 422 })
     }
-    const sumaPagos = pagosDoc.reduce((s: number, p: any) => s + Number(p.monto), 0)
-    if (Math.abs(sumaPagos - Number(doc.total_pagado)) > 0.011) {
-      return NextResponse.json({ error: 'La suma de las formas de pago no coincide con el total pagado.' }, { status: 422 })
+    if (!esCredito) {
+      const sumaPagos = pagosDoc.reduce((s: number, p: any) => s + Number(p.monto), 0)
+      if (Math.abs(sumaPagos - Number(doc.total_pagado)) > 0.011) {
+        return NextResponse.json({ error: 'La suma de las formas de pago no coincide con el total pagado.' }, { status: 422 })
+      }
+    }
+
+    // Venta a crédito: la forma de pago se arma con el código parametrizado en
+    // fe_config (el catálogo del PAC no está confirmado, por eso es configurable).
+    // dVlrCuota = total a pagar; total_pagado (dTotRec) = 0 si el PAC lo acepta.
+    const pagosEnviar: { codigo: string; nombre: string; monto: number }[] = esCredito
+      ? [{
+          codigo: config?.fp_credito_codigo || '01',
+          nombre: config?.fp_credito_nombre || 'CREDITO',
+          monto: Number(doc.totalfinal),
+        }]
+      : pagosDoc.map((p: any) => ({ codigo: p.codigo, nombre: p.nombre, monto: Number(p.monto) }))
+    // Nota (verificado 18/08/2026 contra el PAC y el portal DGI de pruebas): el PAC
+    // imprime siempre TOTAL PAGADO = total del documento, ignora lo que se envíe aquí.
+    const totalPagadoEnviar = esCredito ? Number(doc.totalfinal) : Number(doc.total_pagado)
+
+    // Deja registrado en el documento lo que efectivamente se envía al PAC
+    if (esCredito) {
+      await admin.from('fe_documento_pagos').delete().eq('documento_id', doc.id)
+      await admin.from('fe_documento_pagos').insert(
+        pagosEnviar.map(p => ({ documento_id: doc.id, codigo: p.codigo, nombre: p.nombre, monto: p.monto }))
+      )
     }
 
     // 5) Payload JSON según manual TheFactory
@@ -119,7 +144,7 @@ export async function POST(req: NextRequest) {
         totneto: fmt(Number(doc.totneto)),
         totimpuest: fmt(Number(doc.totimpuest)),
         totalfinal: fmt(Number(doc.totalfinal)),
-        total_pagado: fmt(Number(doc.total_pagado)),
+        total_pagado: fmt(totalPagadoEnviar),
         codigo_retencion: doc.codigo_retencion || '',
         prc_retencion: fmt(Number(doc.prc_retencion || 0)),
         retencion: fmt(Number(doc.retencion || 0)),
@@ -127,10 +152,10 @@ export async function POST(req: NextRequest) {
         fecha_cufe_devol: doc.fecha_cufe_devol || '',
         notas: doc.notas || '',
       },
-      pagos: pagosDoc.map((p: any) => ({
+      pagos: pagosEnviar.map(p => ({
         codigo: p.codigo,
         nombre: p.nombre,
-        monto: fmt(Number(p.monto)),
+        monto: fmt(p.monto),
       })),
       opermv: lineas.map((l: any) => ({
         codigo_articulo: l.codigo_articulo,

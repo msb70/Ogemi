@@ -302,6 +302,9 @@ export interface FeConfig {
   codigo_sucursal: string;
   nro_terminal: string;
   activo: boolean;
+  /** Código de forma de pago que se envía al PAC en ventas a crédito */
+  fp_credito_codigo: string;
+  fp_credito_nombre: string;
   updated_at: string;
 }
 
@@ -359,6 +362,7 @@ export interface FeDocumento {
   totimpuest: number;
   totalfinal: number;
   total_pagado: number;
+  es_credito: boolean;
   codigo_retencion: string | null;
   prc_retencion: number;
   retencion: number;

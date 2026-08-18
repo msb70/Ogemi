@@ -37,7 +37,9 @@ export const FE_ITBMS = [
 ]
 
 export const FE_FORMAS_PAGO = [
-  { codigo: '01', nombre: 'NOTA DE CREDITO' },
+  // Verificado contra el portal de la DGI (ambiente de pruebas, 18/08/2026):
+  // el código 01 se muestra como "Crédito", no como nota de crédito.
+  { codigo: '01', nombre: 'CRÉDITO' },
   { codigo: '02', nombre: 'EFECTIVO' },
   { codigo: '03', nombre: 'TARJETA CREDITO' },
   { codigo: '04', nombre: 'TARJETA DEBITO' },
@@ -46,6 +48,9 @@ export const FE_FORMAS_PAGO = [
   { codigo: '07', nombre: 'TARJETA DE REGALO' },
   { codigo: '99', nombre: 'OTRO' },
 ]
+
+/** Formas de pago escogibles a mano: excluye 01 (crédito), que se marca con la casilla "Venta a crédito" */
+export const FE_FORMAS_PAGO_MANUAL = FE_FORMAS_PAGO.filter(f => f.codigo !== '01')
 
 export const FE_RETENCIONES = [
   { codigo: '1', nombre: 'Pago por servicio profesional al estado 100%' },

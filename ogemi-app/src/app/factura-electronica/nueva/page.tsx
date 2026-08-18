@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/useToast'
 import { withPagePermission } from '@/components/PermissionGuard'
 import {
   FE_TIPO_DOC, FE_TIPO_CLIENTE, FE_TIPO_CONTRIBUYENTE, FE_ITBMS,
-  FE_UNIDADES, FE_CPBS_GRUPOS, FE_FORMAS_PAGO, FE_RETENCIONES,
+  FE_UNIDADES, FE_CPBS_GRUPOS, FE_FORMAS_PAGO, FE_FORMAS_PAGO_MANUAL, FE_RETENCIONES,
 } from '@/lib/fe-catalogos'
 
 interface LineaForm {
@@ -57,7 +57,8 @@ function NuevaFEForm() {
     tipo_contribuyente: 2, tipo_cliente: '01', ruc: '', dv: '', direccion: '', email: '',
   })
   const [lineas, setLineas] = useState<LineaForm[]>([nuevaLinea()])
-  const [pagos, setPagos] = useState<PagoForm[]>([{ codigo: '99', nombre: 'CREDITO', monto: '' }])
+  const [pagos, setPagos] = useState<PagoForm[]>([{ codigo: '02', nombre: 'EFECTIVO', monto: '' }])
+  const [esCredito, setEsCredito] = useState(false)
   const [retencion, setRetencion] = useState({ codigo: '', pct: '', monto: '' })
   const [referencia, setReferencia] = useState({ fe_id: '', cufe: '', fecha: '' })
   const [notas, setNotas] = useState('')
@@ -68,6 +69,17 @@ function NuevaFEForm() {
 
   const esNCRef = tipoDoc === '04'
   const esNC = ['04', '06'].includes(tipoDoc)
+
+  // Venta a crédito: la forma de pago la define Configuración (código del PAC) y
+  // el vencimiento sale de los días de crédito del cliente. No aplica a notas de crédito.
+  const clienteSel = clientes.find(c => c.id === clienteId)
+  const diasCredito = clienteSel?.dias_credito ?? 30
+  const creditoActivo = esCredito && !esNC
+  const fechaVence = (() => {
+    const d = new Date(`${fecha}T00:00:00`)
+    d.setDate(d.getDate() + diasCredito)
+    return d.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  })()
 
   // Totales calculados desde las líneas
   const totNeto = round2(lineas.reduce((s, l) => s + (parseFloat(l.precioneto) || 0) * (parseFloat(l.cantidad) || 0), 0))
@@ -108,7 +120,9 @@ function NuevaFEForm() {
           precioneto: String(l.precioneto), prc_impuesto: Number(l.prc_impuesto), cantidad: String(l.cantidad),
           unidad: l.unidad, grupo_inv: l.grupo_inv, subgr_inv: l.subgr_inv,
         })))
-        setPagos((doc.fe_documento_pagos || []).map((p: any) => ({ codigo: p.codigo, nombre: p.nombre, monto: String(p.monto) })))
+        setEsCredito(!!doc.es_credito)
+        const pagosDoc = (doc.fe_documento_pagos || []).map((p: any) => ({ codigo: p.codigo, nombre: p.nombre, monto: String(p.monto) }))
+        if (pagosDoc.length > 0) setPagos(pagosDoc)
         setRetencion({ codigo: doc.codigo_retencion || '', pct: String(doc.prc_retencion || ''), monto: String(doc.retencion || '') })
         setReferencia({ fe_id: doc.fe_referencia_id || '', cufe: doc.cufe_devol || '', fecha: doc.fecha_cufe_devol || '' })
         setNotas(doc.notas || '')
@@ -133,6 +147,7 @@ function NuevaFEForm() {
         tipo_cliente: c.tipo_cliente ?? '01',
         ruc: c.ruc || '', dv: c.dv || '', direccion: c.direccion || '', email: c.email || '',
       })
+      setEsCredito((c.dias_credito ?? 30) > 0)
       if ((c.retencion_pct || 0) > 0) {
         setRetencion({ codigo: '2', pct: String(c.retencion_pct), monto: '' })
       } else {
@@ -188,7 +203,7 @@ function NuevaFEForm() {
     }
     if (esNCRef && !referencia.cufe.trim()) return 'La NC referenciada (tipo 04) requiere el CUFE del documento afectado.'
     if (esNCRef && !referencia.fecha.trim()) return 'La NC referenciada (tipo 04) requiere la fecha del CUFE afectado.'
-    if (Math.abs(totalPagos - totalFinal) > 0.011) return `Las formas de pago (${formatCurrency(totalPagos)}) deben sumar el total (${formatCurrency(totalFinal)}). Usa "Cuadrar".`
+    if (!creditoActivo && Math.abs(totalPagos - totalFinal) > 0.011) return `Las formas de pago (${formatCurrency(totalPagos)}) deben sumar el total (${formatCurrency(totalFinal)}). Usa "Cuadrar".`
     return null
   }
 
@@ -220,7 +235,8 @@ function NuevaFEForm() {
       totneto: totNeto,
       totimpuest: totImpuesto,
       totalfinal: totalFinal,
-      total_pagado: totalPagos,
+      es_credito: creditoActivo,
+      total_pagado: creditoActivo ? totalFinal : totalPagos,
       codigo_retencion: retencion.codigo || null,
       prc_retencion: parseFloat(retencion.pct) || 0,
       retencion: retencionCalc,
@@ -249,11 +265,15 @@ function NuevaFEForm() {
       cantidad: parseFloat(l.cantidad) || 1, unidad: l.unidad,
       grupo_inv: l.grupo_inv, subgr_inv: l.subgr_inv.trim(),
     })))
-    const { error: pErr } = await supabase.from('fe_documento_pagos').insert(pagos.map(p => ({
-      documento_id: docId, codigo: p.codigo,
-      nombre: FE_FORMAS_PAGO.find(f => f.codigo === p.codigo)?.nombre || p.nombre,
-      monto: parseFloat(p.monto) || 0,
-    })))
+    // En venta a crédito la forma de pago la resuelve el servidor con el código
+    // configurado en fe_config (fe_config sólo es legible por admin).
+    const { error: pErr } = creditoActivo
+      ? { error: null }
+      : await supabase.from('fe_documento_pagos').insert(pagos.map(p => ({
+          documento_id: docId, codigo: p.codigo,
+          nombre: FE_FORMAS_PAGO.find(f => f.codigo === p.codigo)?.nombre || p.nombre,
+          monto: parseFloat(p.monto) || 0,
+        })))
     setSaving(false)
     if (lErr || pErr) { showToast(`Guardado con errores en detalle: ${(lErr || pErr)?.message}`, 'error'); return }
 
@@ -498,30 +518,50 @@ function NuevaFEForm() {
               </div>
             )}
 
-            <p className="text-sm font-medium text-gray-700 pt-2">Formas de pago</p>
-            {pagos.map((p, i) => (
-              <div key={i} className="flex gap-2 items-end">
-                <div className="flex-1">
-                  <label className={labelCls}>Forma</label>
-                  <select value={p.codigo} onChange={e => setPagos(ps => ps.map((x, idx) => idx === i ? { ...x, codigo: e.target.value, nombre: FE_FORMAS_PAGO.find(f => f.codigo === e.target.value)?.nombre || '' } : x))} className={inputCls}>
-                    {FE_FORMAS_PAGO.map(f => <option key={f.codigo} value={f.codigo}>{f.codigo} — {f.nombre}</option>)}
-                  </select>
-                </div>
-                <div className="w-32">
-                  <label className={labelCls}>Monto</label>
-                  <input type="number" step="0.01" value={p.monto} onChange={e => setPagos(ps => ps.map((x, idx) => idx === i ? { ...x, monto: e.target.value } : x))} className={inputCls} />
-                </div>
-                {pagos.length > 1 && (
-                  <button onClick={() => setPagos(ps => ps.filter((_, idx) => idx !== i))} className="text-gray-400 hover:text-red-600 p-2"><Trash2 size={15} /></button>
-                )}
-              </div>
-            ))}
-            <div className="flex gap-2">
-              <button onClick={() => setPagos(ps => [...ps, { codigo: '02', nombre: 'EFECTIVO', monto: '' }])}
-                className="text-xs font-medium text-brand-700 hover:bg-brand-50 px-2 py-1 rounded-md inline-flex items-center gap-1"><Plus size={13} /> Otra forma</button>
-              <button onClick={() => setPagos(ps => ps.map((p, i) => i === 0 ? { ...p, monto: String(round2(totalFinal - ps.slice(1).reduce((s, x) => s + (parseFloat(x.monto) || 0), 0))) } : p))}
-                className="text-xs font-medium text-gray-600 hover:bg-gray-100 px-2 py-1 rounded-md">Cuadrar con el total</button>
+            <div className="pt-2 space-y-2">
+              <p className="text-sm font-medium text-gray-700">Formas de pago</p>
+              {!esNC && (
+                <label className={`flex items-start gap-2 rounded-lg border p-2.5 cursor-pointer transition-colors ${creditoActivo ? 'border-brand-400 bg-brand-50/60' : 'border-gray-200 hover:bg-gray-50'}`}>
+                  <input type="checkbox" checked={creditoActivo} onChange={e => setEsCredito(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+                  <span className="text-sm leading-snug">
+                    <span className="font-medium text-gray-800">Venta a crédito</span>
+                    <span className="block text-xs text-gray-500">
+                      {creditoActivo
+                        ? `${diasCredito} días de crédito · vence el ${fechaVence}. El sistema declara la forma de pago como crédito.`
+                        : `El cliente tiene ${diasCredito} días de crédito. Marca la casilla si la factura no se cobra hoy.`}
+                    </span>
+                  </span>
+                </label>
+              )}
             </div>
+            {!creditoActivo && (
+              <>
+              {pagos.map((p, i) => (
+                <div key={i} className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <label className={labelCls}>Forma</label>
+                    <select value={p.codigo} onChange={e => setPagos(ps => ps.map((x, idx) => idx === i ? { ...x, codigo: e.target.value, nombre: FE_FORMAS_PAGO.find(f => f.codigo === e.target.value)?.nombre || '' } : x))} className={inputCls}>
+                      {FE_FORMAS_PAGO_MANUAL.map(f => <option key={f.codigo} value={f.codigo}>{f.codigo} — {f.nombre}</option>)}
+                    </select>
+                  </div>
+                  <div className="w-32">
+                    <label className={labelCls}>Monto</label>
+                    <input type="number" step="0.01" value={p.monto} onChange={e => setPagos(ps => ps.map((x, idx) => idx === i ? { ...x, monto: e.target.value } : x))} className={inputCls} />
+                  </div>
+                  {pagos.length > 1 && (
+                    <button onClick={() => setPagos(ps => ps.filter((_, idx) => idx !== i))} className="text-gray-400 hover:text-red-600 p-2"><Trash2 size={15} /></button>
+                  )}
+                </div>
+              ))}
+              <div className="flex gap-2">
+                <button onClick={() => setPagos(ps => [...ps, { codigo: '02', nombre: 'EFECTIVO', monto: '' }])}
+                  className="text-xs font-medium text-brand-700 hover:bg-brand-50 px-2 py-1 rounded-md inline-flex items-center gap-1"><Plus size={13} /> Otra forma</button>
+                <button onClick={() => setPagos(ps => ps.map((p, i) => i === 0 ? { ...p, monto: String(round2(totalFinal - ps.slice(1).reduce((s, x) => s + (parseFloat(x.monto) || 0), 0))) } : p))}
+                  className="text-xs font-medium text-gray-600 hover:bg-gray-100 px-2 py-1 rounded-md">Cuadrar con el total</button>
+              </div>
+              </>
+            )}
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
@@ -533,9 +573,15 @@ function NuevaFEForm() {
                 <div className="flex justify-between text-amber-700"><span>Retención ITBMS</span><span>-{formatCurrency(retencionCalc)}</span></div>
               )}
               <div className="flex justify-between text-base border-t border-gray-100 pt-2"><span className="font-semibold text-gray-800">Total final</span><span className="font-bold">{formatCurrency(totalFinal)}</span></div>
-              <div className={`flex justify-between text-xs ${Math.abs(totalPagos - totalFinal) > 0.011 ? 'text-red-600' : 'text-green-600'}`}>
-                <span>Suma formas de pago</span><span>{formatCurrency(totalPagos)}</span>
-              </div>
+              {creditoActivo ? (
+                <div className="flex justify-between text-xs text-brand-700">
+                  <span>A crédito · vence</span><span>{fechaVence}</span>
+                </div>
+              ) : (
+                <div className={`flex justify-between text-xs ${Math.abs(totalPagos - totalFinal) > 0.011 ? 'text-red-600' : 'text-green-600'}`}>
+                  <span>Suma formas de pago</span><span>{formatCurrency(totalPagos)}</span>
+                </div>
+              )}
             </div>
             <div>
               <label className={labelCls}>Notas del documento</label>

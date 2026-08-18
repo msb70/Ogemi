@@ -52,6 +52,7 @@ function FacturaElectronicaPage() {
     pin: '', usuario: '', clave: '', endpoint_url: '',
     pin_prod: '', usuario_prod: '', clave_prod: '', endpoint_url_prod: '',
     codigo_sucursal: '001', nro_terminal: '1', activo: false,
+    fp_credito_codigo: '01', fp_credito_nombre: 'CREDITO',
   })
   const [savingConfig, setSavingConfig] = useState(false)
 
@@ -82,6 +83,8 @@ function FacturaElectronicaPage() {
           endpoint_url_prod: cfg.endpoint_url_prod || cfg.endpoint_url || '',
           codigo_sucursal: cfg.codigo_sucursal || '001', nro_terminal: cfg.nro_terminal || '1',
           activo: cfg.activo,
+          fp_credito_codigo: cfg.fp_credito_codigo || '01',
+          fp_credito_nombre: cfg.fp_credito_nombre || 'CREDITO',
         })
       }
     }
@@ -181,6 +184,8 @@ function FacturaElectronicaPage() {
       codigo_sucursal: configForm.codigo_sucursal.trim() || '001',
       nro_terminal: configForm.nro_terminal.trim() || '1',
       activo: configForm.activo,
+      fp_credito_codigo: configForm.fp_credito_codigo.trim() || '01',
+      fp_credito_nombre: configForm.fp_credito_nombre.trim() || 'CREDITO',
     }).eq('id', true)
     setSavingConfig(false)
     if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
@@ -495,6 +500,28 @@ function FacturaElectronicaPage() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
               </div>
             </div>
+            {/* Venta a crédito */}
+            <fieldset className="rounded-lg border border-gray-200 p-3 space-y-3">
+              <legend className="text-xs font-semibold text-gray-600 px-1">Venta a crédito</legend>
+              <p className="text-xs text-gray-500">
+                Cuando una factura se marca como &ldquo;Venta a crédito&rdquo;, el sistema envía al PAC esta forma de pago
+                en lugar de la que se elige a mano. El código 01 es el que la DGI imprime como &ldquo;Crédito&rdquo;
+                (verificado en ambiente de pruebas). Sólo cámbialo si el PAC informa otro código.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Código de forma de pago</label>
+                  <input value={configForm.fp_credito_codigo} onChange={e => setConfigForm(f => ({ ...f, fp_credito_codigo: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Nombre que se envía</label>
+                  <input value={configForm.fp_credito_nombre} onChange={e => setConfigForm(f => ({ ...f, fp_credito_nombre: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+              </div>
+            </fieldset>
+
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" checked={configForm.activo} onChange={e => setConfigForm(f => ({ ...f, activo: e.target.checked }))}
                 className="rounded border-gray-300" />
@@ -520,6 +547,9 @@ function FacturaElectronicaPage() {
               <p><span className="text-gray-500">Tipo:</span> {FE_TIPO_DOC.find(t => t.codigo === detalle.tipo_doc)?.nombre}</p>
               <p><span className="text-gray-500">Cliente:</span> {detalle.nombre_cliente} {detalle.ruc ? `(RUC ${detalle.ruc} DV ${detalle.dv})` : ''}</p>
               <p><span className="text-gray-500">Neto:</span> {formatCurrency(detalle.totneto)} · <span className="text-gray-500">ITBMS:</span> {formatCurrency(detalle.totimpuest)} · <span className="text-gray-500">Total:</span> <strong>{formatCurrency(detalle.totalfinal)}</strong></p>
+              {detalle.es_credito && (
+                <p><span className="text-gray-500">Condición:</span> <span className="font-medium text-brand-700">Venta a crédito</span></p>
+              )}
               {detalle.ambiente === 'pruebas' && (
                 <p className="text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1 text-xs">
                   Timbrado en ambiente de PRUEBAS: no está registrado en cobros y no aparece en ningún reporte.
