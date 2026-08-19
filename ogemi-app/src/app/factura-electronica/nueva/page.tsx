@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatDateObj } from '@/lib/utils'
 import { Cliente, FeArticulo, FeDocumento } from '@/types'
 import { Plus, Trash2, Loader2, Save, CheckCircle, AlertCircle } from 'lucide-react'
 import { Toast } from '@/components/Toast'
@@ -78,7 +78,7 @@ function NuevaFEForm() {
   const fechaVence = (() => {
     const d = new Date(`${fecha}T00:00:00`)
     d.setDate(d.getDate() + diasCredito)
-    return d.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    return formatDateObj(d)
   })()
 
   // Totales calculados desde las líneas

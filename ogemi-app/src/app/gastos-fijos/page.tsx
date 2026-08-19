@@ -13,7 +13,6 @@ import VencimientoSemanalVentas from '@/app/reportes/components/VencimientoSeman
 import VencimientoSemanalPresupuestos from '@/app/reportes/components/VencimientoSemanalPresupuestos'
 import VencimientoSemanalCompras from '@/app/reportes/components/VencimientoSemanalCompras'
 import { buildVencimientoViernes, buildVencimientoSemanal } from '@/app/reportes/reportes.utils'
-import { resumenTarjeta, ResumenTarjeta } from '@/lib/tarjetas'
 
 type TipoMarca = 'venta' | 'presupuesto' | 'compra'
 
@@ -131,7 +130,6 @@ function GastosFijosPage() {
   const [cxcSemana, setCxcSemana] = useState<number[]>([0, 0, 0, 0])
   const [cuentas, setCuentas] = useState<BancoCuentaLite[]>([])
   const [saldoBancos, setSaldoBancos] = useState(0)
-  const [tarjetas, setTarjetas] = useState<ResumenTarjeta[]>([])
   const [loading, setLoading] = useState(true)
   const [savingMontos, setSavingMontos] = useState(false)
   const [nuevoGastoNombre, setNuevoGastoNombre] = useState('')
@@ -234,11 +232,9 @@ function GastosFijosPage() {
       return
     }
 
-    // Las tarjetas de crédito no son efectivo: van aparte (pago programado),
-    // no dentro del saldo de bancos (evita contar la deuda dos veces).
-    const todas = cuentasData || []
-    const cuentasBanco = todas.filter((c: any) => c.tipo !== 'tarjeta_credito')
-    const cuentasTarjeta = todas.filter((c: any) => c.tipo === 'tarjeta_credito')
+    // Las tarjetas de crédito no son efectivo: se excluyen del saldo de bancos
+    // (evita contar la deuda dos veces). Su pago se maneja en Banco -> Tarjetas.
+    const cuentasBanco = (cuentasData || []).filter((c: any) => c.tipo !== 'tarjeta_credito')
     setCuentas(cuentasBanco)
     const saldos = await Promise.all(
       cuentasBanco.map(cuenta => supabase.rpc('saldo_cuenta', {
@@ -247,17 +243,6 @@ function GastosFijosPage() {
       }))
     )
     setSaldoBancos(saldos.reduce((sum, result) => sum + (result.data || 0), 0))
-
-    const movsTarjetas = await Promise.all(
-      cuentasTarjeta.map((c: any) =>
-        supabase.from('banco_movimientos').select('tipo,monto,fecha').eq('cuenta_id', c.id)
-      )
-    )
-    const info = cuentasTarjeta
-      .map((c: any, i: number) => resumenTarjeta(c, movsTarjetas[i].data || []))
-      .filter((r): r is ResumenTarjeta => r !== null)
-      .sort((a, b) => a.fechaPago.localeCompare(b.fechaPago))
-    setTarjetas(info)
   }, [fechaResumen, showToast, supabase])
 
   const loadCxcSemana = useCallback(async (fechas: string[]) => {
@@ -471,35 +456,38 @@ function GastosFijosPage() {
       comprasPagar.filter((r: any) => r.fridayIdx === i)
         .reduce((s: number, r: any) => s + (r.pagoProyectado || 0), 0))
 
-    // Pago de tarjetas de crédito: el monto a pagar cae en la semana de su fecha
-    // de pago (misma regla de corte que el resto: lo vencido antes del corte cae
-    // en la primera semana >= corte; lo posterior a la semana 4 es del mes siguiente).
-    const lastDate = dateObjs[dateObjs.length - 1]
-    const pagosTarjetas = dateObjs.map(() => 0)
-    for (const t of tarjetas) {
-      if (t.aPagar <= 0) continue
-      const fp = new Date(t.fechaPago + 'T00:00:00')
-      if (lastDate && fp > lastDate) continue
-      let idx = fp < cutoff ? dateObjs.findIndex(d => d >= cutoff) : -1
-      if (idx === -1) idx = dateObjs.findIndex(d => fp <= d)
-      if (idx === -1) continue
-      pagosTarjetas[idx] += t.aPagar
-    }
-    return { cobrosVentas, cobrosPres, pagosCompras, comprasPagar, pagosTarjetas }
-  }, [semanaFechas, fechaResumen, facturasAll, presupuestosAll, comprasAll, marcasVentas, marcasPresupuestos, marcasCompras, montosPagaraCompras, semanasPagaraCompras, tarjetas])
+    // Semana de corte: la primera semana cuya fecha es >= la fecha de corte.
+    // Es donde arranca el saldo de bancos que se arrastra semana a semana.
+    // Si el corte queda después de las 4 semanas (períodos históricos), semana 1.
+    const idxCorte = dateObjs.findIndex(d => d >= cutoff)
+    const semanaCorteIdx = idxCorte === -1 ? 0 : idxCorte
+
+    return { cobrosVentas, cobrosPres, pagosCompras, comprasPagar, semanaCorteIdx }
+  }, [semanaFechas, fechaResumen, facturasAll, presupuestosAll, comprasAll, marcasVentas, marcasPresupuestos, marcasCompras, montosPagaraCompras, semanasPagaraCompras])
 
   const flujoNetoSemana = SEMANAS.map((_, i) =>
-    flujo.cobrosVentas[i] + flujo.cobrosPres[i] - flujo.pagosCompras[i] - flujo.pagosTarjetas[i] - totalesSemana[i])
+    flujo.cobrosVentas[i] + flujo.cobrosPres[i] - flujo.pagosCompras[i] - totalesSemana[i])
   const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0)
+
+  // Saldo de bancos proyectado: arranca en la semana de corte con el saldo real
+  // y se arrastra con el flujo neto de cada semana. Las semanas anteriores al
+  // corte quedan vacías (ya pasaron).
+  const semanaCorteIdx = flujo.semanaCorteIdx
+  const saldoInicialSemana: (number | null)[] = SEMANAS.map((_, i) =>
+    i < semanaCorteIdx ? null : saldoBancos + sum(flujoNetoSemana.slice(semanaCorteIdx, i)))
+  const saldoFinalSemana: (number | null)[] = SEMANAS.map((_, i) => {
+    const ini = saldoInicialSemana[i]
+    return ini == null ? null : ini + flujoNetoSemana[i]
+  })
+  const saldoFinalPeriodo = saldoBancos + sum(flujoNetoSemana.slice(semanaCorteIdx))
 
   // KPIs del flujo de pago
   const cobrosVentasTotal = sum(flujo.cobrosVentas)
   const cobrosPresTotal = sum(flujo.cobrosPres)
   const cxcProbable = cobrosVentasTotal + cobrosPresTotal           // ventas + presupuestos no marcados "No pagará"
   const comprasAPagarTotal = sum(flujo.pagosCompras)                // compras marcadas "Pagará"
-  const tarjetasAPagarTotal = sum(flujo.pagosTarjetas)              // tarjetas de crédito con pago en las 4 semanas
   const totalCxCBancos = cxcProbable + saldoBancos
-  const disponibleFlujo = totalCxCBancos - totalGastos - comprasAPagarTotal - tarjetasAPagarTotal
+  const disponibleFlujo = totalCxCBancos - totalGastos - comprasAPagarTotal
 
   const crearGasto = async () => {
     const nombre = nuevoGastoNombre.trim()
@@ -781,7 +769,7 @@ function GastosFijosPage() {
 
         </section>
 
-        <section className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-7 gap-4">
+        <section className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
           <div className="card p-4">
             <p className="text-xs font-semibold uppercase text-gray-500">CxC vencida al corte</p>
             <p className="mt-2 text-lg font-bold text-green-700">{formatCurrency(cxcProbable)}</p>
@@ -809,11 +797,6 @@ function GastosFijosPage() {
             <p className="mt-2 text-lg font-bold text-red-600">{formatCurrency(comprasAPagarTotal)}</p>
             <p className="text-xs text-gray-400">Marcadas &quot;Pagará&quot;</p>
           </div>
-          <div className="card p-4">
-            <p className="text-xs font-semibold uppercase text-gray-500">Tarjetas a pagar</p>
-            <p className="mt-2 text-lg font-bold text-red-600">{formatCurrency(tarjetasAPagarTotal)}</p>
-            <p className="text-xs text-gray-400">{tarjetas.length} tarjeta{tarjetas.length === 1 ? '' : 's'} · saldo al corte</p>
-          </div>
           <div
             className={`card p-4 ${
               disponibleFlujo >= 0
@@ -836,7 +819,7 @@ function GastosFijosPage() {
               {formatCurrency(disponibleFlujo)}
             </p>
             <p className={disponibleFlujo >= 0 ? 'text-xs text-green-700' : 'text-xs text-red-700'}>
-              CxC + bancos − gastos − compras − tarjetas
+              CxC + bancos − gastos − compras
             </p>
           </div>
         </section>
@@ -870,11 +853,22 @@ function GastosFijosPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
+                  <tr className="bg-brand-50">
+                    <td className="table-cell text-sm font-semibold">Saldo bancos (inicial)</td>
+                    {saldoInicialSemana.map((v, i) => (
+                      <td key={i} className={`table-cell text-right text-sm font-semibold ${
+                        v == null ? 'text-gray-300' : v >= 0 ? 'text-brand-700' : 'text-red-600'
+                      }`}>
+                        {v == null ? '—' : formatCurrency(v)}
+                      </td>
+                    ))}
+                    <td className="table-cell text-right font-semibold text-brand-700">{formatCurrency(saldoBancos)}</td>
+                    <td className="table-cell"></td>
+                  </tr>
                   {[
                     { label: 'Cobros ventas (probable)',       vals: flujo.cobrosVentas,  neg: false },
                     { label: 'Cobros presupuestos (probable)', vals: flujo.cobrosPres,    neg: false },
                     { label: 'Compras a pagar (marcadas)',     vals: flujo.pagosCompras,  neg: true },
-                    { label: 'Pago tarjetas de crédito',       vals: flujo.pagosTarjetas, neg: true },
                     { label: 'Gastos fijos',                   vals: totalesSemana,       neg: true },
                   ].map(r => (
                     <tr key={r.label}>
@@ -901,6 +895,20 @@ function GastosFijosPage() {
                     ))}
                     <td className={`table-cell text-right ${sum(flujoNetoSemana) >= 0 ? 'text-green-800' : 'text-red-700'}`}>
                       {formatCurrency(sum(flujoNetoSemana))}
+                    </td>
+                    <td className="table-cell"></td>
+                  </tr>
+                  <tr className="border-t border-gray-200 bg-brand-50 font-bold">
+                    <td className="table-cell">Saldo bancos proyectado</td>
+                    {saldoFinalSemana.map((v, i) => (
+                      <td key={i} className={`table-cell text-right ${
+                        v == null ? 'text-gray-300' : v >= 0 ? 'text-brand-700' : 'text-red-600'
+                      }`}>
+                        {v == null ? '—' : formatCurrency(v)}
+                      </td>
+                    ))}
+                    <td className={`table-cell text-right ${saldoFinalPeriodo >= 0 ? 'text-brand-700' : 'text-red-600'}`}>
+                      {formatCurrency(saldoFinalPeriodo)}
                     </td>
                     <td className="table-cell"></td>
                   </tr>
