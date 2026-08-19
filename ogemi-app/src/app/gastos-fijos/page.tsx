@@ -152,6 +152,8 @@ function GastosFijosPage() {
   // Montos parciales proyectados por compra marcada "Pagará" (doc_id → monto).
   // Solo hay entrada si el usuario fijó un monto menor al saldo; ausente = saldo completo.
   const [montosPagaraCompras, setMontosPagaraCompras] = useState<Record<string, number>>({})
+  // Semana elegida a mano para pagar una compra (0-3). Ausente = la del vencimiento.
+  const [semanasPagaraCompras, setSemanasPagaraCompras] = useState<Record<string, number>>({})
 
   const periodo = useMemo(() => monthToPeriod(periodoMes), [periodoMes])
 
@@ -316,7 +318,7 @@ function GastosFijosPage() {
   const loadMarcas = useCallback(async () => {
     const { data, error } = await supabase
       .from('flujo_pago_marcas')
-      .select('tipo, doc_id, monto')
+      .select('tipo, doc_id, monto, semana_idx')
       .eq('periodo', periodo)
     if (error) {
       showToast(`Error al cargar marcas del flujo: ${error.message}`, 'error')
@@ -324,18 +326,21 @@ function GastosFijosPage() {
     }
     const v = new Set<string>(), p = new Set<string>(), c = new Set<string>()
     const montos: Record<string, number> = {}
-    ;(data || []).forEach((m: { tipo: TipoMarca; doc_id: string; monto: number | null }) => {
+    const semanas: Record<string, number> = {}
+    ;(data || []).forEach((m: { tipo: TipoMarca; doc_id: string; monto: number | null; semana_idx: number | null }) => {
       if (m.tipo === 'venta') v.add(m.doc_id)
       else if (m.tipo === 'presupuesto') p.add(m.doc_id)
       else if (m.tipo === 'compra') {
         c.add(m.doc_id)
         if (m.monto != null) montos[m.doc_id] = Number(m.monto)
+        if (m.semana_idx != null) semanas[m.doc_id] = Number(m.semana_idx)
       }
     })
     setMarcasVentas(v)
     setMarcasPresupuestos(p)
     setMarcasCompras(c)
     setMontosPagaraCompras(montos)
+    setSemanasPagaraCompras(semanas)
   }, [periodo, showToast, supabase])
 
   useEffect(() => { loadMarcas() }, [loadMarcas])
@@ -349,9 +354,13 @@ function GastosFijosPage() {
       return next
     })
     apply(marked)
-    // Al desmarcar una compra se descarta también su monto parcial proyectado
+    // Al desmarcar una compra se descartan su monto parcial y su semana elegida
     if (tipo === 'compra' && !marked) {
       setMontosPagaraCompras(prev => {
+        if (!(id in prev)) return prev
+        const next = { ...prev }; delete next[id]; return next
+      })
+      setSemanasPagaraCompras(prev => {
         if (!(id in prev)) return prev
         const next = { ...prev }; delete next[id]; return next
       })
@@ -378,6 +387,11 @@ function GastosFijosPage() {
     })
     if (tipo === 'compra' && !marked) {
       setMontosPagaraCompras(prev => {
+        const next = { ...prev }
+        ids.forEach(id => { delete next[id] })
+        return next
+      })
+      setSemanasPagaraCompras(prev => {
         const next = { ...prev }
         ids.forEach(id => { delete next[id] })
         return next
@@ -410,6 +424,22 @@ function GastosFijosPage() {
     }
   }, [periodo, loadMarcas, showToast, supabase])
 
+  // Adelantar o atrasar el pago proyectado de una compra a otra semana del período.
+  // null = volver a la semana que corresponda por su fecha de vencimiento.
+  const setSemanaPagaraCompra = useCallback(async (id: string, semana: number | null) => {
+    setSemanasPagaraCompras(prev => {
+      const next = { ...prev }
+      if (semana == null) delete next[id]; else next[id] = semana
+      return next
+    })
+    const { error } = await supabase.from('flujo_pago_marcas')
+      .upsert({ periodo, tipo: 'compra', doc_id: id, semana_idx: semana }, { onConflict: 'periodo,tipo,doc_id' })
+    if (error) {
+      await loadMarcas()
+      showToast(`Error al guardar la semana de pago: ${error.message}`, 'error')
+    }
+  }, [periodo, loadMarcas, showToast, supabase])
+
   // ── Resumen del flujo de pago por semana ────────────────────────────────────
   const flujo = useMemo(() => {
     const dateObjs = semanaFechas.map(d => new Date(d + 'T00:00:00'))
@@ -432,7 +462,10 @@ function GastosFijosPage() {
       .map((r: any) => {
         const saldo = (r.saldo as number) || 0
         const m = montosPagaraCompras[r.id]
-        return { ...r, pagoProyectado: m != null ? Math.min(m, saldo) : saldo }
+        // Semana elegida a mano (adelantar/atrasar) o la que toca por vencimiento
+        const ov = semanasPagaraCompras[r.id]
+        const fridayIdx = ov != null && ov >= 0 && ov < dateObjs.length ? ov : r.fridayIdx
+        return { ...r, fridayIdx, pagoProyectado: m != null ? Math.min(m, saldo) : saldo }
       })
     const pagosCompras = dateObjs.map((_, i) =>
       comprasPagar.filter((r: any) => r.fridayIdx === i)
@@ -453,7 +486,7 @@ function GastosFijosPage() {
       pagosTarjetas[idx] += t.aPagar
     }
     return { cobrosVentas, cobrosPres, pagosCompras, comprasPagar, pagosTarjetas }
-  }, [semanaFechas, fechaResumen, facturasAll, presupuestosAll, comprasAll, marcasVentas, marcasPresupuestos, marcasCompras, montosPagaraCompras, tarjetas])
+  }, [semanaFechas, fechaResumen, facturasAll, presupuestosAll, comprasAll, marcasVentas, marcasPresupuestos, marcasCompras, montosPagaraCompras, semanasPagaraCompras, tarjetas])
 
   const flujoNetoSemana = SEMANAS.map((_, i) =>
     flujo.cobrosVentas[i] + flujo.cobrosPres[i] - flujo.pagosCompras[i] - flujo.pagosTarjetas[i] - totalesSemana[i])
@@ -701,6 +734,8 @@ function GastosFijosPage() {
                   onToggleManyPagara={(ids, marked) => toggleMarcaMany('compra', ids, marked)}
                   pagaraMontos={montosPagaraCompras}
                   onChangeMontoPagara={setMontoPagaraCompra}
+                  pagaraSemanas={semanasPagaraCompras}
+                  onChangeSemanaPagara={setSemanaPagaraCompra}
                   cutoffDate={fechaResumen}
                 />
               )}

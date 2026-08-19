@@ -25,6 +25,10 @@ export interface VencimientoSemanalComprasProps {
   pagaraMontos?: Record<string, number>
   /** Cambia el monto proyectado de una compra marcada. null = volver al saldo completo. */
   onChangeMontoPagara?: (id: string, monto: number | null) => void
+  /** Semana elegida a mano por compra (id → 0-3). Ausente = la que toca por vencimiento. */
+  pagaraSemanas?: Record<string, number>
+  /** Adelanta/atrasa el pago a otra semana. null = volver a la del vencimiento. */
+  onChangeSemanaPagara?: (id: string, semana: number | null) => void
   /** Fecha de corte: lo vencido antes de esta fecha cae en la primera semana >= corte. Default: hoy. */
   cutoffDate?: string
 }
@@ -76,7 +80,7 @@ function MontoPagaraInput({ saldo, value, onCommit }: {
 export default function VencimientoSemanalCompras({
   compras, weekDates: weekDatesProp, setWeekDates: setWeekDatesProp,
   pagaraSet: pagaraProp, onTogglePagara, onToggleManyPagara,
-  pagaraMontos, onChangeMontoPagara, cutoffDate,
+  pagaraMontos, onChangeMontoPagara, pagaraSemanas, onChangeSemanaPagara, cutoffDate,
 }: VencimientoSemanalComprasProps) {
   const [internalDates, setInternalDates] = useState<string[]>(() =>
     getNextFridays(4).map(d => d.toISOString().split('T')[0])
@@ -94,7 +98,19 @@ export default function VencimientoSemanalCompras({
 
   const compWeekDateObjs = compWeekDates.map(d => new Date(d + 'T00:00:00'))
   const cutoff = new Date((cutoffDate || new Date().toISOString().split('T')[0]) + 'T00:00:00')
-  const vencCompras = buildVencimientoSemanal(compras, compWeekDateObjs, 'vencimiento', cutoff)
+  // Una compra puede adelantarse o atrasarse a mano a otra semana del período:
+  // en ese caso manda la semana elegida, no la de su vencimiento.
+  const vencCompras = (() => {
+    const base = buildVencimientoSemanal(compras, compWeekDateObjs, 'vencimiento', cutoff)
+    if (!pagaraSemanas || Object.keys(pagaraSemanas).length === 0) return base
+    const rows = base.rows.map((r: any) => {
+      const ov = pagaraSemanas[r.id as string]
+      return ov != null && ov >= 0 && ov < compWeekDateObjs.length ? { ...r, fridayIdx: ov, semanaMovida: true } : r
+    })
+    const totals = compWeekDateObjs.map((_, i) =>
+      rows.filter((r: any) => r.fridayIdx === i).reduce((sum: number, r: any) => sum + (r.saldo || 0), 0))
+    return { rows, totals, grandTotal: totals.reduce((a: number, b: number) => a + b, 0) }
+  })()
 
   const compRows = vencCompras.rows.filter((r: any) => {
     const matchSearch = !compSearch ||
@@ -270,7 +286,8 @@ export default function VencimientoSemanalCompras({
                         <td key={i} className="table-cell text-right text-sm">
                           {c.fridayIdx === i
                             ? (
-                              <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>
+                              <span className={c.semanaMovida ? 'font-semibold text-amber-600' : i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}
+                                title={c.semanaMovida ? `Movida a mano a la semana ${i + 1} (vence ${formatDate(c.vencimiento)})` : undefined}>
                                 {formatMonto(c.saldo ?? c.total)}
                                 {(c.monto_pagado || 0) > 0 && (
                                   <span className="block text-[10px] font-normal text-gray-400">abonado {formatMonto(c.monto_pagado)}</span>
@@ -283,11 +300,25 @@ export default function VencimientoSemanalCompras({
                       <td className="table-cell text-right">
                         {isPagara ? (
                           onChangeMontoPagara ? (
-                            <MontoPagaraInput
-                              saldo={c.saldo ?? c.total ?? 0}
-                              value={pagaraMontos?.[c.id]}
-                              onCommit={v => onChangeMontoPagara(c.id, v)}
-                            />
+                            <div className="flex flex-col items-end gap-1">
+                              <MontoPagaraInput
+                                saldo={c.saldo ?? c.total ?? 0}
+                                value={pagaraMontos?.[c.id]}
+                                onCommit={v => onChangeMontoPagara(c.id, v)}
+                              />
+                              {onChangeSemanaPagara && (
+                                <select
+                                  value={pagaraSemanas?.[c.id] ?? ''}
+                                  onChange={e => onChangeSemanaPagara(c.id, e.target.value === '' ? null : parseInt(e.target.value))}
+                                  className={`text-[11px] border rounded px-1 py-0.5 bg-white focus:outline-none ${c.semanaMovida ? 'border-amber-400 text-amber-700 font-semibold' : 'border-gray-200 text-gray-500'}`}
+                                  title="Semana en la que se pagará (por defecto, la del vencimiento)">
+                                  <option value="">Semana por vencimiento</option>
+                                  {compWeekDateObjs.map((d, i) => (
+                                    <option key={i} value={i}>Pagar en semana {i + 1} ({formatDateObj(d)})</option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
                           ) : (
                             <span className="text-sm font-medium text-green-700">{formatMonto(montoPagara(c))}</span>
                           )
