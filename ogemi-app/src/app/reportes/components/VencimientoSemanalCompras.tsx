@@ -102,10 +102,12 @@ export default function VencimientoSemanalCompras({
   // en ese caso manda la semana elegida, no la de su vencimiento.
   const vencCompras = (() => {
     const base = buildVencimientoSemanal(compras, compWeekDateObjs, 'vencimiento', cutoff)
-    if (!pagaraSemanas || Object.keys(pagaraSemanas).length === 0) return base
+    // fridayIdxAuto = la semana que le toca por vencimiento (la que el selector
+    // muestra por defecto); fridayIdx = la efectiva, ya con la semana elegida a mano.
     const rows = base.rows.map((r: any) => {
-      const ov = pagaraSemanas[r.id as string]
-      return ov != null && ov >= 0 && ov < compWeekDateObjs.length ? { ...r, fridayIdx: ov, semanaMovida: true } : r
+      const ov = pagaraSemanas?.[r.id as string]
+      const movida = ov != null && ov >= 0 && ov < compWeekDateObjs.length && ov !== r.fridayIdx
+      return { ...r, fridayIdxAuto: r.fridayIdx, fridayIdx: movida ? ov : r.fridayIdx, semanaMovida: movida }
     })
     const totals = compWeekDateObjs.map((_, i) =>
       rows.filter((r: any) => r.fridayIdx === i).reduce((sum: number, r: any) => sum + (r.saldo || 0), 0))
@@ -308,13 +310,18 @@ export default function VencimientoSemanalCompras({
                               />
                               {onChangeSemanaPagara && (
                                 <select
-                                  value={pagaraSemanas?.[c.id] ?? ''}
-                                  onChange={e => onChangeSemanaPagara(c.id, e.target.value === '' ? null : parseInt(e.target.value))}
+                                  value={c.fridayIdx}
+                                  onChange={e => {
+                                    const idx = parseInt(e.target.value)
+                                    // Volver a la semana del vencimiento = automático (sin override)
+                                    onChangeSemanaPagara(c.id, idx === c.fridayIdxAuto ? null : idx)
+                                  }}
                                   className={`text-[11px] border rounded px-1 py-0.5 bg-white focus:outline-none ${c.semanaMovida ? 'border-amber-400 text-amber-700 font-semibold' : 'border-gray-200 text-gray-500'}`}
-                                  title="Semana en la que se pagará (por defecto, la del vencimiento)">
-                                  <option value="">Semana por vencimiento</option>
+                                  title="Semana en la que se pagará (por defecto, la que le toca por vencimiento)">
                                   {compWeekDateObjs.map((d, i) => (
-                                    <option key={i} value={i}>Pagar en semana {i + 1} ({formatDateObj(d)})</option>
+                                    <option key={i} value={i}>
+                                      Semana {i + 1} ({formatDateObj(d)}){i === c.fridayIdxAuto ? ' · vencimiento' : ''}
+                                    </option>
                                   ))}
                                 </select>
                               )}
