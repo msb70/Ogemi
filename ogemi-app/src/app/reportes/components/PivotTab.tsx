@@ -77,7 +77,7 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
             </div>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end print:hidden">
             <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
               <input type="checkbox" className="w-4 h-4 accent-brand-600 cursor-pointer"
                 checked={antMostrarTodas}

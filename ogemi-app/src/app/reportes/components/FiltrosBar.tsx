@@ -35,7 +35,7 @@ export default function FiltrosBar({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3 mb-4">
+    <div className="flex flex-wrap items-center gap-3 mb-4 print:hidden">
       {showSearch && (
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />

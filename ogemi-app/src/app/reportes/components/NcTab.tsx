@@ -20,7 +20,7 @@ export default function NcTab({
 }: NcTabProps) {
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
         <FiltrosBar {...{ search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }} />
         <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() => {
           const totalMonto = ncFiltradas.reduce((s, f) => s + Math.abs(f.total || 0), 0)

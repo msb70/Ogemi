@@ -47,7 +47,7 @@ export default function LibrosTab({
 
       {libroTab === 'venta' && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
             <FiltrosBar
               search={noopSearch} setSearch={noopSetSearch}
               fechaDesde={fechaDesde} setFechaDesde={setFechaDesde}
@@ -169,7 +169,7 @@ export default function LibrosTab({
 
       {libroTab === 'compra' && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
             <FiltrosBar
               search={noopSearch} setSearch={noopSetSearch}
               fechaDesde={fechaDesde} setFechaDesde={setFechaDesde}

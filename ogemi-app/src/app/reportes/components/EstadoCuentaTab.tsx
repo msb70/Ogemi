@@ -76,7 +76,7 @@ export function EstadoCuentaCliente({ cartera }: { cartera: CarteraVencida[] }) 
     // La clase estado-cuenta-print permite al CSS de impresión detectar esta vista
     // (oculta la línea "Período" del encabezado del PDF via :has)
     <div className="space-y-4 estado-cuenta-print">
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
         <select className="input w-72" value={cliente} onChange={e => setCliente(e.target.value)}>
           <option value="">Seleccionar cliente...</option>
           {clientes.map(c => <option key={c} value={c}>{c}</option>)}
@@ -282,7 +282,7 @@ export function MovimientoCliente({ facturas }: { facturas: any[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
         <div className="flex items-center gap-2 flex-wrap">
           <select className="input w-72" value={cliente} onChange={e => setCliente(e.target.value)}>
             <option value="">Seleccionar cliente...</option>

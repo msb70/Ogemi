@@ -285,7 +285,7 @@ export default function ComprasTab({
 
       {comprasTab === 'antiguedad' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
             <p className="text-sm font-semibold text-gray-700">Antigüedad de cartera por proveedor (saldos pendientes de pago)</p>
             <button className="btn-secondary flex items-center gap-2 text-sm py-1.5" onClick={() => {
               exportXLSX(`compras_antiguedad_${new Date().toISOString().split('T')[0]}.xlsx`, [
@@ -339,7 +339,7 @@ export default function ComprasTab({
             </div>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end print:hidden">
             <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
               <input type="checkbox" className="w-4 h-4 accent-brand-600 cursor-pointer"
                 checked={antMostrarTodas}

@@ -70,7 +70,7 @@ export default function PresupuestosTab({
 
       {presupuestosTab === 'listado' && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
             <FiltrosBar {...{ search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }} />
             <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
               <input type="checkbox" className="w-4 h-4 accent-brand-600 cursor-pointer"

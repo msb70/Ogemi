@@ -133,7 +133,7 @@ export default function BancoTab({
 
       {bancoTab === 'movimientos' && (
         <div className="space-y-3">
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap print:hidden">
             <select className="input text-sm py-1.5 max-w-[240px]" value={cuentaSeleccionada}
               onChange={e => setCuentaSeleccionada(e.target.value)}>
               {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>)}
@@ -220,7 +220,7 @@ export default function BancoTab({
       {bancoTab === 'flujo' && (
         <div className="space-y-4">
           {/* Filtros */}
-          <div className="card p-4 space-y-3">
+          <div className="card p-4 space-y-3 print:hidden">
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2">
                 <label className="text-xs text-gray-500">Desde</label>

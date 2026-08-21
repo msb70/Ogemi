@@ -256,7 +256,7 @@ export default function VentasTab({
               <span className="text-2xl font-bold text-brand-800">{formatMonto(totalCartera)}</span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 print:hidden">
             <span className="text-sm text-gray-500">Agrupar por:</span>
             <select
               className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-600 bg-white focus:outline-none focus:border-gray-400"
