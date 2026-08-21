@@ -260,7 +260,7 @@ export default function PresupuestosTab({
             let acc = 0
             return (
               <>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4 print:hidden">
                   <div className="card p-4">
                     <p className="text-xs font-semibold uppercase text-gray-500">Total presupuestos</p>
                     <p className="text-2xl font-bold text-gray-900">{totalCount.toLocaleString('es-PA')}</p>
@@ -301,7 +301,7 @@ export default function PresupuestosTab({
                         })}
                       </tbody>
                       {rows.length > 0 && (
-                        <tfoot>
+                        <tfoot className="print:hidden">
                           <tr className="bg-gray-50 border-t border-gray-200 font-bold">
                             <td className="px-3 py-2" colSpan={2}>Total</td>
                             <td className="px-3 py-2 text-right">{totalCount}</td>
@@ -314,7 +314,16 @@ export default function PresupuestosTab({
                     </table>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Totales al pie — solo en el PDF */}
+                <div className="hidden print:block">
+                  <table className="print-totales">
+                    <tbody>
+                      <tr><td>Total presupuestos</td><td>{totalCount.toLocaleString('es-PA')}</td></tr>
+                      <tr><td>Monto total</td><td>{formatMonto(totalMonto)}</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print:hidden">
                   <div className="card p-5">
                     <h3 className="text-sm font-semibold text-gray-700 mb-3">Top clientes</h3>
                     <ResponsiveContainer width="100%" height={320}>

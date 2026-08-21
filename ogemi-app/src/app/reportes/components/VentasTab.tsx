@@ -385,7 +385,7 @@ export default function VentasTab({
                         })}
                       </tbody>
                       {rows.length > 0 && (
-                        <tfoot>
+                        <tfoot className="print:hidden">
                           <tr className="bg-gray-50 border-t border-gray-200 font-bold">
                             <td className="px-3 py-2" colSpan={2}>Total</td>
                             <td className="px-3 py-2 text-right">{totalCount}</td>

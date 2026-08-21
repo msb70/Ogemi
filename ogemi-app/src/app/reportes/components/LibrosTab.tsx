@@ -82,7 +82,7 @@ export default function LibrosTab({
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 print:hidden">
             {[
               { label: 'Total ventas',      val: ventasFiltradas.reduce((s, f) => s + (f.total || 0), 0),              color: 'text-brand-700' },
               { label: 'Total NC',          val: ncFiltradas.reduce((s, f) => s + Math.abs(f.total || 0), 0),          color: 'text-amber-600' },
@@ -164,6 +164,17 @@ export default function LibrosTab({
               </tfoot>
             </table>
           </div>
+          {/* Totales al pie — solo en el PDF */}
+          <div className="hidden print:block">
+            <table className="print-totales">
+              <tbody>
+                <tr><td>Total ventas</td><td>{formatMonto(ventasFiltradas.reduce((s, f) => s + (f.total || 0), 0))}</td></tr>
+                <tr><td>Total NC</td><td>{formatMonto(ncFiltradas.reduce((s, f) => s + Math.abs(f.total || 0), 0))}</td></tr>
+                <tr><td>ITBMS recaudado</td><td>{formatMonto(ventasFiltradas.reduce((s, f) => s + (f.itbms || 0), 0))}</td></tr>
+                <tr><td>Neto (Ventas - NC)</td><td>{formatMonto(ventasFiltradas.reduce((s, f) => s + (f.total || 0), 0) - ncFiltradas.reduce((s, f) => s + Math.abs(f.total || 0), 0))}</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -202,7 +213,7 @@ export default function LibrosTab({
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 print:hidden">
             {[
               { label: 'Total compras',      val: libroCompraFiltrado.reduce((s, c) => s + (c.total || 0), 0),                         color: 'text-orange-600' },
               { label: 'ITBMS acreditable',  val: libroCompraFiltrado.reduce((s, c) => s + (c.itbms || 0), 0),                         color: 'text-purple-600' },
@@ -277,6 +288,17 @@ export default function LibrosTab({
                   <td className="table-cell" />
                 </tr>
               </tfoot>
+            </table>
+          </div>
+          {/* Totales al pie — solo en el PDF */}
+          <div className="hidden print:block">
+            <table className="print-totales">
+              <tbody>
+                <tr><td>Total compras</td><td>{formatMonto(libroCompraFiltrado.reduce((s, c) => s + (c.total || 0), 0))}</td></tr>
+                <tr><td>ITBMS acreditable</td><td>{formatMonto(libroCompraFiltrado.reduce((s, c) => s + (c.itbms || 0), 0))}</td></tr>
+                <tr><td>Pagadas</td><td>{formatMonto(libroCompraFiltrado.reduce((s, c) => s + (c.estado === 'pagada' ? (c.total || 0) : (c.monto_pagado || 0)), 0))}</td></tr>
+                <tr><td>Pendientes</td><td>{formatMonto(libroCompraFiltrado.reduce((s, c) => s + (c.estado === 'pendiente' ? (c.total || 0) - (c.monto_pagado || 0) : 0), 0))}</td></tr>
+              </tbody>
             </table>
           </div>
         </div>
