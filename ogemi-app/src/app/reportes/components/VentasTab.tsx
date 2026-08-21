@@ -180,7 +180,7 @@ export default function VentasTab({
                       <Fragment key={nombre}>
                         <tr className="bg-brand-50/40 border-t border-gray-200">
                           <td colSpan={4} className="table-cell font-semibold text-brand-800">
-                            {nombre} <span className="text-xs text-gray-400 font-normal">({fs.length} factura{fs.length === 1 ? '' : 's'})</span>
+                            {nombre} <span className="text-xs text-gray-400 font-normal print:hidden">({fs.length} factura{fs.length === 1 ? '' : 's'})</span>
                           </td>
                           <td className="table-cell text-right font-bold text-brand-800">
                             {formatMonto(fs.reduce((s, f) => s + (f.total || 0), 0))}
