@@ -430,6 +430,24 @@ function ReportesPage() {
             line-height: 1.25 !important;
           }
           #reporte-print .badge { padding: 0 4px !important; font-size: 8.5px !important; }
+          /* ── Listado (Ventas / Compras): totales al pie del PDF ── */
+          #reporte-print .print-totales {
+            margin-left: auto !important;
+            margin-top: 8px !important;
+            border-top: 2px solid #0f766e !important;
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          #reporte-print .print-totales td {
+            font-size: 12px !important;
+            font-weight: 700 !important;
+            padding: 3px 10px !important;
+            line-height: 1.35 !important;
+          }
+          #reporte-print .print-totales td:last-child {
+            text-align: right !important;
+            min-width: 120px !important;
+          }
           /* ── Estado de cuenta: PDF limpio (sin línea Período) y TOTALES más grandes ── */
           #reporte-print:has(.estado-cuenta-print) .print-periodo { display: none !important; }
           #reporte-print .estado-cuenta-totales td {

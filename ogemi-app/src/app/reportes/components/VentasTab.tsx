@@ -58,6 +58,12 @@ export default function VentasTab({
     (a, b) => (Number(b.numero_factura) || 0) - (Number(a.numero_factura) || 0)
   )
 
+  // Totales del listado (mismos cálculos que las tarjetas KPI; se imprimen al pie del PDF)
+  const totalFacturado = ventasFiltradas.reduce((s, f) => s + (f.total || 0), 0)
+  const totalCobrado = ventasFiltradas.reduce((s, f) => s + (f.estado === 'pagada' ? (f.total || 0) : ((f as any).monto_pagado || 0)), 0)
+  const totalPendiente = ventasFiltradas.reduce((s, f) => s + (f.estado === 'pendiente'
+    ? Math.max((f.total || 0) - ((f as any).retencion_monto || 0) - ((f as any).monto_pagado || 0), 0) : 0), 0)
+
   const filaVenta = (f: any) => (
     <tr key={f.id} className="hover:bg-gray-50">
       <td className="table-cell font-mono text-sm text-gray-500">#{f.numero_factura}</td>
@@ -77,7 +83,7 @@ export default function VentasTab({
   return (
     <div className="p-6 space-y-4">
       {/* En el PDF del Estado de cuenta el menú de sub-pestañas no se imprime */}
-      <div className={`flex gap-2 flex-wrap ${ventasTab === 'estado_cuenta' ? 'print:hidden' : ''}`}>
+      <div className={`flex gap-2 flex-wrap ${(ventasTab === 'estado_cuenta' || ventasTab === 'listado') ? 'print:hidden' : ''}`}>
         {[
           { key: 'listado',           label: 'Listado' },
           { key: 'cartera',           label: 'Cartera vencida' },
@@ -98,8 +104,8 @@ export default function VentasTab({
       </div>
 
       {ventasTab === 'listado' && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="space-y-3 listado-ventas-print">
+          <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
             <FiltrosBar {...{ search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }} />
             <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
               <input type="checkbox" className="w-4 h-4 accent-brand-600 cursor-pointer"
@@ -132,7 +138,7 @@ export default function VentasTab({
               <Download size={14} />Exportar Excel
             </button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 print:hidden">
             {[
               { label: 'Total facturado', val: ventasFiltradas.reduce((s, f) => s + (f.total || 0), 0), color: 'text-brand-700' },
               // Cobrado = cobradas completas + abonos de pendientes; Pendiente = saldo cobrable real
@@ -185,6 +191,17 @@ export default function VentasTab({
                       </Fragment>
                     ))
                 ) : ventasOrdenadas.map(filaVenta)}
+              </tbody>
+            </table>
+          </div>
+          {/* Totales al pie — solo en el PDF (en pantalla se ven las tarjetas de arriba) */}
+          <div className="hidden print:block">
+            <table className="print-totales">
+              <tbody>
+                <tr><td>Total facturado</td><td>{formatMonto(totalFacturado)}</td></tr>
+                <tr><td>Cobrado</td><td>{formatMonto(totalCobrado)}</td></tr>
+                <tr><td>Pendiente</td><td>{formatMonto(totalPendiente)}</td></tr>
+                <tr><td># Facturas</td><td>{ventasFiltradas.length}</td></tr>
               </tbody>
             </table>
           </div>

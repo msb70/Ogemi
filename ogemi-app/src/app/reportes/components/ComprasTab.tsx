@@ -34,6 +34,11 @@ export default function ComprasTab({
     a.fecha === b.fecha ? 0 : (a.fecha < b.fecha ? 1 : -1)
   )
 
+  // Totales del listado (mismos cálculos que las tarjetas KPI; se imprimen al pie del PDF)
+  const totalCompras = comprasFiltradas.reduce((s, c) => s + (c.total || 0), 0)
+  const totalPagado = comprasFiltradas.reduce((s, c) => s + (c.estado === 'pagada' ? (c.total || 0) : (c.monto_pagado || 0)), 0)
+  const totalPendienteCompras = comprasFiltradas.reduce((s, c) => s + (c.estado === 'pendiente' ? (c.total || 0) - (c.monto_pagado || 0) : 0), 0)
+
   const filaCompra = (c: any) => {
     const abonado = c.monto_pagado || 0
     const saldo = c.estado === 'pagada' ? 0 : (c.total || 0) - abonado
@@ -74,7 +79,7 @@ export default function ComprasTab({
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex gap-2 flex-wrap">
+      <div className={`flex gap-2 flex-wrap ${comprasTab === 'listado' ? 'print:hidden' : ''}`}>
         {[
           { key: 'listado',      label: 'Listado' },
           { key: 'cxp',          label: 'Cuentas por pagar' },
@@ -92,8 +97,8 @@ export default function ComprasTab({
       </div>
 
       {comprasTab === 'listado' && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="space-y-3 listado-compras-print">
+          <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
             <FiltrosBar {...{ search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }} />
             <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
               <input type="checkbox" className="w-4 h-4 accent-brand-600 cursor-pointer"
@@ -124,7 +129,7 @@ export default function ComprasTab({
               <Download size={14} />Exportar Excel
             </button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 print:hidden">
             {[
               { label: 'Total compras', val: comprasFiltradas.reduce((s, c) => s + (c.total || 0), 0), color: 'text-brand-700' },
               // Pagado = compras pagadas completas + abonos parciales de pendientes
@@ -185,6 +190,17 @@ export default function ComprasTab({
                       </Fragment>
                     ))
                 ) : comprasOrdenadas.map(filaCompra)}
+              </tbody>
+            </table>
+          </div>
+          {/* Totales al pie — solo en el PDF (en pantalla se ven las tarjetas de arriba) */}
+          <div className="hidden print:block">
+            <table className="print-totales">
+              <tbody>
+                <tr><td>Total compras</td><td>{formatMonto(totalCompras)}</td></tr>
+                <tr><td>Pagado (incluye abonos)</td><td>{formatMonto(totalPagado)}</td></tr>
+                <tr><td>Pendiente</td><td>{formatMonto(totalPendienteCompras)}</td></tr>
+                <tr><td># Compras</td><td>{comprasFiltradas.length}</td></tr>
               </tbody>
             </table>
           </div>
