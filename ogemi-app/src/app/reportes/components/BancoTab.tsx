@@ -104,7 +104,7 @@ export default function BancoTab({
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex gap-2 flex-wrap mb-2">
+      <div className="flex gap-2 flex-wrap mb-2 print:hidden">
         {[
           { key: 'movimientos', label: 'Movimientos' },
           { key: 'flujo',       label: 'Flujo de caja' },

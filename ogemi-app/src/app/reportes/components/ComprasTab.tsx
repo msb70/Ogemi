@@ -79,7 +79,7 @@ export default function ComprasTab({
 
   return (
     <div className="p-6 space-y-4">
-      <div className={`flex gap-2 flex-wrap ${comprasTab === 'listado' ? 'print:hidden' : ''}`}>
+      <div className="flex gap-2 flex-wrap print:hidden">
         {[
           { key: 'listado',      label: 'Listado' },
           { key: 'cxp',          label: 'Cuentas por pagar' },

@@ -52,7 +52,7 @@ export default function PresupuestosTab({
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap print:hidden">
         {[
           { key: 'listado',    label: 'Listado' },
           { key: 'cartera',    label: 'Cartera vencida' },

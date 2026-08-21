@@ -32,7 +32,7 @@ export default function PivotTab({ facturas, cartera, initialTab = 'semanal', hi
   return (
     <div className={hideTabs ? 'space-y-4' : 'p-6 space-y-4'}>
       {!hideTabs && (
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap print:hidden">
           {[
             { key: 'semanal',    label: 'Vencimientos por semana' },
             { key: 'antigüedad', label: 'Antigüedad de cartera' },

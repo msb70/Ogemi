@@ -31,7 +31,7 @@ export default function LibrosTab({
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap print:hidden">
         {[
           { key: 'venta',  label: 'Libro de Venta' },
           { key: 'compra', label: 'Libro de Compra' },
