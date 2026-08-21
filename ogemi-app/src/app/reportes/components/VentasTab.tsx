@@ -341,8 +341,8 @@ export default function VentasTab({
             let acc = 0
             return (
               <>
-                {/* KPIs */}
-                <div className="grid grid-cols-2 gap-4">
+                {/* KPIs — en el PDF no salen; los totales van al pie */}
+                <div className="grid grid-cols-2 gap-4 print:hidden">
                   <div className="card p-4">
                     <p className="text-xs font-semibold uppercase text-gray-500">Total facturas</p>
                     <p className="text-2xl font-bold text-gray-900">{totalCount.toLocaleString('es-PA')}</p>
@@ -399,8 +399,18 @@ export default function VentasTab({
                   </div>
                 </div>
 
-                {/* Gráficas */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Totales al pie — solo en el PDF */}
+                <div className="hidden print:block">
+                  <table className="print-totales">
+                    <tbody>
+                      <tr><td>Total facturas</td><td>{totalCount.toLocaleString('es-PA')}</td></tr>
+                      <tr><td>Monto total</td><td>{formatMonto(totalMonto)}</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Gráficas — solo en pantalla */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print:hidden">
                   <div className="card p-5">
                     <h3 className="text-sm font-semibold text-gray-700 mb-3">Top clientes</h3>
                     <ResponsiveContainer width="100%" height={320}>
