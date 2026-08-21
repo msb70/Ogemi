@@ -38,7 +38,7 @@ export default function NcTab({
           <Download size={14} />Exportar Excel
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4 print:hidden">
         <div className="card p-4">
           <p className="text-xs font-semibold uppercase text-gray-500">Número de notas de crédito</p>
           <p className="text-2xl font-bold text-gray-900">{ncFiltradas.length.toLocaleString('es-PA')}</p>
@@ -73,6 +73,15 @@ export default function NcTab({
                 <td className="table-cell text-right font-semibold text-amber-700">{formatMonto(Math.abs(f.total))}</td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+      {/* Totales al pie — solo en el PDF */}
+      <div className="hidden print:block">
+        <table className="print-totales">
+          <tbody>
+            <tr><td>Número de notas de crédito</td><td>{ncFiltradas.length.toLocaleString('es-PA')}</td></tr>
+            <tr><td>Total notas de crédito</td><td>{formatMonto(ncFiltradas.reduce((s, f) => s + Math.abs(f.total || 0), 0))}</td></tr>
           </tbody>
         </table>
       </div>
