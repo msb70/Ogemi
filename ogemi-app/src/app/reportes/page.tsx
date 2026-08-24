@@ -318,6 +318,7 @@ function ReportesPage() {
             <div style={{ flex: 1 }}>
               <div className="print-titulo-default" style={{ fontSize: 16, fontWeight: 700 }}>Reporte de {tabs.find(t => t.key === tab)?.label}</div>
               <div className="print-titulo-cxc" style={{ fontSize: 16, fontWeight: 700, display: 'none' }}>REPORTE CUENTAS POR COBRAR</div>
+              <div className="print-titulo-cxp" style={{ fontSize: 16, fontWeight: 700, display: 'none' }}>REPORTE CUENTAS POR PAGAR</div>
               <div style={{ fontSize: 11, color: '#6b7280' }}>Impresos Comerciales S.A. · Sistema Ogemi</div>
             </div>
             <div style={{ textAlign: 'right', fontSize: 10, color: '#6b7280' }}>
@@ -475,6 +476,24 @@ function ReportesPage() {
           #reporte-print .cartera-tabla .col-dias { text-align: center !important; }
           /* Subtotal de cada cliente al pie de su bloque */
           #reporte-print .cartera-tabla .cartera-subtotal td {
+            border-top: 1px solid #d1d5db !important;
+            font-weight: 700 !important;
+          }
+          /* ── Cuentas por pagar = REPORTE CUENTAS POR PAGAR (solo afecta al PDF) ── */
+          #reporte-print:has(.cxp-print) .print-titulo-default { display: none !important; }
+          #reporte-print:has(.cxp-print) .print-titulo-cxp { display: block !important; }
+          /* Orden en el PDF: listado → total de cartera → resumen por tramos */
+          #reporte-print .cxp-print { display: flex !important; flex-direction: column !important; }
+          #reporte-print .cxp-print .cxp-tabla  { order: 1 !important; }
+          #reporte-print .cxp-print .cxp-total  { order: 2 !important; margin-top: 6px !important; }
+          #reporte-print .cxp-print .cxp-tramos { order: 3 !important; margin-top: 6px !important; }
+          /* La columna Tramo no se imprime */
+          #reporte-print .cxp-tabla .col-tramo { display: none !important; }
+          /* Encabezados centrados sobre su información */
+          #reporte-print .cxp-tabla .col-venc,
+          #reporte-print .cxp-tabla .col-dias { text-align: center !important; }
+          /* Subtotal de cada proveedor al pie de su bloque */
+          #reporte-print .cxp-tabla .cxp-subtotal td {
             border-top: 1px solid #d1d5db !important;
             font-weight: 700 !important;
           }

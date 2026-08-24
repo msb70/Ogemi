@@ -208,8 +208,8 @@ export default function ComprasTab({
       )}
 
       {comprasTab === 'cxp' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="space-y-4 cxp-print">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 cxp-tramos">
             {TRAMOS.map(tramo => {
               const items = cxp.filter((c: any) => normTramo(c.tramo) === tramo)
               return (
@@ -224,15 +224,15 @@ export default function ComprasTab({
               )
             })}
           </div>
-          <div className="card overflow-hidden">
+          <div className="card overflow-hidden cxp-tabla">
             <table className="w-full">
               <thead><tr className="border-b border-gray-200">
-                <th className="table-header">Proveedor</th>
-                <th className="table-header">Concepto</th>
-                <th className="table-header">Vencimiento</th>
-                <th className="table-header text-right">Días</th>
-                <th className="table-header text-right">Saldo</th>
-                <th className="table-header">Tramo</th>
+                <th className="table-header col-proveedor">Proveedor</th>
+                <th className="table-header col-concepto">Concepto</th>
+                <th className="table-header col-venc">Vencimiento</th>
+                <th className="table-header text-right col-dias">Días</th>
+                <th className="table-header text-right col-saldo">Saldo</th>
+                <th className="table-header col-tramo">Tramo</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-100">
                 {cxp.length === 0 ? (
@@ -252,33 +252,53 @@ export default function ComprasTab({
                           <td colSpan={4} className="table-cell font-semibold text-brand-800">
                             {nombre} <span className="text-xs text-gray-400 font-normal">({items.length} compra{items.length === 1 ? '' : 's'})</span>
                           </td>
-                          <td className="table-cell text-right font-bold text-brand-800">
-                            {formatMonto(items.reduce((s: number, c: any) => s + (c.saldo_pendiente ?? c.total), 0))}
+                          {/* En el PDF el total del proveedor va al pie de su bloque, no en el encabezado */}
+                          <td className="table-cell text-right font-bold text-brand-800 col-saldo">
+                            <span className="print:hidden">
+                              {formatMonto(items.reduce((s: number, c: any) => s + (c.saldo_pendiente ?? c.total), 0))}
+                            </span>
                           </td>
-                          <td />
+                          <td className="col-tramo" />
                         </tr>
                         {items.map((c: any) => (
                           <tr key={c.id} className="hover:bg-gray-50">
-                            <td className="table-cell font-medium">{c.proveedor}</td>
-                            <td className="table-cell text-sm text-gray-500">{c.concepto || '—'}</td>
-                            <td className="table-cell text-sm text-gray-400">{formatDate(c.vencimiento)}</td>
-                            <td className="table-cell text-right">
+                            <td className="table-cell font-medium col-proveedor">{c.proveedor}</td>
+                            <td className="table-cell text-sm text-gray-500 col-concepto">{c.concepto || '—'}</td>
+                            <td className="table-cell text-sm text-gray-400 col-venc">{formatDate(c.vencimiento)}</td>
+                            <td className="table-cell text-right col-dias">
                               <span className={c.dias_vencida > 0 ? 'text-red-600 font-medium' : 'text-green-600'}>
                                 {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
                               </span>
                             </td>
-                            <td className="table-cell text-right font-semibold">{formatMonto(c.saldo_pendiente ?? c.total)}</td>
-                            <td className="table-cell">
+                            <td className="table-cell text-right font-semibold col-saldo">{formatMonto(c.saldo_pendiente ?? c.total)}</td>
+                            <td className="table-cell col-tramo">
                               <span className="badge text-xs" style={{ backgroundColor: TRAMO_COLORS_HEX[normTramo(c.tramo)] + '20', color: TRAMO_COLORS_HEX[normTramo(c.tramo)] }}>
                                 {TRAMO_LABELS[normTramo(c.tramo)]}
                               </span>
                             </td>
                           </tr>
                         ))}
+                        {/* Subtotal del proveedor al final de su última compra — solo en el PDF */}
+                        <tr className="hidden print:table-row cxp-subtotal">
+                          <td colSpan={4} className="table-cell text-right font-semibold text-brand-800">
+                            Total {nombre}
+                          </td>
+                          <td className="table-cell text-right font-bold text-brand-800 col-saldo">
+                            {formatMonto(items.reduce((s: number, c: any) => s + (c.saldo_pendiente ?? c.total), 0))}
+                          </td>
+                          <td className="col-tramo" />
+                        </tr>
                       </Fragment>
                     ))}
               </tbody>
             </table>
+          </div>
+          {/* Total de la cartera por pagar — solo en el PDF, va después del listado */}
+          <div className="hidden print:block card p-4 bg-brand-50 border-brand-200 cxp-total">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium text-brand-700">Total cartera pendiente</span>
+              <span className="text-2xl font-bold text-brand-800">{formatMonto(totalCarteraCxp)}</span>
+            </div>
           </div>
         </div>
       )}
