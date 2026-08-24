@@ -234,8 +234,8 @@ export default function VentasTab({
               .filter(([, items]) => items.length > 0)
 
         return (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="space-y-4 cartera-cxc">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 cartera-tramos">
             {TRAMOS_90.map(tramo => {
               const items = carteraNorm.filter((c: any) => c.tramo90 === tramo)
               return (
@@ -250,7 +250,7 @@ export default function VentasTab({
               )
             })}
           </div>
-          <div className="card p-4 bg-brand-50 border-brand-200">
+          <div className="card p-4 bg-brand-50 border-brand-200 cartera-total">
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-brand-700">Total cartera pendiente</span>
               <span className="text-2xl font-bold text-brand-800">{formatMonto(totalCartera)}</span>
@@ -266,17 +266,17 @@ export default function VentasTab({
               <option value="tramo">Antigüedad (30 / 60 / 90 días)</option>
             </select>
           </div>
-          <div className="card overflow-hidden">
+          <div className="card overflow-hidden cartera-tabla">
             <table className="w-full">
               <thead><tr className="border-b border-gray-200">
-                <th className="table-header">#Factura</th>
-                <th className="table-header">Fecha</th>
-                <th className="table-header">Cliente</th>
-                <th className="table-header">Vencimiento</th>
-                <th className="table-header text-right">Total</th>
-                <th className="table-header text-right">Saldo</th>
-                <th className="table-header text-right">Días</th>
-                <th className="table-header">Tramo</th>
+                <th className="table-header col-factura">#Factura</th>
+                <th className="table-header col-fecha">Fecha</th>
+                <th className="table-header col-cliente">Cliente</th>
+                <th className="table-header col-venc">Vencimiento</th>
+                <th className="table-header text-right col-total">Total</th>
+                <th className="table-header text-right col-saldo">Saldo</th>
+                <th className="table-header text-right col-dias">Días</th>
+                <th className="table-header col-tramo">Tramo</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-100">
                 {grupos.length === 0 ? (
@@ -287,31 +287,46 @@ export default function VentasTab({
                       <td colSpan={5} className="table-cell font-semibold text-brand-800">
                         {nombre} <span className="text-xs text-gray-400 font-normal">({items.length} factura{items.length === 1 ? '' : 's'})</span>
                       </td>
-                      <td className="table-cell text-right font-bold text-brand-800">
-                        {formatMonto(items.reduce((s: number, c: any) => s + saldoDe(c), 0))}
+                      {/* En el PDF el total del cliente va al pie de su bloque, no en el encabezado */}
+                      <td className="table-cell text-right font-bold text-brand-800 col-saldo">
+                        <span className="print:hidden">
+                          {formatMonto(items.reduce((s: number, c: any) => s + saldoDe(c), 0))}
+                        </span>
                       </td>
-                      <td colSpan={2} />
+                      <td className="col-dias" />
+                      <td className="col-tramo" />
                     </tr>
                     {items.map((c: any) => (
                       <tr key={c.id} className="hover:bg-gray-50">
-                        <td className="table-cell font-mono">#{c.numero_factura}</td>
-                        <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha)}</td>
-                        <td className="table-cell max-w-[200px]"><span className="truncate block">{c.cliente}</span></td>
-                        <td className="table-cell text-sm text-gray-500">{formatDate(c.fecha_pago)}</td>
-                        <td className="table-cell text-right">{formatMonto(c.total)}</td>
-                        <td className="table-cell text-right font-semibold text-orange-600">{formatMonto(saldoDe(c))}</td>
-                        <td className="table-cell text-right">
+                        <td className="table-cell font-mono col-factura">#{c.numero_factura}</td>
+                        <td className="table-cell text-sm text-gray-500 col-fecha">{formatDate(c.fecha)}</td>
+                        <td className="table-cell max-w-[200px] col-cliente"><span className="truncate block">{c.cliente}</span></td>
+                        <td className="table-cell text-sm text-gray-500 col-venc">{formatDate(c.fecha_pago)}</td>
+                        <td className="table-cell text-right col-total">{formatMonto(c.total)}</td>
+                        <td className="table-cell text-right font-semibold text-orange-600 col-saldo">{formatMonto(saldoDe(c))}</td>
+                        <td className="table-cell text-right col-dias">
                           <span className={c.dias_vencida > 0 ? 'text-red-600 font-medium' : 'text-green-600'}>
                             {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
                           </span>
                         </td>
-                        <td className="table-cell">
+                        <td className="table-cell col-tramo">
                           <span className="badge text-xs" style={{ backgroundColor: TRAMO90_COLORS[c.tramo90] + '20', color: TRAMO90_COLORS[c.tramo90] }}>
                             {TRAMO90_LABELS[c.tramo90]}
                           </span>
                         </td>
                       </tr>
                     ))}
+                    {/* Subtotal del cliente al final de su última factura — solo en el PDF */}
+                    <tr className="hidden print:table-row cartera-subtotal">
+                      <td colSpan={5} className="table-cell text-right font-semibold text-brand-800">
+                        Total {nombre}
+                      </td>
+                      <td className="table-cell text-right font-bold text-brand-800 col-saldo">
+                        {formatMonto(items.reduce((s: number, c: any) => s + saldoDe(c), 0))}
+                      </td>
+                      <td className="col-dias" />
+                      <td className="col-tramo" />
+                    </tr>
                   </Fragment>
                 ))}
               </tbody>

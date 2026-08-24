@@ -316,7 +316,8 @@ function ReportesPage() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.jpeg" alt="Ogemi" style={{ width: 48, height: 48, objectFit: 'contain' }} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>Reporte de {tabs.find(t => t.key === tab)?.label}</div>
+              <div className="print-titulo-default" style={{ fontSize: 16, fontWeight: 700 }}>Reporte de {tabs.find(t => t.key === tab)?.label}</div>
+              <div className="print-titulo-cxc" style={{ fontSize: 16, fontWeight: 700, display: 'none' }}>REPORTE CUENTAS POR COBRAR</div>
               <div style={{ fontSize: 11, color: '#6b7280' }}>Impresos Comerciales S.A. · Sistema Ogemi</div>
             </div>
             <div style={{ textAlign: 'right', fontSize: 10, color: '#6b7280' }}>
@@ -455,6 +456,27 @@ function ReportesPage() {
             font-weight: 700 !important;
             padding: 6px 6px !important;
             line-height: 1.3 !important;
+          }
+          /* ── Cartera vencida = REPORTE CUENTAS POR COBRAR (solo afecta al PDF) ── */
+          /* Título propio en vez de "Reporte de Ventas" */
+          #reporte-print:has(.cartera-cxc) .print-titulo-default { display: none !important; }
+          #reporte-print:has(.cartera-cxc) .print-titulo-cxc { display: block !important; }
+          /* Orden en el PDF: listado → total de cartera → resumen por tramos */
+          #reporte-print .cartera-cxc { display: flex !important; flex-direction: column !important; }
+          #reporte-print .cartera-cxc .cartera-tabla  { order: 1 !important; }
+          #reporte-print .cartera-cxc .cartera-total  { order: 2 !important; margin-top: 6px !important; }
+          #reporte-print .cartera-cxc .cartera-tramos { order: 3 !important; margin-top: 6px !important; }
+          /* La columna Tramo no se imprime */
+          #reporte-print .cartera-tabla .col-tramo { display: none !important; }
+          /* Encabezados centrados sobre su información */
+          #reporte-print .cartera-tabla .col-factura,
+          #reporte-print .cartera-tabla .col-fecha,
+          #reporte-print .cartera-tabla .col-venc,
+          #reporte-print .cartera-tabla .col-dias { text-align: center !important; }
+          /* Subtotal de cada cliente al pie de su bloque */
+          #reporte-print .cartera-tabla .cartera-subtotal td {
+            border-top: 1px solid #d1d5db !important;
+            font-weight: 700 !important;
           }
           @page { margin: 10mm; }
         }
