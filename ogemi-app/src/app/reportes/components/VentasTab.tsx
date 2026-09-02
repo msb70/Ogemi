@@ -26,6 +26,23 @@ const TRAMO90_COLORS: Record<string, string> = {
 }
 const normTramo = (t: string) => (t === '91-120' || t === '+120') ? '+90' : t
 
+// Tramos SOLO para el PDF: antigüedad contada desde la EMISIÓN de la factura (no desde el vencimiento)
+const TRAMOS_EMISION = ['0-30', '31-60', '61-90', '+90'] as const
+const TRAMO_EMISION_LABELS: Record<string, string> = {
+  '0-30': '0 a 30 días', '31-60': '31 a 60 días', '61-90': '61 a 90 días', '+90': 'Más de 90 días',
+}
+const TRAMO_EMISION_COLORS: Record<string, string> = {
+  '0-30': '#22c55e', '31-60': '#facc15', '61-90': '#fb923c', '+90': '#b91c1c',
+}
+const diasDesdeEmision = (fecha: string | null | undefined) => {
+  if (!fecha) return 0
+  const [y, m, d] = String(fecha).slice(0, 10).split('-').map(Number)
+  const emision = new Date(y, (m || 1) - 1, d || 1)
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
+  return Math.max(0, Math.floor((hoy.getTime() - emision.getTime()) / 86400000))
+}
+const tramoEmision = (dias: number) => dias <= 30 ? '0-30' : dias <= 60 ? '31-60' : dias <= 90 ? '61-90' : '+90'
+
 type VentasSubTab =
   | 'listado'
   | 'cartera'
@@ -235,7 +252,7 @@ export default function VentasTab({
 
         return (
         <div className="space-y-4 cartera-cxc">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 cartera-tramos">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 print:hidden">
             {TRAMOS_90.map(tramo => {
               const items = carteraNorm.filter((c: any) => c.tramo90 === tramo)
               return (
@@ -243,6 +260,22 @@ export default function VentasTab({
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-3 h-3 rounded-full" style={{ background: TRAMO90_COLORS[tramo] }} />
                     <span className="text-xs font-medium text-gray-600">{TRAMO90_LABELS[tramo]}</span>
+                  </div>
+                  <p className="text-lg font-bold">{formatMonto(items.reduce((s: number, c: any) => s + saldoDe(c), 0))}</p>
+                  <p className="text-xs text-gray-400">{items.length} facturas</p>
+                </div>
+              )
+            })}
+          </div>
+          {/* Solo PDF: cuadro de antigüedad contada desde la emisión de la factura */}
+          <div className="hidden print:grid grid-cols-4 gap-3 cartera-tramos">
+            {TRAMOS_EMISION.map(tramo => {
+              const items = carteraNorm.filter((c: any) => tramoEmision(diasDesdeEmision(c.fecha)) === tramo)
+              return (
+                <div key={tramo} className="card p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-3 h-3 rounded-full" style={{ background: TRAMO_EMISION_COLORS[tramo] }} />
+                    <span className="text-xs font-medium text-gray-600">{TRAMO_EMISION_LABELS[tramo]}</span>
                   </div>
                   <p className="text-lg font-bold">{formatMonto(items.reduce((s: number, c: any) => s + saldoDe(c), 0))}</p>
                   <p className="text-xs text-gray-400">{items.length} facturas</p>
@@ -285,7 +318,7 @@ export default function VentasTab({
                   <Fragment key={nombre}>
                     <tr className="bg-brand-50/40 border-t border-gray-200">
                       <td colSpan={5} className="table-cell font-semibold text-brand-800">
-                        {nombre} <span className="text-xs text-gray-400 font-normal">({items.length} factura{items.length === 1 ? '' : 's'})</span>
+                        {nombre} <span className="text-xs text-gray-400 font-normal print:hidden">({items.length} factura{items.length === 1 ? '' : 's'})</span>
                       </td>
                       {/* En el PDF el total del cliente va al pie de su bloque, no en el encabezado */}
                       <td className="table-cell text-right font-bold text-brand-800 col-saldo">
@@ -318,12 +351,13 @@ export default function VentasTab({
                     ))}
                     {/* Subtotal del cliente al final de su última factura — solo en el PDF */}
                     <tr className="hidden print:table-row cartera-subtotal">
-                      <td colSpan={5} className="table-cell text-right font-semibold text-brand-800">
+                      <td colSpan={4} className="table-cell text-right font-semibold text-brand-800">
                         Total {nombre}
                       </td>
-                      <td className="table-cell text-right font-bold text-brand-800 col-saldo">
+                      <td className="table-cell text-right font-bold text-brand-800 col-total">
                         {formatMonto(items.reduce((s: number, c: any) => s + saldoDe(c), 0))}
                       </td>
+                      <td className="col-saldo" />
                       <td className="col-dias" />
                       <td className="col-tramo" />
                     </tr>

@@ -467,8 +467,9 @@ function ReportesPage() {
           #reporte-print .cartera-cxc .cartera-tabla  { order: 1 !important; }
           #reporte-print .cartera-cxc .cartera-total  { order: 2 !important; margin-top: 6px !important; }
           #reporte-print .cartera-cxc .cartera-tramos { order: 3 !important; margin-top: 6px !important; }
-          /* La columna Tramo no se imprime */
-          #reporte-print .cartera-tabla .col-tramo { display: none !important; }
+          /* Las columnas Tramo y Saldo no se imprimen (el saldo del cliente va en su subtotal) */
+          #reporte-print .cartera-tabla .col-tramo,
+          #reporte-print .cartera-tabla .col-saldo { display: none !important; }
           /* Encabezados centrados sobre su información */
           #reporte-print .cartera-tabla .col-factura,
           #reporte-print .cartera-tabla .col-fecha,
