@@ -17,17 +17,18 @@ export interface VencimientoSemanalVentasProps {
   /** Fechas controladas (ej. las semanas del Flujo de Pago). Si se omiten, usa los próximos 4 viernes. */
   weekDates?: string[]
   setWeekDates?: (dates: string[]) => void
-  /** Marcas "No pagará" controladas (persistidas por el padre). Si se omiten, estado local. */
-  noPagaraSet?: Set<string>
-  onToggleNoPagara?: (id: string, marked: boolean) => void
-  onToggleManyNoPagara?: (ids: string[], marked: boolean) => void
+  /** Marcas "Pagarán" controladas (persistidas por el padre). Si se omiten, estado local.
+   *  Marcada = se espera que SÍ pague; solo lo marcado suma al probable pago. */
+  pagaraSet?: Set<string>
+  onTogglePagara?: (id: string, marked: boolean) => void
+  onToggleManyPagara?: (ids: string[], marked: boolean) => void
   /** Fecha de corte: lo vencido antes de esta fecha cae en la primera semana >= corte. Default: hoy. */
   cutoffDate?: string
 }
 
 export default function VencimientoSemanalVentas({
   facturas, weekDates: weekDatesProp, setWeekDates: setWeekDatesProp,
-  noPagaraSet: noPagaraProp, onToggleNoPagara, onToggleManyNoPagara, cutoffDate,
+  pagaraSet: pagaraProp, onTogglePagara, onToggleManyPagara, cutoffDate,
 }: VencimientoSemanalVentasProps) {
   const [internalDates, setInternalDates] = useState<string[]>(() =>
     getNextFridays(4).map(d => d.toISOString().split('T')[0])
@@ -36,11 +37,11 @@ export default function VencimientoSemanalVentas({
   const setWeekDates = setWeekDatesProp ?? setInternalDates
   const [viernesSearch, setViernesSearch] = useState('')
   const [semanaFilter, setSemanaFilter] = useState<string>('all')
-  const [internalNoPagara, setInternalNoPagara] = useState<Set<string>>(new Set())
-  const noPagaraSet = noPagaraProp ?? internalNoPagara
-  const toggleNoPagara = (id: string, marked: boolean) => {
-    if (onToggleNoPagara) { onToggleNoPagara(id, marked); return }
-    setInternalNoPagara(prev => { const next = new Set(prev); marked ? next.add(id) : next.delete(id); return next })
+  const [internalPagara, setInternalPagara] = useState<Set<string>>(new Set())
+  const pagaraSet = pagaraProp ?? internalPagara
+  const togglePagara = (id: string, marked: boolean) => {
+    if (onTogglePagara) { onTogglePagara(id, marked); return }
+    setInternalPagara(prev => { const next = new Set(prev); marked ? next.add(id) : next.delete(id); return next })
   }
 
   const weekDateObjs = weekDates.map(d => new Date(d + 'T00:00:00'))
@@ -76,12 +77,12 @@ export default function VencimientoSemanalVentas({
   })()
 
   // Marcar/desmarcar todas las filas visibles (filtradas)
-  const allMarked = viernesRows.length > 0 && viernesRows.every((r: any) => noPagaraSet.has(r.id))
+  const allMarked = viernesRows.length > 0 && viernesRows.every((r: any) => pagaraSet.has(r.id))
   const toggleAll = (marked: boolean) => {
     const ids = viernesRows.map((r: any) => r.id as string)
-    if (onToggleManyNoPagara) { onToggleManyNoPagara(ids, marked); return }
-    if (onToggleNoPagara) { ids.forEach(id => onToggleNoPagara(id, marked)); return }
-    setInternalNoPagara(prev => {
+    if (onToggleManyPagara) { onToggleManyPagara(ids, marked); return }
+    if (onTogglePagara) { ids.forEach(id => onTogglePagara(id, marked)); return }
+    setInternalPagara(prev => {
       const next = new Set(prev)
       ids.forEach(id => marked ? next.add(id) : next.delete(id))
       return next
@@ -89,11 +90,11 @@ export default function VencimientoSemanalVentas({
   }
 
   const totProbable = weekDateObjs.map((_, i) =>
-    vencViernes.rows.filter((r: any) => r.fridayIdx === i && !noPagaraSet.has(r.id))
+    vencViernes.rows.filter((r: any) => r.fridayIdx === i && pagaraSet.has(r.id))
       .reduce((s: number, r: any) => s + (r.saldo || 0), 0)
   )
   const totNoPaga = weekDateObjs.map((_, i) =>
-    vencViernes.rows.filter((r: any) => r.fridayIdx === i && noPagaraSet.has(r.id))
+    vencViernes.rows.filter((r: any) => r.fridayIdx === i && !pagaraSet.has(r.id))
       .reduce((s: number, r: any) => s + (r.saldo || 0), 0)
   )
   const grandProbable = totProbable.reduce((s, t) => s + t, 0)
@@ -137,7 +138,7 @@ export default function VencimientoSemanalVentas({
               <p className={`text-lg font-bold ${c.text}`}>{formatMonto(totProbable[i])}</p>
               {noPaga > 0 && (
                 <p className="text-[11px] text-red-500 mt-0.5">
-                  No pagará: −{formatMonto(noPaga)} · bruto {formatMonto(vencViernes.totals[i])}
+                  Sin marcar: −{formatMonto(noPaga)} · bruto {formatMonto(vencViernes.totals[i])}
                 </p>
               )}
               <p className="text-xs text-gray-400 mt-1">{cnt} {cnt === 1 ? 'factura' : 'facturas'}</p>
@@ -152,11 +153,11 @@ export default function VencimientoSemanalVentas({
           <span className="text-2xl font-bold text-brand-900">{formatMonto(vencViernes.grandTotal)}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-xs text-green-600 font-medium">↳ Probable pago</span>
+          <span className="text-xs text-green-600 font-medium">↳ Pagarán (marcadas)</span>
           <span className="text-sm font-bold text-green-700">{formatMonto(grandProbable)}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-xs text-red-500 font-medium">↳ No pagará</span>
+          <span className="text-xs text-red-500 font-medium">↳ Sin marcar (no pagarán)</span>
           <span className="text-sm font-bold text-red-600">{formatMonto(grandNoPaga)}</span>
         </div>
       </div>
@@ -180,11 +181,11 @@ export default function VencimientoSemanalVentas({
                 ))}
                 <th className="table-header text-center min-w-[60px] text-[11px]">
                   <div className="flex flex-col items-center gap-1">
-                    <span>No<br />Pagará</span>
+                    <span>Pagarán</span>
                     <input type="checkbox" checked={allMarked}
                       onChange={e => toggleAll(e.target.checked)}
-                      className="w-4 h-4 accent-red-600 cursor-pointer"
-                      title="Marcar/desmarcar todas como No Pagará" />
+                      className="w-4 h-4 accent-green-600 cursor-pointer"
+                      title="Marcar/desmarcar todas como Pagarán" />
                   </div>
                 </th>
               </tr>
@@ -198,10 +199,10 @@ export default function VencimientoSemanalVentas({
                   </td>
                 </tr>,
                 ...g.rows.map((f: any) => {
-                  const isNoPaga = noPagaraSet.has(f.id)
+                  const isPagara = pagaraSet.has(f.id)
                   return (
-                    <tr key={f.id} className={`hover:bg-gray-50 transition-opacity ${isNoPaga ? 'opacity-50 bg-red-50/40' : ''}`}>
-                      <td className={`table-cell sticky left-0 z-10 max-w-[220px] ${isNoPaga ? 'bg-red-50' : 'bg-white'}`}>
+                    <tr key={f.id} className={`hover:bg-gray-50 transition-colors ${isPagara ? 'bg-green-50/50' : ''}`}>
+                      <td className={`table-cell sticky left-0 z-10 max-w-[220px] ${isPagara ? 'bg-green-50' : 'bg-white'}`}>
                         <span className="truncate block text-sm">{f.clientes?.nombre || '—'}</span>
                       </td>
                       <td className="table-cell text-center font-mono text-sm text-gray-500">#{f.numero_factura}</td>
@@ -222,9 +223,9 @@ export default function VencimientoSemanalVentas({
                         </td>
                       ))}
                       <td className="table-cell text-center">
-                        <input type="checkbox" checked={isNoPaga}
-                          onChange={e => toggleNoPagara(f.id, e.target.checked)}
-                          className="w-4 h-4 accent-red-600 cursor-pointer" title="Marcar como No Pagará" />
+                        <input type="checkbox" checked={isPagara}
+                          onChange={e => togglePagara(f.id, e.target.checked)}
+                          className="w-4 h-4 accent-green-600 cursor-pointer" title="Marcar como Pagarán" />
                       </td>
                     </tr>
                   )
@@ -247,14 +248,14 @@ export default function VencimientoSemanalVentas({
                 <td className="table-cell" />
               </tr>
               <tr className="bg-green-50 text-xs font-semibold">
-                <td colSpan={4} className="table-cell text-right sticky left-0 bg-green-50 z-10 text-green-700">↳ Probable Pago</td>
+                <td colSpan={4} className="table-cell text-right sticky left-0 bg-green-50 z-10 text-green-700">↳ Pagarán (marcadas)</td>
                 {totProbable.map((t, i) => (
                   <td key={i} className="table-cell text-right text-green-700">{t > 0 ? formatMonto(t) : '—'}</td>
                 ))}
                 <td className="table-cell" />
               </tr>
               <tr className="bg-red-50 text-xs font-semibold">
-                <td colSpan={4} className="table-cell text-right sticky left-0 bg-red-50 z-10 text-red-600">↳ No Pagará</td>
+                <td colSpan={4} className="table-cell text-right sticky left-0 bg-red-50 z-10 text-red-600">↳ Sin marcar</td>
                 {totNoPaga.map((t, i) => (
                   <td key={i} className="table-cell text-right text-red-600">{t > 0 ? formatMonto(t) : '—'}</td>
                 ))}

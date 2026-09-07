@@ -143,7 +143,7 @@ function GastosFijosPage() {
   const [presupuestosAll, setPresupuestosAll] = useState<any[]>([])
   const [comprasAll, setComprasAll] = useState<any[]>([])
 
-  // Marcas persistidas por período: venta/presupuesto = "No pagará"; compra = "Pagará"
+  // Marcas persistidas por período: venta/presupuesto = "Pagarán" (solo lo marcado suma); compra = "Pagará"
   const [marcasVentas, setMarcasVentas] = useState<Set<string>>(new Set())
   const [marcasPresupuestos, setMarcasPresupuestos] = useState<Set<string>>(new Set())
   const [marcasCompras, setMarcasCompras] = useState<Set<string>>(new Set())
@@ -190,8 +190,45 @@ function GastosFijosPage() {
       return
     }
 
+    let rows: Pick<GastoMonto, 'gasto_fijo_id' | 'semana' | 'monto'>[] = (data || []) as GastoMonto[]
+
+    // Período sin montos: se arrastran los del último período que sí tenga
+    // (el usuario solo ajusta lo que cambie mes a mes). Se persisten para que
+    // el flujo y los KPIs los tomen igual que si se hubieran escrito a mano.
+    // Solo para el mes en curso o futuros: no se inventan montos en períodos históricos.
+    if (rows.length === 0 && periodo >= monthToPeriod(currentMonth())) {
+      const { data: prev } = await supabase
+        .from('gastos_fijos_montos')
+        .select('periodo')
+        .lt('periodo', periodo)
+        .order('periodo', { ascending: false })
+        .limit(1)
+      const periodoPrev = prev?.[0]?.periodo as string | undefined
+      if (periodoPrev) {
+        const { data: prevRows } = await supabase
+          .from('gastos_fijos_montos')
+          .select('*')
+          .eq('periodo', periodoPrev)
+        const copia = ((prevRows || []) as GastoMonto[])
+          .filter(r => r.semana >= 1 && r.semana <= 4)
+          .map(r => ({ gasto_fijo_id: r.gasto_fijo_id, periodo, semana: r.semana, monto: r.monto }))
+        if (copia.length > 0) {
+          const { error: copyError } = await supabase
+            .from('gastos_fijos_montos')
+            .upsert(copia, { onConflict: 'gasto_fijo_id,periodo,semana' })
+          if (copyError) {
+            // Sin permiso de edición: se muestran igual, pero no quedan guardados
+            showToast(`Montos del período anterior mostrados sin guardar: ${copyError.message}`, 'error')
+          } else {
+            showToast(`Gastos fijos copiados de ${periodoPrev.slice(0, 7)}. Ajusta solo lo que cambie.`, 'success')
+          }
+          rows = copia
+        }
+      }
+    }
+
     const next: Record<string, MontosSemana> = {}
-    ;((data || []) as GastoMonto[]).forEach(row => {
+    rows.forEach(row => {
       if (!next[row.gasto_fijo_id]) next[row.gasto_fijo_id] = emptyMontos()
       if (row.semana >= 1 && row.semana <= 4) {
         next[row.gasto_fijo_id][row.semana as Semana] = String(row.monto ?? '')
@@ -435,10 +472,10 @@ function GastosFijosPage() {
     const vencComp = buildVencimientoSemanal(comprasAll, dateObjs, 'vencimiento', cutoff)
 
     const cobrosVentas = dateObjs.map((_, i) =>
-      vencVentas.rows.filter((r: any) => r.fridayIdx === i && !marcasVentas.has(r.id))
+      vencVentas.rows.filter((r: any) => r.fridayIdx === i && marcasVentas.has(r.id))
         .reduce((s: number, r: any) => s + ((r.saldo as number) || 0), 0))
     const cobrosPres = dateObjs.map((_, i) =>
-      vencPres.rows.filter((r: any) => r.fridayIdx === i && !marcasPresupuestos.has(r.id))
+      vencPres.rows.filter((r: any) => r.fridayIdx === i && marcasPresupuestos.has(r.id))
         .reduce((s: number, r: any) => s + (r.saldo || 0), 0))
     // Compras marcadas "Pagará": el monto proyectado es el parcial fijado por el
     // usuario (si existe) o el saldo completo. El flujo usa ese monto proyectado.
@@ -465,6 +502,24 @@ function GastosFijosPage() {
     return { cobrosVentas, cobrosPres, pagosCompras, comprasPagar, semanaCorteIdx }
   }, [semanaFechas, fechaResumen, facturasAll, presupuestosAll, comprasAll, marcasVentas, marcasPresupuestos, marcasCompras, montosPagaraCompras, semanasPagaraCompras])
 
+  // Detalle de compras a pagar agrupado por proveedor: N facturas, monto por semana y total
+  const comprasPagarPorProveedor = useMemo(() => {
+    const m = new Map<string, { nombre: string; count: number; semanas: number[]; countSemanas: number[]; total: number }>()
+    flujo.comprasPagar.forEach((c: any) => {
+      const nombre = c.proveedores?.nombre || '—'
+      if (!m.has(nombre)) m.set(nombre, { nombre, count: 0, semanas: SEMANAS.map(() => 0), countSemanas: SEMANAS.map(() => 0), total: 0 })
+      const g = m.get(nombre)!
+      const monto = c.pagoProyectado || 0
+      g.count += 1
+      g.total += monto
+      if (c.fridayIdx >= 0 && c.fridayIdx < SEMANAS.length) {
+        g.semanas[c.fridayIdx] += monto
+        g.countSemanas[c.fridayIdx] += 1
+      }
+    })
+    return Array.from(m.values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
+  }, [flujo.comprasPagar])
+
   const flujoNetoSemana = SEMANAS.map((_, i) =>
     flujo.cobrosVentas[i] + flujo.cobrosPres[i] - flujo.pagosCompras[i] - totalesSemana[i])
   const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0)
@@ -484,7 +539,7 @@ function GastosFijosPage() {
   // KPIs del flujo de pago
   const cobrosVentasTotal = sum(flujo.cobrosVentas)
   const cobrosPresTotal = sum(flujo.cobrosPres)
-  const cxcProbable = cobrosVentasTotal + cobrosPresTotal           // ventas + presupuestos no marcados "No pagará"
+  const cxcProbable = cobrosVentasTotal + cobrosPresTotal           // ventas + presupuestos marcados "Pagarán"
   const comprasAPagarTotal = sum(flujo.pagosCompras)                // compras marcadas "Pagará"
   const totalCxCBancos = cxcProbable + saldoBancos
   const disponibleFlujo = totalCxCBancos - totalGastos - comprasAPagarTotal
@@ -695,9 +750,9 @@ function GastosFijosPage() {
                   facturas={facturasAll}
                   weekDates={semanaFechas}
                   setWeekDates={setSemanaFechasPersist}
-                  noPagaraSet={marcasVentas}
-                  onToggleNoPagara={(id, marked) => toggleMarca('venta', id, marked)}
-                  onToggleManyNoPagara={(ids, marked) => toggleMarcaMany('venta', ids, marked)}
+                  pagaraSet={marcasVentas}
+                  onTogglePagara={(id, marked) => toggleMarca('venta', id, marked)}
+                  onToggleManyPagara={(ids, marked) => toggleMarcaMany('venta', ids, marked)}
                   cutoffDate={fechaResumen}
                 />
               )}
@@ -706,9 +761,9 @@ function GastosFijosPage() {
                   presupuestos={presupuestosAll}
                   weekDates={semanaFechas}
                   setWeekDates={setSemanaFechasPersist}
-                  noPagaraSet={marcasPresupuestos}
-                  onToggleNoPagara={(id, marked) => toggleMarca('presupuesto', id, marked)}
-                  onToggleManyNoPagara={(ids, marked) => toggleMarcaMany('presupuesto', ids, marked)}
+                  pagaraSet={marcasPresupuestos}
+                  onTogglePagara={(id, marked) => toggleMarca('presupuesto', id, marked)}
+                  onToggleManyPagara={(ids, marked) => toggleMarcaMany('presupuesto', ids, marked)}
                   cutoffDate={fechaResumen}
                 />
               )}
@@ -771,7 +826,7 @@ function GastosFijosPage() {
 
         <section className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
           <div className="card p-4">
-            <p className="text-xs font-semibold uppercase text-gray-500">CxC vencida al corte</p>
+            <p className="text-xs font-semibold uppercase text-gray-500">CxC marcada Pagarán</p>
             <p className="mt-2 text-lg font-bold text-green-700">{formatCurrency(cxcProbable)}</p>
             <p className="text-xs text-gray-400">
               Ventas {formatCurrency(cobrosVentasTotal)} · Presup. {formatCurrency(cobrosPresTotal)}
@@ -866,8 +921,8 @@ function GastosFijosPage() {
                     <td className="table-cell"></td>
                   </tr>
                   {[
-                    { label: 'Cobros ventas (probable)',       vals: flujo.cobrosVentas,  neg: false },
-                    { label: 'Cobros presupuestos (probable)', vals: flujo.cobrosPres,    neg: false },
+                    { label: 'Cobros ventas (marcadas Pagarán)',       vals: flujo.cobrosVentas,  neg: false },
+                    { label: 'Cobros presupuestos (marcadas Pagarán)', vals: flujo.cobrosPres,    neg: false },
                     { label: 'Compras a pagar (marcadas)',     vals: flujo.pagosCompras,  neg: true },
                     { label: 'Gastos fijos',                   vals: totalesSemana,       neg: true },
                   ].map(r => (
@@ -1093,24 +1148,29 @@ function GastosFijosPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {flujo.comprasPagar.map((c: any) => (
-                    <tr key={c.id} className="hover:bg-gray-50">
-                      <td className="table-cell text-sm font-medium">{c.proveedores?.nombre || '—'}</td>
+                  {comprasPagarPorProveedor.map(g => (
+                    <tr key={g.nombre} className="hover:bg-gray-50">
+                      <td className="table-cell text-sm font-medium">
+                        {g.nombre}
+                        <span className="block text-[10px] font-normal text-gray-400">
+                          {g.count} {g.count === 1 ? 'factura' : 'facturas'}
+                        </span>
+                      </td>
                       {SEMANAS.map((_, i) => (
                         <td key={i} className="table-cell text-right text-sm">
-                          {c.fridayIdx === i
+                          {g.semanas[i] > 0
                             ? (
                               <span className="font-medium text-red-600">
-                                −{formatCurrency(c.pagoProyectado)}
-                                {c.pagoProyectado < (c.saldo || 0) && (
-                                  <span className="block text-[10px] font-normal text-gray-400">de {formatCurrency(c.saldo)}</span>
+                                −{formatCurrency(g.semanas[i])}
+                                {g.countSemanas[i] > 1 && (
+                                  <span className="block text-[10px] font-normal text-gray-400">{g.countSemanas[i]} facturas</span>
                                 )}
                               </span>
                             )
                             : <span className="text-gray-200">—</span>}
                         </td>
                       ))}
-                      <td className="table-cell text-right font-semibold text-red-600">−{formatCurrency(c.pagoProyectado)}</td>
+                      <td className="table-cell text-right font-semibold text-red-600">−{formatCurrency(g.total)}</td>
                       <td className="table-cell"></td>
                     </tr>
                   ))}
