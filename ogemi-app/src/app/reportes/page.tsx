@@ -488,8 +488,9 @@ function ReportesPage() {
           #reporte-print .cxp-print .cxp-tabla  { order: 1 !important; }
           #reporte-print .cxp-print .cxp-total  { order: 2 !important; margin-top: 6px !important; }
           #reporte-print .cxp-print .cxp-tramos { order: 3 !important; margin-top: 6px !important; }
-          /* La columna Tramo no se imprime */
-          #reporte-print .cxp-tabla .col-tramo { display: none !important; }
+          /* Las columnas Tramo y Saldo no se imprimen (el saldo va como subtotal bajo Total) */
+          #reporte-print .cxp-tabla .col-tramo,
+          #reporte-print .cxp-tabla .col-saldo { display: none !important; }
           /* Encabezados centrados sobre su información */
           #reporte-print .cxp-tabla .col-venc,
           #reporte-print .cxp-tabla .col-dias { text-align: center !important; }

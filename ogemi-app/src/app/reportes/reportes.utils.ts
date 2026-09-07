@@ -38,6 +38,23 @@ export type Tramo = typeof TRAMOS[number]
 /** Normaliza el tramo de la BD (6 tramos) al tramo de UI (5 tramos, +90 consolidado) */
 export const normTramo = (t: string): string => (t === '91-120' || t === '+120') ? '+90' : t
 
+// Tramos SOLO para el PDF (Cartera CxC y Cuentas por pagar): antigüedad contada desde la EMISIÓN (no desde el vencimiento)
+export const TRAMOS_EMISION = ['0-30', '31-60', '61-90', '+90'] as const
+export const TRAMO_EMISION_LABELS: Record<string, string> = {
+  '0-30': '0 a 30 días', '31-60': '31 a 60 días', '61-90': '61 a 90 días', '+90': 'Más de 90 días',
+}
+export const TRAMO_EMISION_COLORS: Record<string, string> = {
+  '0-30': '#22c55e', '31-60': '#facc15', '61-90': '#fb923c', '+90': '#b91c1c',
+}
+export const diasDesdeEmision = (fecha: string | null | undefined): number => {
+  if (!fecha) return 0
+  const [y, m, d] = String(fecha).slice(0, 10).split('-').map(Number)
+  const emision = new Date(y, (m || 1) - 1, d || 1)
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
+  return Math.max(0, Math.floor((hoy.getTime() - emision.getTime()) / 86400000))
+}
+export const tramoEmision = (dias: number): string => dias <= 30 ? '0-30' : dias <= 60 ? '31-60' : dias <= 90 ? '61-90' : '+90'
+
 /** Para pivot de antigüedad — muestra columnas en orden */
 export const BUCKETS: { key: Tramo; label: string }[] = [
   { key: 'corriente', label: 'Al día' },

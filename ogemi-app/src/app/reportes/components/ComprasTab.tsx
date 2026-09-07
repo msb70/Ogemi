@@ -9,6 +9,7 @@ import {
 import {
   TRAMOS, TRAMO_LABELS, TRAMO_COLORS_HEX, BUCKETS, normTramo,
   exportXLSX, buildKpiSheet,
+  TRAMOS_EMISION, TRAMO_EMISION_LABELS, TRAMO_EMISION_COLORS, diasDesdeEmision, tramoEmision,
 } from '../reportes.utils'
 import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
 
@@ -209,7 +210,7 @@ export default function ComprasTab({
 
       {comprasTab === 'cxp' && (
         <div className="space-y-4 cxp-print">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 cxp-tramos">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 print:hidden">
             {TRAMOS.map(tramo => {
               const items = cxp.filter((c: any) => normTramo(c.tramo) === tramo)
               return (
@@ -224,6 +225,22 @@ export default function ComprasTab({
               )
             })}
           </div>
+          {/* Solo PDF: cuadro de antigüedad contada desde la emisión de la factura */}
+          <div className="hidden print:grid grid-cols-4 gap-3 cxp-tramos">
+            {TRAMOS_EMISION.map(tramo => {
+              const items = cxp.filter((c: any) => tramoEmision(diasDesdeEmision(c.fecha)) === tramo)
+              return (
+                <div key={tramo} className="card p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-3 h-3 rounded-full" style={{ background: TRAMO_EMISION_COLORS[tramo] }} />
+                    <span className="text-xs font-medium text-gray-600">{TRAMO_EMISION_LABELS[tramo]}</span>
+                  </div>
+                  <p className="text-lg font-bold">{formatMonto(items.reduce((s: number, c: any) => s + (c.saldo_pendiente ?? c.total), 0))}</p>
+                  <p className="text-xs text-gray-400">{items.length} compras</p>
+                </div>
+              )
+            })}
+          </div>
           <div className="card overflow-hidden cxp-tabla">
             <table className="w-full">
               <thead><tr className="border-b border-gray-200">
@@ -231,12 +248,13 @@ export default function ComprasTab({
                 <th className="table-header col-concepto">Concepto</th>
                 <th className="table-header col-venc">Vencimiento</th>
                 <th className="table-header text-right col-dias">Días</th>
+                <th className="table-header text-right hidden print:table-cell col-total">Total</th>
                 <th className="table-header text-right col-saldo">Saldo</th>
                 <th className="table-header col-tramo">Tramo</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-100">
                 {cxp.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center py-8 text-gray-400">Sin cuentas por pagar</td></tr>
+                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">Sin cuentas por pagar</td></tr>
                 ) : Object.entries(
                     cxp.reduce((acc: Record<string, any[]>, c: any) => {
                       const k = c.proveedor || 'N/A'
@@ -250,8 +268,9 @@ export default function ComprasTab({
                       <Fragment key={nombre}>
                         <tr className="bg-brand-50/40 border-t border-gray-200">
                           <td colSpan={4} className="table-cell font-semibold text-brand-800">
-                            {nombre} <span className="text-xs text-gray-400 font-normal">({items.length} compra{items.length === 1 ? '' : 's'})</span>
+                            {nombre} <span className="text-xs text-gray-400 font-normal print:hidden">({items.length} compra{items.length === 1 ? '' : 's'})</span>
                           </td>
+                          <td className="hidden print:table-cell col-total" />
                           {/* En el PDF el total del proveedor va al pie de su bloque, no en el encabezado */}
                           <td className="table-cell text-right font-bold text-brand-800 col-saldo">
                             <span className="print:hidden">
@@ -270,6 +289,7 @@ export default function ComprasTab({
                                 {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
                               </span>
                             </td>
+                            <td className="table-cell text-right hidden print:table-cell col-total">{formatMonto(c.total)}</td>
                             <td className="table-cell text-right font-semibold col-saldo">{formatMonto(c.saldo_pendiente ?? c.total)}</td>
                             <td className="table-cell col-tramo">
                               <span className="badge text-xs" style={{ backgroundColor: TRAMO_COLORS_HEX[normTramo(c.tramo)] + '20', color: TRAMO_COLORS_HEX[normTramo(c.tramo)] }}>
@@ -283,9 +303,10 @@ export default function ComprasTab({
                           <td colSpan={4} className="table-cell text-right font-semibold text-brand-800">
                             Total {nombre}
                           </td>
-                          <td className="table-cell text-right font-bold text-brand-800 col-saldo">
+                          <td className="table-cell text-right font-bold text-brand-800 col-total">
                             {formatMonto(items.reduce((s: number, c: any) => s + (c.saldo_pendiente ?? c.total), 0))}
                           </td>
+                          <td className="col-saldo" />
                           <td className="col-tramo" />
                         </tr>
                       </Fragment>

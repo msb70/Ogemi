@@ -10,6 +10,7 @@ import {
 import { CarteraVencida } from '@/types'
 import {
   PIE_COLORS, exportXLSX, buildKpiSheet,
+  TRAMOS_EMISION, TRAMO_EMISION_LABELS, TRAMO_EMISION_COLORS, diasDesdeEmision, tramoEmision,
 } from '../reportes.utils'
 import FiltrosBar, { type FiltrosBarProps } from './FiltrosBar'
 import PivotTab from './PivotTab'
@@ -26,22 +27,6 @@ const TRAMO90_COLORS: Record<string, string> = {
 }
 const normTramo = (t: string) => (t === '91-120' || t === '+120') ? '+90' : t
 
-// Tramos SOLO para el PDF: antigüedad contada desde la EMISIÓN de la factura (no desde el vencimiento)
-const TRAMOS_EMISION = ['0-30', '31-60', '61-90', '+90'] as const
-const TRAMO_EMISION_LABELS: Record<string, string> = {
-  '0-30': '0 a 30 días', '31-60': '31 a 60 días', '61-90': '61 a 90 días', '+90': 'Más de 90 días',
-}
-const TRAMO_EMISION_COLORS: Record<string, string> = {
-  '0-30': '#22c55e', '31-60': '#facc15', '61-90': '#fb923c', '+90': '#b91c1c',
-}
-const diasDesdeEmision = (fecha: string | null | undefined) => {
-  if (!fecha) return 0
-  const [y, m, d] = String(fecha).slice(0, 10).split('-').map(Number)
-  const emision = new Date(y, (m || 1) - 1, d || 1)
-  const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
-  return Math.max(0, Math.floor((hoy.getTime() - emision.getTime()) / 86400000))
-}
-const tramoEmision = (dias: number) => dias <= 30 ? '0-30' : dias <= 60 ? '31-60' : dias <= 90 ? '61-90' : '+90'
 
 type VentasSubTab =
   | 'listado'
