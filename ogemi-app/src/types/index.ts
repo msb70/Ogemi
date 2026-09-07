@@ -67,6 +67,8 @@ export interface Factura {
   // Joins
   clientes?: Cliente;
   banco_cuentas?: BancoCuenta;
+  /** Clasificación para el informe diario: 400-01 litografico, 400-02 digital, 400-05 otras */
+  tipo_venta?: 'litografico' | 'digital' | 'otras' | null;
 }
 
 export type NotaCreditoEstado = 'disponible' | 'aplicada';
@@ -173,6 +175,28 @@ export interface BancoCuenta {
   dia_pago?: number | null;
   /** Posición de la tarjeta en Banco → Cuentas (y de la cuenta en los selectores) */
   orden?: number;
+}
+
+/** Venta de Impresora OGEMI (registro propio, cobro por el circuito de pagos) */
+export interface VentaOgemi {
+  id: string;
+  numero: number;
+  fecha: string;
+  cliente_id: string;
+  concepto: string | null;
+  monto: number;
+  itbms_pct: number;
+  itbms: number;
+  total: number;
+  dias_credito: number;
+  fecha_pago: string | null;
+  estado: 'pendiente' | 'pagada';
+  monto_pagado: number;
+  fecha_cobro: string | null;
+  banco_cuenta_id: string | null;
+  notas: string | null;
+  created_at: string;
+  clientes?: { nombre: string; dias_credito?: number };
 }
 
 export interface BancoMovimiento {

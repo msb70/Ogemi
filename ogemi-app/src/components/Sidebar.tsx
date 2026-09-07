@@ -8,7 +8,7 @@ import type { Modulo } from '@/types/auth'
 import {
   LayoutDashboard, FileText, Users, Building2,
   BarChart3, Upload, ShieldCheck, LogOut, ChevronRight,
-  ShoppingCart, Truck, Wallet, ClipboardList, CalendarClock, QrCode, CreditCard, WalletCards
+  ShoppingCart, Truck, Wallet, ClipboardList, CalendarClock, QrCode, CreditCard, WalletCards, Printer
 } from 'lucide-react'
 
 const navItems: { href: string; label: string; icon: React.ElementType; modulo: Modulo }[] = [
@@ -21,6 +21,7 @@ const navItems: { href: string; label: string; icon: React.ElementType; modulo: 
   { href: '/cobros-presupuestos', label: 'Cobro presupuestos', icon: WalletCards, modulo: 'presupuestos' },
   { href: '/clientes',     label: 'Clientes',       icon: Users,           modulo: 'clientes'     },
   { href: '/anticipos',    label: 'Anticipos',      icon: Wallet,          modulo: 'facturas'     },
+  { href: '/ventas-ogemi', label: 'Ventas Ogemi',   icon: Printer,         modulo: 'ventas_ogemi' },
   { href: '/compras',      label: 'Compras',        icon: ShoppingCart,    modulo: 'compras'      },
   { href: '/pagos-compras', label: 'Pago compras',  icon: WalletCards,     modulo: 'compras'      },
   { href: '/proveedores',  label: 'Proveedores',    icon: Truck,           modulo: 'proveedores'  },

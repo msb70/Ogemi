@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/useToast'
 import { useAuth } from '@/context/AuthContext'
 import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
+import { TIPOS_VENTA } from '@/lib/tiposVenta'
 
 type EstadoFilter = 'todos' | 'pendiente' | 'pagada' | 'falta_retencion'
 
@@ -136,7 +137,8 @@ function FacturasPage() {
   const [retForm, setRetForm] = useState({ pct: '', comprobante: false, fecha: '' })
   const [savingRet, setSavingRet] = useState(false)
 
-  const { profile } = useAuth()
+  const { profile, puedeHacer } = useAuth()
+  const puedeClasificar = puedeHacer('facturas', 'editar')
   const isAdmin = profile?.rol_id === 'admin'
   const [exporting, setExporting] = useState(false)
 
@@ -400,6 +402,18 @@ function FacturasPage() {
     loadData(); loadResumen()
   }
 
+  // Clasificación de la venta para el Informe diario (sin recargar toda la lista)
+  const handleTipoVenta = async (f: Factura, tipo: string) => {
+    const value = tipo || null
+    const prev = f.tipo_venta ?? null
+    setFacturas(list => list.map(x => x.id === f.id ? { ...x, tipo_venta: value as Factura['tipo_venta'] } : x))
+    const { error } = await supabase.from('facturas').update({ tipo_venta: value }).eq('id', f.id)
+    if (error) {
+      setFacturas(list => list.map(x => x.id === f.id ? { ...x, tipo_venta: prev } : x))
+      showToast(`No se pudo clasificar: ${error.message}`, 'error')
+    }
+  }
+
   const handleEliminarFactura = async (f: Factura) => {
     if (!confirm(`¿Borrar la factura #${f.numero_factura}? Se eliminarán sus cobros y movimientos de banco. No se puede deshacer.`)) return
     const { error } = await supabase.rpc('eliminar_factura', { p_id: f.id })
@@ -576,6 +590,22 @@ function FacturasPage() {
                         <span className={`badge ${tipoCorto === 'N. CRÉDITO' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
                           {tipoCorto}
                         </span>
+                        {/* Tipo de venta (400-01/02/05) para el Informe diario */}
+                        {!esNC && (
+                          puedeClasificar ? (
+                            <select
+                              className={`block mt-1 text-[11px] border rounded px-1 py-0.5 bg-white focus:outline-none ${f.tipo_venta ? 'border-gray-200 text-gray-600' : 'border-amber-300 text-amber-700'}`}
+                              value={f.tipo_venta || ''}
+                              onChange={e => handleTipoVenta(f, e.target.value)}
+                              onClick={e => e.stopPropagation()}
+                              title="Tipo de venta (informe diario)">
+                              <option value="">Sin clasificar</option>
+                              {TIPOS_VENTA.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                            </select>
+                          ) : f.tipo_venta ? (
+                            <span className="block mt-1 text-[11px] text-gray-500">{TIPOS_VENTA.find(t => t.value === f.tipo_venta)?.label}</span>
+                          ) : null
+                        )}
                       </td>
                       <td className="table-cell text-right font-semibold">{formatCurrency(f.total)}</td>
                       <td className="table-cell text-right text-green-600">

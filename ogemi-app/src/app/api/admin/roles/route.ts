@@ -13,6 +13,7 @@ const MODULES: Modulo[] = [
   'proveedores',
   'banco',
   'gastos_fijos',
+  'ventas_ogemi',
   'reportes',
   'importar',
   'usuarios',

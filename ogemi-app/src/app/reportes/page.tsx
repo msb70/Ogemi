@@ -6,7 +6,7 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { CarteraVencida } from '@/types'
 import {
-  FileText, ShoppingCart, Building2, BookOpen, ClipboardList, Printer, FileSpreadsheet,
+  FileText, ShoppingCart, Building2, BookOpen, ClipboardList, Printer, FileSpreadsheet, CalendarDays,
 } from 'lucide-react'
 import { withPagePermission } from '@/components/PermissionGuard'
 import { isNC, xlsxFromReporteArea } from './reportes.utils'
@@ -17,8 +17,9 @@ import PresupuestosTab from './components/PresupuestosTab'
 import ComprasTab     from './components/ComprasTab'
 import BancoTab       from './components/BancoTab'
 import LibrosTab      from './components/LibrosTab'
+import InformeDiarioTab from './components/InformeDiarioTab'
 
-type ReporteTab = 'ventas' | 'presupuestos' | 'compras' | 'banco' | 'libros'
+type ReporteTab = 'informe' | 'ventas' | 'presupuestos' | 'compras' | 'banco' | 'libros'
 
 function ReportesPage() {
   const [tab, setTab] = useState<ReporteTab>('ventas')
@@ -262,6 +263,7 @@ function ReportesPage() {
   const filtrosBarProps = { search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta }
 
   const tabs: { key: ReporteTab; label: string; icon: React.ElementType }[] = [
+    { key: 'informe',      label: 'Informe diario', icon: CalendarDays },
     { key: 'ventas',       label: 'Ventas',       icon: FileText },
     { key: 'presupuestos', label: 'Presupuestos', icon: ClipboardList },
     { key: 'compras',      label: 'Compras',      icon: ShoppingCart },
@@ -319,6 +321,7 @@ function ReportesPage() {
               <div className="print-titulo-default" style={{ fontSize: 16, fontWeight: 700 }}>Reporte de {tabs.find(t => t.key === tab)?.label}</div>
               <div className="print-titulo-cxc" style={{ fontSize: 16, fontWeight: 700, display: 'none' }}>REPORTE CUENTAS POR COBRAR</div>
               <div className="print-titulo-cxp" style={{ fontSize: 16, fontWeight: 700, display: 'none' }}>REPORTE CUENTAS POR PAGAR</div>
+              <div className="print-titulo-informe" style={{ fontSize: 16, fontWeight: 700, display: 'none' }}>INFORME DIARIO</div>
               <div style={{ fontSize: 11, color: '#6b7280' }}>Impresos Comerciales S.A. · Sistema Ogemi</div>
             </div>
             <div style={{ textAlign: 'right', fontSize: 10, color: '#6b7280' }}>
@@ -327,6 +330,7 @@ function ReportesPage() {
             </div>
           </div>
         </div>
+        {tab === 'informe' && <InformeDiarioTab />}
         {tab === 'ventas' && (
           <VentasTab {...filtrosBarProps}
             ventasFiltradas={ventasFiltradas}
@@ -499,6 +503,16 @@ function ReportesPage() {
             border-top: 1px solid #d1d5db !important;
             font-weight: 700 !important;
           }
+          /* ── Informe diario: título propio, sin línea Período, hoja centrada ── */
+          #reporte-print:has(.informe-diario) .print-titulo-default { display: none !important; }
+          #reporte-print:has(.informe-diario) .print-titulo-informe { display: block !important; }
+          #reporte-print:has(.informe-diario) .print-periodo { display: none !important; }
+          #reporte-print .informe-hoja { max-width: 100% !important; border: none !important; }
+          #reporte-print .informe-hoja .text-sm { font-size: 11px !important; }
+          #reporte-print .informe-hoja h2 { font-size: 18px !important; }
+          #reporte-print .informe-hoja h3 { font-size: 12px !important; }
+          #reporte-print .informe-saldo span { font-size: 14px !important; }
+          #reporte-print .informe-seccion { page-break-inside: avoid; break-inside: avoid; }
           @page { margin: 10mm; }
         }
       `}</style>

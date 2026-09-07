@@ -11,6 +11,7 @@ export type Modulo =
   | 'proveedores'
   | 'banco'
   | 'gastos_fijos'
+  | 'ventas_ogemi'
   | 'reportes'
   | 'importar'
   | 'usuarios'
