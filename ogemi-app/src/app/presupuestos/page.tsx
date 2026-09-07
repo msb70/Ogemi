@@ -123,7 +123,7 @@ function PresupuestosPage() {
     const [{ data: presData }, { data: cliData }, { data: cuentasData }] = await Promise.all([
       query,
       supabase.from('clientes').select('*').eq('activo', true).order('nombre'),
-      supabase.from('banco_cuentas').select('*').eq('activo', true).order('nombre'),
+      supabase.from('banco_cuentas').select('*').eq('activo', true).order('orden').order('nombre'),
     ])
     setPresupuestos(presData || [])
     setClientes(cliData || [])

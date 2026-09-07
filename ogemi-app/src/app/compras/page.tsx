@@ -120,7 +120,7 @@ function ComprasPage() {
     const [{ data: comprasData }, { data: provData }, { data: cuentasData }] = await Promise.all([
       supabase.from('compras').select('*, proveedores(nombre), banco_cuentas(nombre, banco)').order('fecha', { ascending: false }),
       supabase.from('proveedores').select('*').eq('activo', true).order('nombre'),
-      supabase.from('banco_cuentas').select('*').eq('activo', true).order('nombre'),
+      supabase.from('banco_cuentas').select('*').eq('activo', true).order('orden').order('nombre'),
     ])
     setCompras(comprasData || [])
     setProveedores(provData || [])

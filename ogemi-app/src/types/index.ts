@@ -171,6 +171,8 @@ export interface BancoCuenta {
   dia_corte?: number | null;
   /** Día del mes (1-31) de pago de la tarjeta */
   dia_pago?: number | null;
+  /** Posición de la tarjeta en Banco → Cuentas (y de la cuenta en los selectores) */
+  orden?: number;
 }
 
 export interface BancoMovimiento {

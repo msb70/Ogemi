@@ -262,6 +262,7 @@ function GastosFijosPage() {
       .from('banco_cuentas')
       .select('id,nombre,banco,tipo,dia_corte,dia_pago,saldo_inicial')
       .eq('activo', true)
+      .order('orden')
       .order('nombre')
 
     if (cuentasError) {

@@ -49,7 +49,7 @@ function AnticiposPage() {
         .order('fecha', { ascending: false })
         .order('created_at', { ascending: false }),
       supabase.from('clientes').select('*').eq('activo', true).order('nombre'),
-      supabase.from('banco_cuentas').select('*').eq('activo', true).order('nombre'),
+      supabase.from('banco_cuentas').select('*').eq('activo', true).order('orden').order('nombre'),
       supabase.from('anticipos_saldos').select('id, saldo, aplicado'),
     ])
     setAnticipos(anticData || [])

@@ -197,7 +197,7 @@ function FacturasPage() {
     if (!cuentasCargadasRef.current) {
       cuentasCargadasRef.current = true
       const { data: cuentasData } = await supabase
-        .from('banco_cuentas').select('*').eq('activo', true).order('nombre')
+        .from('banco_cuentas').select('*').eq('activo', true).order('orden').order('nombre')
       setCuentas(cuentasData || [])
     }
 

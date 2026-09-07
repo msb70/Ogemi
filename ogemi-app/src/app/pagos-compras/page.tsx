@@ -41,7 +41,7 @@ function PagosComprasPage() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    supabase.from('banco_cuentas').select('*').eq('activo', true).order('nombre')
+    supabase.from('banco_cuentas').select('*').eq('activo', true).order('orden').order('nombre')
       .then(({ data }) => {
         setCuentas(data || [])
         if (data && data[0]) setCuentaId(data[0].id)

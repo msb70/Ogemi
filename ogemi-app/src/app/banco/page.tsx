@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate, formatDateObj } from '@/lib/utils'
 import { BancoCuenta, BancoMovimiento } from '@/types'
-import { Plus, Building2, CreditCard, TrendingUp, TrendingDown, Printer, RefreshCw, Pencil } from 'lucide-react'
+import { Plus, Building2, CreditCard, TrendingUp, TrendingDown, Printer, RefreshCw, Pencil, GripVertical } from 'lucide-react'
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
 import { withPagePermission } from '@/components/PermissionGuard'
@@ -53,7 +53,7 @@ function BancoPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const { data: cuentasData } = await supabase.from('banco_cuentas').select('*').eq('activo', true).order('nombre')
+    const { data: cuentasData } = await supabase.from('banco_cuentas').select('*').eq('activo', true).order('orden').order('nombre')
     setCuentas(cuentasData || [])
 
     if (cuentasData && cuentasData.length > 0 && !cuentaSelected) {
@@ -102,6 +102,33 @@ function BancoPage() {
     !m.pago_reverso_id && !m.anticipo_id && !m.lote_id
 
   const puedeReversar = puedeHacer('banco', 'editar')
+  const puedeOrdenar = puedeHacer('banco', 'editar')
+
+  // ── Orden de las tarjetas de cuentas (drag & drop, persistido en banco_cuentas.orden) ──
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [overId, setOverId] = useState<string | null>(null)
+  const justDragged = useRef(false)
+
+  const moverCuenta = async (fromId: string, toId: string) => {
+    if (fromId === toId) return
+    const from = cuentas.findIndex(c => c.id === fromId)
+    const to = cuentas.findIndex(c => c.id === toId)
+    if (from < 0 || to < 0) return
+    const next = [...cuentas]
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
+    const reordenadas = next.map((c, i) => ({ ...c, orden: i + 1 }))
+    setCuentas(reordenadas)
+    // Se guarda la posición de todas las cuentas (el orden lo usan también los selectores)
+    const results = await Promise.all(
+      reordenadas.map(c => supabase.from('banco_cuentas').update({ orden: c.orden }).eq('id', c.id))
+    )
+    const err = results.find(r => r.error)?.error
+    if (err) {
+      showToast(`No se pudo guardar el orden: ${err.message}`, 'error')
+      loadData()
+    }
+  }
 
   const handleReversar = async () => {
     if (!reversar || motivoReverso.trim().length < 3) return
@@ -170,7 +197,7 @@ function BancoPage() {
     }
     const { error } = editCuentaId
       ? await supabase.from('banco_cuentas').update(row).eq('id', editCuentaId)
-      : await supabase.from('banco_cuentas').insert(row)
+      : await supabase.from('banco_cuentas').insert({ ...row, orden: cuentas.reduce((m, c) => Math.max(m, c.orden || 0), 0) + 1 })
     if (error) {
       showToast(`Error al guardar cuenta: ${error.message}`, 'error')
     } else {
@@ -309,13 +336,27 @@ function BancoPage() {
                 const saldo = saldos[c.id] || 0
                 const deuda = -saldo
                 return (
-                <div key={c.id} className="card p-5 cursor-pointer hover:border-brand-300 transition-colors"
-                  onClick={() => { setCuentaSelected(c.id); setTab('movimientos') }}>
+                <div key={c.id}
+                  className={`card p-5 cursor-pointer hover:border-brand-300 transition-colors ${dragId === c.id ? 'opacity-40' : ''} ${overId === c.id && dragId && dragId !== c.id ? 'ring-2 ring-brand-400' : ''}`}
+                  draggable={puedeOrdenar}
+                  onDragStart={e => { setDragId(c.id); justDragged.current = true; e.dataTransfer.effectAllowed = 'move' }}
+                  onDragOver={e => { if (!dragId) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (overId !== c.id) setOverId(c.id) }}
+                  onDragLeave={() => { if (overId === c.id) setOverId(null) }}
+                  onDrop={e => { e.preventDefault(); if (dragId) moverCuenta(dragId, c.id); setDragId(null); setOverId(null) }}
+                  onDragEnd={() => { setDragId(null); setOverId(null); setTimeout(() => { justDragged.current = false }, 0) }}
+                  onClick={() => { if (justDragged.current) return; setCuentaSelected(c.id); setTab('movimientos') }}>
                   <div className="flex items-start justify-between mb-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${esTarjeta ? 'bg-purple-100' : 'bg-brand-100'}`}>
-                      {esTarjeta
-                        ? <CreditCard size={20} className="text-purple-600" />
-                        : <Building2 size={20} className="text-brand-600" />}
+                    <div className="flex items-center gap-2">
+                      {puedeOrdenar && (
+                        <span className="text-gray-300 cursor-grab active:cursor-grabbing" title="Arrastra para cambiar el orden">
+                          <GripVertical size={16} />
+                        </span>
+                      )}
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${esTarjeta ? 'bg-purple-100' : 'bg-brand-100'}`}>
+                        {esTarjeta
+                          ? <CreditCard size={20} className="text-purple-600" />
+                          : <Building2 size={20} className="text-brand-600" />}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {esTarjeta && (
