@@ -289,7 +289,8 @@ export default function ComprasTab({
                                 {c.dias_vencida > 0 ? `+${c.dias_vencida}` : c.dias_vencida}
                               </span>
                             </td>
-                            <td className="table-cell text-right hidden print:table-cell col-total">{formatMonto(c.total)}</td>
+                            {/* Columna solo-PDF: muestra el saldo pendiente (lo que se debe), no el total de la compra */}
+                            <td className="table-cell text-right hidden print:table-cell col-total">{formatMonto(c.saldo_pendiente ?? c.total)}</td>
                             <td className="table-cell text-right font-semibold col-saldo">{formatMonto(c.saldo_pendiente ?? c.total)}</td>
                             <td className="table-cell col-tramo">
                               <span className="badge text-xs" style={{ backgroundColor: TRAMO_COLORS_HEX[normTramo(c.tramo)] + '20', color: TRAMO_COLORS_HEX[normTramo(c.tramo)] }}>
