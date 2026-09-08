@@ -1,18 +1,20 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
-import { formatCurrency, formatDate } from '@/lib/utils'
-import { FeDocumento, FeArticulo, FeConfig } from '@/types'
-import { Plus, Search, X, Pencil, Trash2, Copy, QrCode, AlertCircle, CheckCircle, Loader2, Save } from 'lucide-react'
+import { formatCurrency, formatDate, classifyTramo, tramoColor } from '@/lib/utils'
+import { FeDocumento, FeArticulo, FeConfig, FeDocumentoLinea, FeDocumentoPago } from '@/types'
+import { Plus, Search, X, Pencil, Trash2, Copy, QrCode, AlertCircle, CheckCircle, Loader2, Save, FileText, Printer, Eye } from 'lucide-react'
+import ComprobanteFE, { FeEmisor, calcLinea } from '@/components/ComprobanteFE'
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
 import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
 import { useAuth } from '@/context/AuthContext'
-import { FE_TIPO_DOC, FE_ITBMS, FE_UNIDADES, FE_CPBS_GRUPOS } from '@/lib/fe-catalogos'
+import { FE_TIPO_DOC, FE_ITBMS, FE_UNIDADES, FE_CPBS_GRUPOS, FE_TIPO_CLIENTE, FE_TIPO_CONTRIBUYENTE, FE_FORMAS_PAGO, FE_RETENCIONES } from '@/lib/fe-catalogos'
 
 type Tab = 'documentos' | 'articulos' | 'config'
 type EstadoFilter = 'todos' | 'borrador' | 'aceptado' | 'rechazado'
@@ -22,6 +24,24 @@ const ESTADO_BADGE: Record<string, string> = {
   enviando: 'bg-blue-100 text-blue-700',
   aceptado: 'bg-green-100 text-green-700',
   rechazado: 'bg-red-100 text-red-700',
+}
+
+/** Vencimiento, pagado, saldo y estado de cobro de un doc FE, tomados de la factura vinculada en cobros. */
+function cobroInfo(d: FeDocumento) {
+  const f = d.facturas
+  if (!f) return null
+  const cobrable = Number(f.total) - Number(f.retencion_monto || 0)
+  const pagado = Number(f.monto_pagado || 0)
+  const saldo = Math.max(0, cobrable - pagado)
+  let dias = 0
+  if (f.fecha_pago && f.estado === 'pendiente') {
+    dias = Math.floor((Date.now() - new Date(f.fecha_pago + 'T00:00:00').getTime()) / 86400000)
+  }
+  const badge = f.estado === 'pagada' ? { cls: 'bg-green-100 text-green-700', txt: 'pagada' }
+    : f.estado === 'falta_retencion' ? { cls: 'bg-amber-100 text-amber-700', txt: 'falta retención' }
+    : pagado > 0 ? { cls: 'bg-blue-100 text-blue-700', txt: 'abono' }
+    : { cls: 'bg-yellow-100 text-yellow-700', txt: 'pendiente' }
+  return { f, cobrable, pagado, saldo, dias, tramo: f.estado === 'pendiente' ? classifyTramo(dias) : null, badge }
 }
 
 const emptyArticulo = () => ({
@@ -40,6 +60,13 @@ function FacturaElectronicaPage() {
   const [timbrando, setTimbrando] = useState<string | null>(null)
   const [ambienteActivo, setAmbienteActivo] = useState<'pruebas' | 'produccion' | null>(null)
   const [detalle, setDetalle] = useState<FeDocumento | null>(null)
+  const [detalleLineas, setDetalleLineas] = useState<FeDocumentoLinea[]>([])
+  const [detallePagos, setDetallePagos] = useState<FeDocumentoPago[]>([])
+  const [detalleLoading, setDetalleLoading] = useState(false)
+  const [emisor, setEmisor] = useState<FeEmisor | null>(null)
+  // Comprobante Auxiliar (CAFE): doc + líneas + pagos listos para previsualizar/imprimir
+  const [cafe, setCafe] = useState<{ doc: FeDocumento; lineas: FeDocumentoLinea[]; pagos: FeDocumentoPago[] } | null>(null)
+  const [cafeLoading, setCafeLoading] = useState<string | null>(null)
 
   // artículos
   const [showArtForm, setShowArtForm] = useState(false)
@@ -53,6 +80,7 @@ function FacturaElectronicaPage() {
     pin_prod: '', usuario_prod: '', clave_prod: '', endpoint_url_prod: '',
     codigo_sucursal: '001', nro_terminal: '1', activo: false,
     fp_credito_codigo: '01', fp_credito_nombre: 'CREDITO',
+    emisor_nombre: '', emisor_ruc: '', emisor_dv: '', emisor_direccion: '',
   })
   const [savingConfig, setSavingConfig] = useState(false)
 
@@ -64,13 +92,20 @@ function FacturaElectronicaPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     const [{ data: docsData }, { data: artData }] = await Promise.all([
-      supabase.from('fe_documentos').select('*').order('created_at', { ascending: false }),
+      supabase.from('fe_documentos')
+        .select('*, facturas:factura_id(id, numero_factura, total, monto_pagado, retencion_monto, fecha_pago, estado, fecha_cobro)')
+        .order('created_at', { ascending: false }),
       supabase.from('fe_articulos').select('*').order('codigo'),
     ])
     setDocs((docsData || []) as FeDocumento[])
     setArticulos((artData || []) as FeArticulo[])
-    const { data: amb } = await supabase.rpc('fe_ambiente_activo')
+    const [{ data: amb }, { data: emi }] = await Promise.all([
+      supabase.rpc('fe_ambiente_activo'),
+      supabase.rpc('fe_emisor'),
+    ])
     setAmbienteActivo(amb === 'produccion' ? 'produccion' : amb ? 'pruebas' : null)
+    const e = Array.isArray(emi) ? emi[0] : emi
+    setEmisor(e ? (e as FeEmisor) : null)
     if (esAdmin) {
       const { data: cfg } = await supabase.from('fe_config').select('*').eq('id', true).single()
       if (cfg) {
@@ -85,6 +120,8 @@ function FacturaElectronicaPage() {
           activo: cfg.activo,
           fp_credito_codigo: cfg.fp_credito_codigo || '01',
           fp_credito_nombre: cfg.fp_credito_nombre || 'CREDITO',
+          emisor_nombre: cfg.emisor_nombre || '', emisor_ruc: cfg.emisor_ruc || '',
+          emisor_dv: cfg.emisor_dv || '', emisor_direccion: cfg.emisor_direccion || '',
         })
       }
     }
@@ -99,6 +136,36 @@ function FacturaElectronicaPage() {
     const s = search.toLowerCase()
     return d.nombre_cliente.toLowerCase().includes(s) || d.documento.toLowerCase().includes(s) || (d.cufe || '').toLowerCase().includes(s)
   })
+
+  /** Carga líneas y formas de pago de un documento (para el detalle y el comprobante) */
+  const cargarDetalleDoc = async (id: string) => {
+    const [{ data: ln }, { data: pg }] = await Promise.all([
+      supabase.from('fe_documento_lineas').select('*').eq('documento_id', id).order('orden'),
+      supabase.from('fe_documento_pagos').select('*').eq('documento_id', id),
+    ])
+    return { lineas: (ln || []) as FeDocumentoLinea[], pagos: (pg || []) as FeDocumentoPago[] }
+  }
+
+  const abrirDetalle = async (d: FeDocumento) => {
+    setDetalle(d); setDetalleLineas([]); setDetallePagos([]); setDetalleLoading(true)
+    const { lineas, pagos } = await cargarDetalleDoc(d.id)
+    setDetalleLineas(lineas); setDetallePagos(pagos); setDetalleLoading(false)
+  }
+
+  const abrirCafe = async (d: FeDocumento) => {
+    setCafeLoading(d.id)
+    const { lineas, pagos } = await cargarDetalleDoc(d.id)
+    setCafe({ doc: d, lineas, pagos })
+    setCafeLoading(null)
+  }
+
+  const imprimirCafe = () => {
+    // Título del archivo al "Guardar como PDF" en el diálogo de impresión
+    const prev = document.title
+    if (cafe) document.title = `CAFE_${cafe.doc.documento}_${cafe.doc.nombre_cliente.replace(/[^\w]+/g, '_').slice(0, 30)}`
+    window.print()
+    setTimeout(() => { document.title = prev }, 1000)
+  }
 
   const timbrar = async (d: FeDocumento) => {
     if (!confirm(`¿Timbrar el documento ${d.documento} (${d.nombre_cliente}) por ${formatCurrency(d.totalfinal)} contra el PAC?`)) return
@@ -186,6 +253,10 @@ function FacturaElectronicaPage() {
       activo: configForm.activo,
       fp_credito_codigo: configForm.fp_credito_codigo.trim() || '01',
       fp_credito_nombre: configForm.fp_credito_nombre.trim() || 'CREDITO',
+      emisor_nombre: configForm.emisor_nombre.trim(),
+      emisor_ruc: configForm.emisor_ruc.trim(),
+      emisor_dv: configForm.emisor_dv.trim(),
+      emisor_direccion: configForm.emisor_direccion.trim(),
     }).eq('id', true)
     setSavingConfig(false)
     if (error) { showToast(`No se pudo guardar: ${error.message}`, 'error'); return }
@@ -262,61 +333,92 @@ function FacturaElectronicaPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-gray-500 uppercase border-b border-gray-200">
-                    <th className="px-4 py-3">Documento</th>
-                    <th className="px-4 py-3">Tipo</th>
+                    <th className="px-4 py-3">#Factura</th>
                     <th className="px-4 py-3">Fecha</th>
                     <th className="px-4 py-3">Cliente</th>
+                    <th className="px-4 py-3">Tipo</th>
                     <th className="px-4 py-3 text-right">Total</th>
+                    <th className="px-4 py-3 text-right">Pagado</th>
+                    <th className="px-4 py-3 text-right">Saldo</th>
+                    <th className="px-4 py-3">Vence</th>
                     <th className="px-4 py-3">Estado</th>
-                    <th className="px-4 py-3">CUFE</th>
-                    <th className="px-4 py-3 text-right">Acciones</th>
+                    <th className="px-4 py-3 text-right">Acción</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400">Cargando...</td></tr>
+                    <tr><td colSpan={10} className="px-4 py-10 text-center text-gray-400">Cargando...</td></tr>
                   ) : filtered.length === 0 ? (
-                    <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400">No hay documentos electrónicos.</td></tr>
+                    <tr><td colSpan={10} className="px-4 py-10 text-center text-gray-400">No hay documentos electrónicos.</td></tr>
                   ) : filtered.map(d => {
                     const tipoNombre = FE_TIPO_DOC.find(t => t.codigo === d.tipo_doc)?.nombre || d.tipo_doc
                     const esNC = ['04', '06'].includes(d.tipo_doc)
+                    const cobro = cobroInfo(d)
                     return (
                       <tr key={d.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="px-4 py-3 font-medium text-gray-900">{d.documento}</td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${esNC ? 'bg-purple-100 text-purple-700' : 'bg-blue-50 text-blue-700'}`} title={tipoNombre}>
-                            {esNC ? 'NC' : 'FE'} {d.tipo_doc}
-                          </span>
+                        <td className="px-4 py-3 font-mono font-medium text-gray-900">
+                          #{d.documento}
+                          {d.cufe && (
+                            <button onClick={() => copiarCufe(d.cufe!)} className="ml-1 text-gray-300 hover:text-brand-600 align-middle" title={`Copiar CUFE ${d.cufe}`}><Copy size={12} /></button>
+                          )}
                         </td>
-                        <td className="px-4 py-3 text-gray-600">{formatDate(d.fecha)}</td>
-                        <td className="px-4 py-3 text-gray-700 max-w-[220px] truncate">{d.nombre_cliente}</td>
-                        <td className="px-4 py-3 text-right font-medium">{formatCurrency(d.totalfinal)}</td>
+                        <td className="px-4 py-3 text-gray-500">{formatDate(d.fecha)}</td>
+                        <td className="px-4 py-3 text-gray-700 max-w-[200px]">
+                          <span className="truncate block" title={d.nombre_cliente}>{d.nombre_cliente}</span>
+                        </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${ESTADO_BADGE[d.estado] || ''}`}>{d.estado}</span>
-                            {d.ambiente === 'pruebas' && (
-                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300" title="Timbrado en ambiente de PRUEBAS: no está en cobros ni en reportes">
-                                PRUEBA
-                              </span>
-                            )}
+                          <span className={`badge ${esNC ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`} title={tipoNombre}>
+                            {esNC ? 'N. CRÉDITO' : 'FACTURA'}
+                          </span>
+                          {d.es_credito && <span className="block mt-1 text-[11px] text-gray-500">Crédito</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold">{formatCurrency(d.totalfinal)}</td>
+                        <td className="px-4 py-3 text-right text-green-600">
+                          {cobro && cobro.pagado > 0 ? formatCurrency(cobro.pagado) : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-orange-600">
+                          {!cobro ? <span className="text-gray-300">—</span>
+                            : cobro.f.estado === 'pagada' ? <span className="text-green-600" title="Saldada">{formatCurrency(0)}</span>
+                            : cobro.f.estado === 'falta_retencion' ? <span className="text-amber-600 text-sm" title={`Retención pendiente de comprobante: ${formatCurrency(Number(cobro.f.retencion_monto || 0))}`}>Falta comprobante</span>
+                            : formatCurrency(cobro.saldo)}
+                        </td>
+                        <td className="px-4 py-3">
+                          {cobro ? (
+                            <div className="flex flex-col">
+                              <span className="text-xs">{formatDate(cobro.f.fecha_pago)}</span>
+                              {cobro.tramo && <span className={`badge mt-0.5 text-xs ${tramoColor(cobro.tramo)}`}>{cobro.tramo}</span>}
+                            </div>
+                          ) : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col items-start gap-1">
+                            {cobro
+                              ? <span className={`badge ${cobro.badge.cls}`}>{cobro.badge.txt}</span>
+                              : <span className={`badge capitalize ${ESTADO_BADGE[d.estado] || ''}`}>{d.estado}</span>}
+                            <div className="flex items-center gap-1">
+                              {d.estado === 'aceptado' && (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200" title={`CUFE ${d.cufe || ''}`}>CUFE</span>
+                              )}
+                              {d.ambiente === 'pruebas' && (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300" title="Timbrado en ambiente de PRUEBAS: no está en cobros ni en reportes">PRUEBA</span>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          {d.cufe ? (
-                            <div className="flex items-center gap-1">
-                              <span className="text-xs text-gray-500 font-mono">{d.cufe.slice(0, 12)}…</span>
-                              <button onClick={() => copiarCufe(d.cufe!)} className="text-gray-400 hover:text-brand-600" title="Copiar CUFE"><Copy size={13} /></button>
-                              {d.url_dgi && (
-                                <a href={d.url_dgi} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-brand-600" title="Ver en DGI"><QrCode size={13} /></a>
-                              )}
-                            </div>
-                          ) : <span className="text-xs text-gray-300">—</span>}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button onClick={() => setDetalle(d)} className="text-gray-400 hover:text-gray-700 p-1" title="Ver detalle / respuesta PAC">
-                              <Search size={15} />
+                          <div className="flex items-center justify-end gap-2">
+                            <button onClick={() => abrirDetalle(d)} className="flex items-center gap-1 text-sm text-brand-600 hover:text-brand-800 font-medium" title="Ver detalle">
+                              <Eye size={15} /> Ver
                             </button>
+                            {d.cufe && (
+                              <button onClick={() => abrirCafe(d)} disabled={cafeLoading === d.id}
+                                className="flex items-center gap-1 text-sm text-gray-700 hover:text-brand-700 font-medium disabled:opacity-50" title="Comprobante Auxiliar de Factura Electrónica (PDF)">
+                                {cafeLoading === d.id ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />} PDF
+                              </button>
+                            )}
+                            {d.url_dgi && (
+                              <a href={d.url_dgi} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-brand-600 p-1" title="Consultar en la DGI"><QrCode size={15} /></a>
+                            )}
                             {d.estado !== 'aceptado' && (
                               <>
                                 <PermissionGuard modulo="factura_electronica" accion="agregar" silent>
@@ -500,6 +602,34 @@ function FacturaElectronicaPage() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
               </div>
             </div>
+            {/* Emisor (CAFE) */}
+            <fieldset className="rounded-lg border border-gray-200 p-3 space-y-3">
+              <legend className="text-xs font-semibold text-gray-600 px-1">Datos del emisor (comprobante PDF)</legend>
+              <p className="text-xs text-gray-500">Se imprimen en el Comprobante Auxiliar de Factura Electrónica. Deben coincidir con los registrados ante la DGI.</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-3">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Razón social</label>
+                  <input value={configForm.emisor_nombre} onChange={e => setConfigForm(f => ({ ...f, emisor_nombre: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">RUC</label>
+                  <input value={configForm.emisor_ruc} onChange={e => setConfigForm(f => ({ ...f, emisor_ruc: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">DV</label>
+                  <input value={configForm.emisor_dv} onChange={e => setConfigForm(f => ({ ...f, emisor_dv: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono" />
+                </div>
+                <div className="col-span-3">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Dirección</label>
+                  <input value={configForm.emisor_direccion} onChange={e => setConfigForm(f => ({ ...f, emisor_direccion: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+              </div>
+            </fieldset>
+
             {/* Venta a crédito */}
             <fieldset className="rounded-lg border border-gray-200 p-3 space-y-3">
               <legend className="text-xs font-semibold text-gray-600 px-1">Venta a crédito</legend>
@@ -536,37 +666,217 @@ function FacturaElectronicaPage() {
       </div>
 
       {/* Modal detalle documento */}
-      {detalle && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setDetalle(null)}>
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-5 space-y-3 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">Documento {detalle.documento}</h3>
-              <button onClick={() => setDetalle(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
-            </div>
-            <div className="text-sm space-y-1.5">
-              <p><span className="text-gray-500">Tipo:</span> {FE_TIPO_DOC.find(t => t.codigo === detalle.tipo_doc)?.nombre}</p>
-              <p><span className="text-gray-500">Cliente:</span> {detalle.nombre_cliente} {detalle.ruc ? `(RUC ${detalle.ruc} DV ${detalle.dv})` : ''}</p>
-              <p><span className="text-gray-500">Neto:</span> {formatCurrency(detalle.totneto)} · <span className="text-gray-500">ITBMS:</span> {formatCurrency(detalle.totimpuest)} · <span className="text-gray-500">Total:</span> <strong>{formatCurrency(detalle.totalfinal)}</strong></p>
-              {detalle.es_credito && (
-                <p><span className="text-gray-500">Condición:</span> <span className="font-medium text-brand-700">Venta a crédito</span></p>
-              )}
-              {detalle.ambiente === 'pruebas' && (
-                <p className="text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1 text-xs">
-                  Timbrado en ambiente de PRUEBAS: no está registrado en cobros y no aparece en ningún reporte.
-                </p>
-              )}
-              {detalle.cufe && <p className="break-all"><span className="text-gray-500">CUFE:</span> <span className="font-mono text-xs">{detalle.cufe}</span></p>}
-              {detalle.url_dgi && <p><a href={detalle.url_dgi} target="_blank" rel="noopener noreferrer" className="text-brand-600 underline text-xs">Consultar en DGI</a></p>}
-              {detalle.respuesta_pac && (
+      {detalle && (() => {
+        const cobro = cobroInfo(detalle)
+        const esNC = ['04', '06'].includes(detalle.tipo_doc)
+        const filas = detalleLineas.map(l => ({ l, ...calcLinea(l) }))
+        const ret = FE_RETENCIONES.find(r => r.codigo === detalle.codigo_retencion)
+        const Row = ({ k, v, mono = false }: { k: string; v: ReactNode; mono?: boolean }) => (
+          <div className="flex justify-between gap-4 py-1 border-b border-gray-50 last:border-0">
+            <span className="text-gray-500 flex-shrink-0">{k}</span>
+            <span className={`text-right text-gray-900 ${mono ? 'font-mono text-xs break-all' : ''}`}>{v}</span>
+          </div>
+        )
+        return (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 print:hidden" onClick={() => setDetalle(null)}>
+            <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                 <div>
-                  <p className="text-gray-500 mb-1">Respuesta del PAC:</p>
-                  <pre className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs whitespace-pre-wrap break-all">{detalle.respuesta_pac}</pre>
+                  <h3 className="font-semibold text-gray-900">{esNC ? 'Nota de crédito' : 'Factura'} electrónica #{detalle.documento}</h3>
+                  <p className="text-xs text-gray-500">{FE_TIPO_DOC.find(t => t.codigo === detalle.tipo_doc)?.nombre} · {formatDate(detalle.fecha)}</p>
                 </div>
-              )}
+                <div className="flex items-center gap-2">
+                  {detalle.cufe && (
+                    <button onClick={() => { setDetalle(null); abrirCafe(detalle) }}
+                      className="inline-flex items-center gap-1.5 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 px-3 py-1.5 rounded-lg">
+                      <FileText size={15} /> Comprobante PDF
+                    </button>
+                  )}
+                  <button onClick={() => setDetalle(null)} className="text-gray-400 hover:text-gray-600 p-1"><X size={18} /></button>
+                </div>
+              </div>
+
+              <div className="overflow-y-auto p-5 space-y-5 text-sm">
+                {detalle.ambiente === 'pruebas' && (
+                  <p className="text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 text-xs">
+                    Timbrado en ambiente de PRUEBAS: no está registrado en cobros y no aparece en ningún reporte.
+                  </p>
+                )}
+
+                {/* Estado / cobro */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="rounded-lg bg-gray-50 p-3">
+                    <p className="text-[11px] uppercase text-gray-500">Estado FE</p>
+                    <span className={`badge capitalize mt-1 ${ESTADO_BADGE[detalle.estado] || ''}`}>{detalle.estado}</span>
+                  </div>
+                  <div className="rounded-lg bg-gray-50 p-3">
+                    <p className="text-[11px] uppercase text-gray-500">Estado de cobro</p>
+                    {cobro ? <span className={`badge mt-1 ${cobro.badge.cls}`}>{cobro.badge.txt}</span> : <p className="text-gray-400 mt-1">No está en cobros</p>}
+                  </div>
+                  <div className="rounded-lg bg-gray-50 p-3">
+                    <p className="text-[11px] uppercase text-gray-500">Pagado</p>
+                    <p className="font-semibold text-green-700 mt-1">{cobro ? formatCurrency(cobro.pagado) : '—'}</p>
+                  </div>
+                  <div className="rounded-lg bg-gray-50 p-3">
+                    <p className="text-[11px] uppercase text-gray-500">Saldo</p>
+                    <p className="font-semibold text-orange-600 mt-1">{cobro ? formatCurrency(cobro.f.estado === 'pagada' ? 0 : cobro.saldo) : '—'}</p>
+                    {cobro?.f.fecha_pago && <p className="text-[11px] text-gray-500">Vence {formatDate(cobro.f.fecha_pago)}{cobro.tramo ? ` · ${cobro.tramo}` : ''}</p>}
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-5">
+                  {/* Cliente */}
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase text-gray-500 mb-2">Receptor</h4>
+                    <Row k="Cliente" v={detalle.nombre_cliente} />
+                    <Row k="Tipo de receptor" v={FE_TIPO_CLIENTE.find(c => c.codigo === detalle.tipo_cliente)?.nombre || detalle.tipo_cliente} />
+                    <Row k="Contribuyente" v={FE_TIPO_CONTRIBUYENTE.find(c => c.codigo === detalle.tipo_contribuyente)?.nombre || detalle.tipo_contribuyente} />
+                    {detalle.ruc && <Row k="RUC / DV" v={`${detalle.ruc} · DV ${detalle.dv || '—'}`} mono />}
+                    <Row k="Dirección" v={detalle.direccion_cliente} />
+                    {detalle.email_cliente && <Row k="Email" v={detalle.email_cliente} />}
+                  </div>
+                  {/* Documento */}
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase text-gray-500 mb-2">Documento</h4>
+                    <Row k="Número" v={`#${detalle.documento}`} />
+                    <Row k="Fecha de emisión" v={formatDate(detalle.fecha)} />
+                    <Row k="Condición" v={detalle.es_credito ? <span className="font-medium text-brand-700">Venta a crédito</span> : 'Contado'} />
+                    <Row k="Ambiente" v={detalle.ambiente ? (detalle.ambiente === 'produccion' ? 'Producción' : 'Pruebas') : '—'} />
+                    {detalle.fecha_cufe && <Row k="Fecha de autorización" v={detalle.fecha_cufe} />}
+                    {cobro && <Row k="Factura en cobros" v={<Link href={`/facturas?search=${cobro.f.numero_factura}`} className="text-brand-600 underline">#{cobro.f.numero_factura}</Link>} />}
+                    {esNC && detalle.cufe_devol && <Row k="CUFE afectado" v={detalle.cufe_devol} mono />}
+                    {esNC && detalle.fecha_cufe_devol && <Row k="Fecha doc. afectado" v={detalle.fecha_cufe_devol} />}
+                  </div>
+                </div>
+
+                {/* Líneas */}
+                <div>
+                  <h4 className="text-xs font-semibold uppercase text-gray-500 mb-2">Detalle</h4>
+                  <div className="border border-gray-200 rounded-lg overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50 text-gray-500">
+                        <tr>
+                          <th className="px-2 py-1.5 text-left">#</th>
+                          <th className="px-2 py-1.5 text-left">Código</th>
+                          <th className="px-2 py-1.5 text-left">Descripción</th>
+                          <th className="px-2 py-1.5 text-right">Cant.</th>
+                          <th className="px-2 py-1.5 text-left">Und.</th>
+                          <th className="px-2 py-1.5 text-right">P. unit.</th>
+                          <th className="px-2 py-1.5 text-right">Monto</th>
+                          <th className="px-2 py-1.5 text-right">ITBMS</th>
+                          <th className="px-2 py-1.5 text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {detalleLoading ? (
+                          <tr><td colSpan={9} className="px-2 py-4 text-center text-gray-400">Cargando...</td></tr>
+                        ) : filas.length === 0 ? (
+                          <tr><td colSpan={9} className="px-2 py-4 text-center text-gray-400">Sin líneas</td></tr>
+                        ) : filas.map((f, i) => (
+                          <tr key={f.l.id || i}>
+                            <td className="px-2 py-1.5 text-gray-400">{i + 1}</td>
+                            <td className="px-2 py-1.5 font-mono">{f.l.codigo_articulo}</td>
+                            <td className="px-2 py-1.5">{f.l.nombre_articulo}<span className="block text-[10px] text-gray-400">CPBS {f.l.grupo_inv}/{f.l.subgr_inv}</span></td>
+                            <td className="px-2 py-1.5 text-right">{Number(f.l.cantidad).toLocaleString('es-PA', { maximumFractionDigits: 3 })}</td>
+                            <td className="px-2 py-1.5">{f.l.unidad}</td>
+                            <td className="px-2 py-1.5 text-right">{formatCurrency(Number(f.l.precioneto))}</td>
+                            <td className="px-2 py-1.5 text-right">{formatCurrency(f.monto)}</td>
+                            <td className="px-2 py-1.5 text-right">{formatCurrency(f.itbms)} <span className="text-gray-400">({f.l.prc_impuesto}%)</span></td>
+                            <td className="px-2 py-1.5 text-right font-medium">{formatCurrency(f.valorItem)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-5">
+                  {/* Pagos */}
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase text-gray-500 mb-2">Forma de pago</h4>
+                    {detalle.es_credito ? (
+                      <Row k="Crédito" v={formatCurrency(detalle.totalfinal)} />
+                    ) : detallePagos.length === 0 ? (
+                      <p className="text-gray-400">—</p>
+                    ) : detallePagos.map((pg, i) => (
+                      <Row key={pg.id || i} k={FE_FORMAS_PAGO.find(f => f.codigo === pg.codigo)?.nombre || pg.nombre} v={formatCurrency(Number(pg.monto))} />
+                    ))}
+                    {Number(detalle.retencion) > 0 && (
+                      <Row k={`Retención ITBMS ${detalle.prc_retencion}%${ret ? ` (${ret.codigo})` : ''}`} v={formatCurrency(Number(detalle.retencion))} />
+                    )}
+                  </div>
+                  {/* Totales */}
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase text-gray-500 mb-2">Totales</h4>
+                    <Row k="Neto" v={formatCurrency(detalle.totneto)} />
+                    <Row k="ITBMS" v={formatCurrency(detalle.totimpuest)} />
+                    <Row k="Total" v={<strong>{formatCurrency(detalle.totalfinal)}</strong>} />
+                  </div>
+                </div>
+
+                {/* DGI */}
+                <div>
+                  <h4 className="text-xs font-semibold uppercase text-gray-500 mb-2">Autorización DGI</h4>
+                  {detalle.cufe ? (
+                    <>
+                      <Row k="CUFE" v={<span className="inline-flex items-center gap-1">{detalle.cufe}<button onClick={() => copiarCufe(detalle.cufe!)} className="text-gray-400 hover:text-brand-600" title="Copiar"><Copy size={12} /></button></span>} mono />
+                      {detalle.url_dgi && <Row k="Consulta" v={<a href={detalle.url_dgi} target="_blank" rel="noopener noreferrer" className="text-brand-600 underline">Ver en la DGI</a>} />}
+                    </>
+                  ) : <p className="text-gray-400">Documento sin timbrar.</p>}
+                  {detalle.respuesta_pac && (
+                    <details className="mt-2">
+                      <summary className="text-xs text-gray-500 cursor-pointer">Respuesta del PAC</summary>
+                      <pre className="mt-1 bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs whitespace-pre-wrap break-all">{detalle.respuesta_pac}</pre>
+                    </details>
+                  )}
+                </div>
+                {detalle.notas && <p className="text-xs text-gray-600"><span className="text-gray-500">Notas:</span> {detalle.notas}</p>}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Comprobante Auxiliar (CAFE): vista previa + impresión/PDF */}
+      {cafe && typeof document !== 'undefined' && createPortal(
+        <div id="cafe-print" className="hidden print:block">
+          <ComprobanteFE doc={cafe.doc} emisor={emisor} lineas={cafe.lineas} pagos={cafe.pagos} />
+        </div>,
+        document.body,
+      )}
+      {cafe && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 print:hidden" onClick={() => setCafe(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="text-base font-semibold">Comprobante Auxiliar de Factura Electrónica</h2>
+                <p className="text-xs text-gray-500">#{cafe.doc.documento} · {cafe.doc.nombre_cliente} · en el diálogo elige &ldquo;Guardar como PDF&rdquo;</p>
+              </div>
+              <button onClick={() => setCafe(null)} className="text-gray-400 hover:text-gray-600 p-1"><X size={18} /></button>
+            </div>
+            <div className="overflow-y-auto p-6 bg-gray-100">
+              <div className="bg-white shadow p-8 mx-auto" style={{ width: '215.9mm', maxWidth: '100%' }}>
+                <ComprobanteFE doc={cafe.doc} emisor={emisor} lineas={cafe.lineas} pagos={cafe.pagos} preview />
+              </div>
+            </div>
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
+              <button className="btn-secondary flex-1" onClick={() => setCafe(null)}>Cerrar</button>
+              <button className="btn-primary flex-1 flex items-center justify-center gap-2" onClick={imprimirCafe}>
+                <Printer size={16} /> Imprimir / Guardar PDF
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      <style>{`
+        @media print {
+          /* display:none colapsa el layout (visibility dejaba páginas en blanco) */
+          body > :not(#cafe-print) { display: none !important; }
+          #cafe-print { display: block !important; width: 100%; }
+          @page { size: letter; margin: 12mm; }
+        }
+      `}</style>
 
       {/* Modal artículo */}
       {showArtForm && (

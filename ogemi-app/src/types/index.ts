@@ -331,6 +331,11 @@ export interface FeConfig {
   /** Código de forma de pago que se envía al PAC en ventas a crédito */
   fp_credito_codigo: string;
   fp_credito_nombre: string;
+  /** Datos del emisor impresos en el Comprobante Auxiliar (CAFE) */
+  emisor_nombre: string;
+  emisor_ruc: string;
+  emisor_dv: string;
+  emisor_direccion: string;
   updated_at: string;
 }
 
@@ -410,6 +415,8 @@ export interface FeDocumento {
   clientes?: Cliente;
   fe_documento_lineas?: FeDocumentoLinea[];
   fe_documento_pagos?: FeDocumentoPago[];
+  /** Factura de cobros vinculada (solo docs aceptados en producción) */
+  facturas?: Pick<Factura, 'id' | 'numero_factura' | 'total' | 'monto_pagado' | 'retencion_monto' | 'fecha_pago' | 'estado' | 'fecha_cobro'> | null;
 }
 
 export interface ExcelRow {
