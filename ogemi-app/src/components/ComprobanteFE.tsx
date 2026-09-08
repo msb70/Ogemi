@@ -98,7 +98,10 @@ export default function ComprobanteFE({ doc, emisor, lineas, pagos, preview = fa
       <div className="flex justify-between gap-4">
         <div className="flex-1 pt-3">
           <h1 className="text-[17px] font-bold text-center">Comprobante Auxiliar de Factura Electrónica</h1>
-          <h2 className="text-[13px] font-bold text-center mt-2 mb-5">{tipoNombre}</h2>
+          <h2 className="text-[13px] font-bold text-center mt-2 mb-3">{tipoNombre}</h2>
+          {/* Logo a color del emisor (public/logo.jpeg); printColorAdjust exact lo mantiene en el PDF */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.jpeg" alt="Impresos Comerciales" className="h-[46px] w-auto mb-3" style={exact} />
           <p><b>Emisor:</b> {emisor?.nombre || '—'}</p>
           <p><b>RUC:</b> {emisor?.ruc || '—'}</p>
           <p><b>DV:</b> {emisor?.dv || '—'}</p>
@@ -112,6 +115,7 @@ export default function ComprobanteFE({ doc, emisor, lineas, pagos, preview = fa
           </div>
         </div>
         <div className="w-[170px] h-[170px] flex-shrink-0 flex items-center justify-center border border-gray-200">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           {qr ? <img src={qr} alt="QR DGI" className="w-[165px] h-[165px]" /> : <span className="text-gray-400 text-[10px]">Sin QR</span>}
         </div>
       </div>
