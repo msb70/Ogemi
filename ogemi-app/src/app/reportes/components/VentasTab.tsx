@@ -320,7 +320,11 @@ export default function VentasTab({
                         <td className="table-cell text-sm text-gray-500 col-fecha">{formatDate(c.fecha)}</td>
                         <td className="table-cell max-w-[200px] col-cliente"><span className="truncate block">{c.cliente}</span></td>
                         <td className="table-cell text-sm text-gray-500 col-venc">{formatDate(c.fecha_pago)}</td>
-                        <td className="table-cell text-right col-total">{formatMonto(c.total)}</td>
+                        {/* En el PDF la columna Total muestra el saldo (lo que se debe); en pantalla, el total facturado */}
+                        <td className="table-cell text-right col-total">
+                          <span className="print:hidden">{formatMonto(c.total)}</span>
+                          <span className="hidden print:inline">{formatMonto(saldoDe(c))}</span>
+                        </td>
                         <td className="table-cell text-right font-semibold text-orange-600 col-saldo">{formatMonto(saldoDe(c))}</td>
                         <td className="table-cell text-right col-dias">
                           <span className={c.dias_vencida > 0 ? 'text-red-600 font-medium' : 'text-green-600'}>
