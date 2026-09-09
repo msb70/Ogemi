@@ -144,8 +144,10 @@ export default function VentasTab({
               <Download size={14} />Exportar Excel
             </button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 print:hidden">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 print:hidden">
             {[
+              { label: 'Neto', val: totalNeto, color: 'text-gray-800' },
+              { label: 'ITBMS', val: totalItbms, color: 'text-gray-600' },
               { label: 'Total facturado', val: ventasFiltradas.reduce((s, f) => s + (f.total || 0), 0), color: 'text-brand-700' },
               // Cobrado = cobradas completas + abonos de pendientes; Pendiente = saldo cobrable real
               { label: 'Cobrado', val: ventasFiltradas.reduce((s, f) => s + (f.estado === 'pagada' ? (f.total || 0) : ((f as any).monto_pagado || 0)), 0), color: 'text-green-600' },
