@@ -62,6 +62,8 @@ export default function VentasTab({
 
   // Totales del listado (mismos cálculos que las tarjetas KPI; se imprimen al pie del PDF)
   const totalFacturado = ventasFiltradas.reduce((s, f) => s + (f.total || 0), 0)
+  const totalNeto = ventasFiltradas.reduce((s, f) => s + (f.monto || 0), 0)
+  const totalItbms = ventasFiltradas.reduce((s, f) => s + (f.itbms || 0), 0)
   const totalCobrado = ventasFiltradas.reduce((s, f) => s + (f.estado === 'pagada' ? (f.total || 0) : ((f as any).monto_pagado || 0)), 0)
   const totalPendiente = ventasFiltradas.reduce((s, f) => s + (f.estado === 'pendiente'
     ? Math.max((f.total || 0) - ((f as any).retencion_monto || 0) - ((f as any).monto_pagado || 0), 0) : 0), 0)
@@ -72,6 +74,8 @@ export default function VentasTab({
       <td className="table-cell text-sm">{formatDate(f.fecha)}</td>
       <td className="table-cell max-w-[200px]"><span className="truncate block">{f.clientes?.nombre}</span></td>
       <td className="table-cell text-xs text-gray-400">{f.tipo_documento}</td>
+      <td className="table-cell text-right text-sm">{formatMonto(f.monto)}</td>
+      <td className="table-cell text-right text-sm text-gray-500">{formatMonto(f.itbms)}</td>
       <td className="table-cell text-right font-semibold">{formatMonto(f.total)}</td>
       <td className="table-cell">
         <span className={`badge ${f.estado === 'pagada' ? 'bg-green-100 text-green-700' : f.estado === 'falta_retencion' ? 'bg-amber-100 text-amber-700' : 'bg-orange-100 text-orange-700'}`}>
@@ -162,13 +166,15 @@ export default function VentasTab({
                 <th className="table-header">Fecha</th>
                 <th className="table-header">Cliente</th>
                 <th className="table-header">Tipo</th>
+                <th className="table-header text-right">Neto</th>
+                <th className="table-header text-right">ITBMS</th>
                 <th className="table-header text-right">Total</th>
                 <th className="table-header">Estado</th>
                 <th className="table-header">Vencimiento</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-100">
                 {ventasOrdenadas.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">Sin resultados</td></tr>
+                  <tr><td colSpan={9} className="text-center py-8 text-gray-400">Sin resultados</td></tr>
                 ) : agruparCliente ? (
                   Object.entries(
                     ventasOrdenadas.reduce((acc: Record<string, any[]>, f: any) => {
@@ -183,6 +189,12 @@ export default function VentasTab({
                         <tr className="bg-brand-50/40 border-t border-gray-200">
                           <td colSpan={4} className="table-cell font-semibold text-brand-800">
                             {nombre} <span className="text-xs text-gray-400 font-normal print:hidden">({fs.length} factura{fs.length === 1 ? '' : 's'})</span>
+                          </td>
+                          <td className="table-cell text-right font-bold text-brand-800">
+                            {formatMonto(fs.reduce((s, f) => s + (f.monto || 0), 0))}
+                          </td>
+                          <td className="table-cell text-right font-bold text-brand-800">
+                            {formatMonto(fs.reduce((s, f) => s + (f.itbms || 0), 0))}
                           </td>
                           <td className="table-cell text-right font-bold text-brand-800">
                             {formatMonto(fs.reduce((s, f) => s + (f.total || 0), 0))}
@@ -200,6 +212,8 @@ export default function VentasTab({
           <div className="hidden print:block">
             <table className="print-totales">
               <tbody>
+                <tr><td>Neto</td><td>{formatMonto(totalNeto)}</td></tr>
+                <tr><td>ITBMS</td><td>{formatMonto(totalItbms)}</td></tr>
                 <tr><td>Total facturado</td><td>{formatMonto(totalFacturado)}</td></tr>
                 <tr><td>Cobrado</td><td>{formatMonto(totalCobrado)}</td></tr>
                 <tr><td>Pendiente</td><td>{formatMonto(totalPendiente)}</td></tr>
