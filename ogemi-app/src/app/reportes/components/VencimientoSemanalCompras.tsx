@@ -17,6 +17,8 @@ export interface VencimientoSemanalComprasProps {
   /** Fechas controladas (ej. las semanas del Flujo de Pago). Si se omiten, usa los próximos 4 viernes. */
   weekDates?: string[]
   setWeekDates?: (dates: string[]) => void
+  /** Fechas fijadas por el padre (corte + 7 días): se muestran como texto, no se editan. */
+  datesReadOnly?: boolean
   /** Marcas "Pagará" controladas (persistidas por el padre). Si se omiten, estado local. */
   pagaraSet?: Set<string>
   onTogglePagara?: (id: string, marked: boolean) => void
@@ -78,7 +80,7 @@ function MontoPagaraInput({ saldo, value, onCommit }: {
 }
 
 export default function VencimientoSemanalCompras({
-  compras, weekDates: weekDatesProp, setWeekDates: setWeekDatesProp,
+  compras, weekDates: weekDatesProp, setWeekDates: setWeekDatesProp, datesReadOnly,
   pagaraSet: pagaraProp, onTogglePagara, onToggleManyPagara,
   pagaraMontos, onChangeMontoPagara, pagaraSemanas, onChangeSemanaPagara, cutoffDate,
 }: VencimientoSemanalComprasProps) {
@@ -205,9 +207,13 @@ export default function VencimientoSemanalCompras({
           return (
             <div key={i} className={`card p-4 border-t-4 ${c.bg} ${c.border}`}>
               <p className={`text-xs font-semibold uppercase tracking-wide ${c.label}`}>Semana {i + 1}</p>
-              <input type="date" value={compWeekDates[i]}
-                onChange={e => { const nd = [...compWeekDates]; nd[i] = e.target.value; setCompWeekDates(nd) }}
-                className="text-xs text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 mt-0.5 mb-2 w-full bg-white focus:outline-none focus:border-gray-400" />
+              {datesReadOnly ? (
+                <p className="text-xs text-gray-600 mt-0.5 mb-2">{formatDate(compWeekDates[i])}</p>
+              ) : (
+                <input type="date" value={compWeekDates[i]}
+                  onChange={e => { const nd = [...compWeekDates]; nd[i] = e.target.value; setCompWeekDates(nd) }}
+                  className="text-xs text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 mt-0.5 mb-2 w-full bg-white focus:outline-none focus:border-gray-400" />
+              )}
               <p className={`text-lg font-bold ${c.text}`}>{formatMonto(vencCompras.totals[i])}</p>
               {pagara > 0 && (
                 <p className="text-[11px] text-green-600 mt-0.5">

@@ -27,7 +27,7 @@ type GastoMonto = {
   id: string
   gasto_fijo_id: string
   periodo: string
-  semana: 1 | 2 | 3 | 4
+  semana: number
   monto: number
   notas: string | null
 }
@@ -40,41 +40,77 @@ type BancoCuentaLite = {
 
 type Pestana = 'gastos' | 'ventas' | 'presupuestos' | 'compras'
 
+/** Semanas del flujo: siempre 4, arrancando en la fecha de corte (corte, +7, +14, +21). */
 const SEMANAS = [1, 2, 3, 4] as const
-type Semana = (typeof SEMANAS)[number]
-type MontosSemana = Record<Semana, string>
+/** Máximo de semanas de gastos fijos en un mes (5 si el mes tiene 5 viernes). */
+const MAX_SEMANAS_GASTOS = 5
+type Semana = number
+type MontosSemana = Record<number, string>
 
-const emptyMontos = (): MontosSemana => ({ 1: '', 2: '', 3: '', 4: '' })
+/**
+ * Las marcas "Pagarán"/"Pagará" ya no van por mes: hay un solo juego global
+ * (lo que está en pantalla). Se conserva la columna periodo con un valor fijo.
+ */
+const PERIODO_MARCAS = '1900-01-01'
+const LS_CORTE_KEY = 'ogemi.flujo.corte'
 
-const currentMonth = () => {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-}
-
-const monthToPeriod = (month: string) => `${month}-01`
+const emptyMontos = (): MontosSemana => ({})
 
 const toISO = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-/** Fechas por defecto: el viernes de cada una de las 4 semanas del mes. */
-const defaultWeekDates = (month: string): string[] => {
+const todayISO = () => toISO(new Date())
+
+const parseISO = (s: string) => new Date(s + 'T00:00:00')
+
+const addDays = (iso: string, n: number) => {
+  const d = parseISO(iso)
+  d.setDate(d.getDate() + n)
+  return toISO(d)
+}
+
+/** 'AAAA-MM' del mes al que pertenece una fecha ISO. */
+const monthOf = (iso: string) => iso.slice(0, 7)
+
+const monthToPeriod = (month: string) => `${month}-01`
+
+/** 'AAAA-MM' del mes siguiente. */
+const nextMonth = (month: string) => {
   const [y, m] = month.split('-').map(Number)
-  const first = new Date(y, m - 1, 1)
-  const offset = (5 - first.getDay() + 7) % 7 // 5 = viernes
-  const firstFriday = 1 + offset
-  return [0, 1, 2, 3].map(i => toISO(new Date(y, m - 1, firstFriday + i * 7)))
+  const d = new Date(y, m, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
 /**
- * Anchos de columna compartidos para que Semana 1-4 y Total queden alineadas
- * entre las tablas de flujo, gastos fijos y compras a pagar.
- * Estructura: [concepto flexible] [4 semanas] [total] [estado/espaciador]
+ * Fechas de las semanas de gastos fijos: todos los viernes del mes (4 o 5).
+ * Los gastos siempre van del principio al final del mes.
  */
-const ColsSemana = () => (
+const fridaysOfMonth = (month: string): string[] => {
+  const [y, m] = month.split('-').map(Number)
+  const first = new Date(y, m - 1, 1)
+  const offset = (5 - first.getDay() + 7) % 7 // 5 = viernes
+  const out: string[] = []
+  for (let day = 1 + offset; day <= 31; day += 7) {
+    const d = new Date(y, m - 1, day)
+    if (d.getMonth() !== m - 1) break
+    out.push(toISO(d))
+  }
+  return out
+}
+
+/** Las 4 fechas del flujo: la fecha de corte es la semana 1, luego +7 días. */
+const flujoWeekDates = (corte: string): string[] => SEMANAS.map((_, i) => addDays(corte, i * 7))
+
+/**
+ * Anchos de columna compartidos para que las semanas y Total queden alineadas
+ * entre las tablas de flujo, gastos fijos y compras a pagar.
+ * Estructura: [concepto flexible] [N semanas] [total] [estado/espaciador]
+ */
+const ColsSemana = ({ n = SEMANAS.length }: { n?: number }) => (
   <colgroup>
     <col />
-    {SEMANAS.map(s => (
-      <col key={s} className="w-36" />
+    {Array.from({ length: n }, (_, i) => (
+      <col key={i} className="w-36" />
     ))}
     <col className="w-32" />
     <col className="w-28" />
@@ -122,12 +158,22 @@ function GastosFijosPage() {
   const supabase = useMemo(() => createClient(), [])
   const { toast, showToast, hideToast } = useToast()
   const [pestana, setPestana] = useState<Pestana>('gastos')
-  const [periodoMes, setPeriodoMes] = useState(currentMonth)
-  const [fechaResumen, setFechaResumen] = useState(new Date().toISOString().split('T')[0])
+  // Fecha de corte = semana 1 del flujo. Se recuerda en el navegador.
+  const [fechaResumen, setFechaResumen] = useState<string>(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem(LS_CORTE_KEY) : null
+      if (saved && /^\d{4}-\d{2}-\d{2}$/.test(saved)) return saved
+    } catch { /* sin storage */ }
+    return todayISO()
+  })
   const [gastos, setGastos] = useState<GastoFijo[]>([])
+  // Montos del mes del corte (editable) y del mes siguiente (solo para el flujo)
   const [montos, setMontos] = useState<Record<string, MontosSemana>>({})
-  const [semanaFechas, setSemanaFechas] = useState<string[]>(() => defaultWeekDates(currentMonth()))
-  const [cxcSemana, setCxcSemana] = useState<number[]>([0, 0, 0, 0])
+  const [montosSig, setMontosSig] = useState<Record<string, MontosSemana> | null>(null)
+  // Fechas de las semanas de gastos del mes del corte (viernes, editables) y del mes siguiente
+  const [semanaFechas, setSemanaFechas] = useState<string[]>(() => fridaysOfMonth(monthOf(todayISO())))
+  const [semanaFechasSig, setSemanaFechasSig] = useState<string[]>([])
+  const [cxcSemana, setCxcSemana] = useState<number[]>([])
   const [cuentas, setCuentas] = useState<BancoCuentaLite[]>([])
   const [saldoBancos, setSaldoBancos] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -153,16 +199,52 @@ function GastosFijosPage() {
   // Semana elegida a mano para pagar una compra (0-3). Ausente = la del vencimiento.
   const [semanasPagaraCompras, setSemanasPagaraCompras] = useState<Record<string, number>>({})
 
+  // Mes de gastos fijos = mes de la fecha de corte
+  const periodoMes = useMemo(() => monthOf(fechaResumen), [fechaResumen])
   const periodo = useMemo(() => monthToPeriod(periodoMes), [periodoMes])
+  const periodoMesSig = useMemo(() => nextMonth(periodoMes), [periodoMes])
+  const periodoSig = useMemo(() => monthToPeriod(periodoMesSig), [periodoMesSig])
+  // Semanas de gastos del mes (1..4 o 1..5)
+  const semanasGastos = useMemo(() => semanaFechas.map((_, i) => i + 1), [semanaFechas])
+  // Semanas del flujo: corte + 7 días
+  const flujoFechas = useMemo(() => flujoWeekDates(fechaResumen), [fechaResumen])
 
+  useEffect(() => {
+    try { localStorage.setItem(LS_CORTE_KEY, fechaResumen) } catch { /* sin storage */ }
+  }, [fechaResumen])
+
+  // Totales de la tabla de gastos fijos del mes (por semana del mes)
   const totalesSemana = useMemo(
     () =>
-      SEMANAS.map(s =>
+      semanasGastos.map(s =>
         gastos.filter(g => g.activo).reduce((sum, gasto) => sum + (parseFloat(montos[gasto.id]?.[s] || '0') || 0), 0)
       ),
-    [gastos, montos]
+    [gastos, montos, semanasGastos]
   )
-  const totalGastos = useMemo(() => totalesSemana.reduce((a, b) => a + b, 0), [totalesSemana])
+
+  /**
+   * Gastos fijos que caen en cada semana del flujo.
+   * Regla: la semana de gastos que "coincide" con la semana del flujo es la
+   * primera fecha de gastos >= fecha de la semana del flujo (y a menos de 7
+   * días). Ej.: corte 11-09 → gastos de la semana del 11-09; flujo semana 4
+   * (02-10) → gastos de la semana 1 de octubre. Si el mes siguiente no tiene
+   * montos cargados, se reutilizan los del mes actual por número de semana.
+   */
+  const gastosFlujoSemana = useMemo(() => {
+    const activos = gastos.filter(g => g.activo)
+    const sumSemana = (src: Record<string, MontosSemana>, s: number) =>
+      activos.reduce((sum, g) => sum + (parseFloat(src[g.id]?.[s] || '0') || 0), 0)
+    const candidatos: { fecha: string; monto: number }[] = [
+      ...semanaFechas.map((fecha, i) => ({ fecha, monto: sumSemana(montos, i + 1) })),
+      ...semanaFechasSig.map((fecha, i) => ({ fecha, monto: sumSemana(montosSig ?? montos, i + 1) })),
+    ].filter(c => !!c.fecha).sort((a, b) => (a.fecha < b.fecha ? -1 : 1))
+    return flujoFechas.map(f => {
+      const fin = addDays(f, 7)
+      const c = candidatos.find(x => x.fecha >= f && x.fecha < fin)
+      return c ? c.monto : 0
+    })
+  }, [gastos, montos, montosSig, semanaFechas, semanaFechasSig, flujoFechas])
+  const totalGastos = useMemo(() => gastosFlujoSemana.reduce((a, b) => a + b, 0), [gastosFlujoSemana])
 
   const loadGastos = useCallback(async () => {
     const { data, error } = await supabase
@@ -196,7 +278,7 @@ function GastosFijosPage() {
     // (el usuario solo ajusta lo que cambie mes a mes). Se persisten para que
     // el flujo y los KPIs los tomen igual que si se hubieran escrito a mano.
     // Solo para el mes en curso o futuros: no se inventan montos en períodos históricos.
-    if (rows.length === 0 && periodo >= monthToPeriod(currentMonth())) {
+    if (rows.length === 0 && periodo >= monthToPeriod(monthOf(todayISO()))) {
       const { data: prev } = await supabase
         .from('gastos_fijos_montos')
         .select('periodo')
@@ -210,7 +292,7 @@ function GastosFijosPage() {
           .select('*')
           .eq('periodo', periodoPrev)
         const copia = ((prevRows || []) as GastoMonto[])
-          .filter(r => r.semana >= 1 && r.semana <= 4)
+          .filter(r => r.semana >= 1 && r.semana <= MAX_SEMANAS_GASTOS)
           .map(r => ({ gasto_fijo_id: r.gasto_fijo_id, periodo, semana: r.semana, monto: r.monto }))
         if (copia.length > 0) {
           const { error: copyError } = await supabase
@@ -230,32 +312,52 @@ function GastosFijosPage() {
     const next: Record<string, MontosSemana> = {}
     rows.forEach(row => {
       if (!next[row.gasto_fijo_id]) next[row.gasto_fijo_id] = emptyMontos()
-      if (row.semana >= 1 && row.semana <= 4) {
-        next[row.gasto_fijo_id][row.semana as Semana] = String(row.monto ?? '')
+      if (row.semana >= 1 && row.semana <= MAX_SEMANAS_GASTOS) {
+        next[row.gasto_fijo_id][row.semana] = String(row.monto ?? '')
       }
     })
     setMontos(next)
   }, [periodo, showToast, supabase])
 
-  const loadSemanas = useCallback(async () => {
-    const defaults = defaultWeekDates(periodoMes)
+  // Montos del mes siguiente (solo lectura): el flujo puede cruzar de mes.
+  // Si no hay filas, null → se reutilizan los del mes actual.
+  const loadMontosSig = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('gastos_fijos_montos')
+      .select('gasto_fijo_id, semana, monto')
+      .eq('periodo', periodoSig)
+    if (error || !data || data.length === 0) { setMontosSig(null); return }
+    const next: Record<string, MontosSemana> = {}
+    ;(data as GastoMonto[]).forEach(row => {
+      if (!next[row.gasto_fijo_id]) next[row.gasto_fijo_id] = emptyMontos()
+      if (row.semana >= 1 && row.semana <= MAX_SEMANAS_GASTOS) next[row.gasto_fijo_id][row.semana] = String(row.monto ?? '')
+    })
+    setMontosSig(next)
+  }, [periodoSig, supabase])
+
+  /** Fechas de semanas de un mes: viernes por defecto, sobreescritas por lo guardado. */
+  const fetchSemanas = useCallback(async (mes: string, per: string) => {
+    const fechas = fridaysOfMonth(mes)
     const { data, error } = await supabase
       .from('gastos_fijos_semanas')
       .select('semana, fecha')
-      .eq('periodo', periodo)
-
-    if (error) {
-      showToast(`Error al cargar fechas de semanas: ${error.message}`, 'error')
-      setSemanaFechas(defaults)
-      return
-    }
-
-    const fechas = [...defaults]
+      .eq('periodo', per)
+    if (error) return { fechas, error }
     ;((data || []) as { semana: number; fecha: string }[]).forEach(row => {
-      if (row.semana >= 1 && row.semana <= 4) fechas[row.semana - 1] = row.fecha
+      if (row.semana >= 1 && row.semana <= fechas.length) fechas[row.semana - 1] = row.fecha
     })
-    setSemanaFechas(fechas)
-  }, [periodo, periodoMes, showToast, supabase])
+    return { fechas, error: null }
+  }, [supabase])
+
+  const loadSemanas = useCallback(async () => {
+    const [act, sig] = await Promise.all([
+      fetchSemanas(periodoMes, periodo),
+      fetchSemanas(periodoMesSig, periodoSig),
+    ])
+    if (act.error) showToast(`Error al cargar fechas de semanas: ${act.error.message}`, 'error')
+    setSemanaFechas(act.fechas)
+    setSemanaFechasSig(sig.fechas)
+  }, [fetchSemanas, periodo, periodoMes, periodoSig, periodoMesSig, showToast])
 
   const loadResumen = useCallback(async () => {
     const { data: cuentasData, error: cuentasError } = await supabase
@@ -303,9 +405,9 @@ function GastosFijosPage() {
 
   const loadAll = useCallback(async () => {
     setLoading(true)
-    await Promise.all([loadGastos(), loadMontos(), loadSemanas(), loadResumen()])
+    await Promise.all([loadGastos(), loadMontos(), loadMontosSig(), loadSemanas(), loadResumen()])
     setLoading(false)
-  }, [loadGastos, loadMontos, loadSemanas, loadResumen])
+  }, [loadGastos, loadMontos, loadMontosSig, loadSemanas, loadResumen])
 
   useEffect(() => { loadAll() }, [loadAll])
 
@@ -337,12 +439,12 @@ function GastosFijosPage() {
 
   useEffect(() => { loadVencimientos() }, [loadVencimientos])
 
-  // Cargar marcas del período
+  // Cargar marcas (juego global, sin mes)
   const loadMarcas = useCallback(async () => {
     const { data, error } = await supabase
       .from('flujo_pago_marcas')
       .select('tipo, doc_id, monto, semana_idx')
-      .eq('periodo', periodo)
+      .eq('periodo', PERIODO_MARCAS)
     if (error) {
       showToast(`Error al cargar marcas del flujo: ${error.message}`, 'error')
       return
@@ -364,7 +466,7 @@ function GastosFijosPage() {
     setMarcasCompras(c)
     setMontosPagaraCompras(montos)
     setSemanasPagaraCompras(semanas)
-  }, [periodo, showToast, supabase])
+  }, [showToast, supabase])
 
   useEffect(() => { loadMarcas() }, [loadMarcas])
 
@@ -390,14 +492,14 @@ function GastosFijosPage() {
     }
     const { error } = marked
       ? await supabase.from('flujo_pago_marcas')
-          .upsert({ periodo, tipo, doc_id: id }, { onConflict: 'periodo,tipo,doc_id', ignoreDuplicates: true })
+          .upsert({ periodo: PERIODO_MARCAS, tipo, doc_id: id }, { onConflict: 'periodo,tipo,doc_id', ignoreDuplicates: true })
       : await supabase.from('flujo_pago_marcas')
-          .delete().eq('periodo', periodo).eq('tipo', tipo).eq('doc_id', id)
+          .delete().eq('periodo', PERIODO_MARCAS).eq('tipo', tipo).eq('doc_id', id)
     if (error) {
       apply(!marked) // revertir
       showToast(`Error al guardar la marca: ${error.message}`, 'error')
     }
-  }, [periodo, showToast, supabase])
+  }, [showToast, supabase])
 
   // Marcar/desmarcar TODAS las filas visibles de una pestaña (persistido en lote)
   const toggleMarcaMany = useCallback(async (tipo: TipoMarca, ids: string[], marked: boolean) => {
@@ -422,14 +524,14 @@ function GastosFijosPage() {
     }
     const { error } = marked
       ? await supabase.from('flujo_pago_marcas')
-          .upsert(ids.map(id => ({ periodo, tipo, doc_id: id })), { onConflict: 'periodo,tipo,doc_id', ignoreDuplicates: true })
+          .upsert(ids.map(id => ({ periodo: PERIODO_MARCAS, tipo, doc_id: id })), { onConflict: 'periodo,tipo,doc_id', ignoreDuplicates: true })
       : await supabase.from('flujo_pago_marcas')
-          .delete().eq('periodo', periodo).eq('tipo', tipo).in('doc_id', ids)
+          .delete().eq('periodo', PERIODO_MARCAS).eq('tipo', tipo).in('doc_id', ids)
     if (error) {
       await loadMarcas() // resincronizar con la BD
       showToast(`Error al guardar las marcas: ${error.message}`, 'error')
     }
-  }, [periodo, loadMarcas, showToast, supabase])
+  }, [loadMarcas, showToast, supabase])
 
   // Fijar el monto parcial proyectado de una compra marcada "Pagará".
   // null = volver al saldo completo. Se persiste en flujo_pago_marcas.monto.
@@ -440,12 +542,12 @@ function GastosFijosPage() {
       return next
     })
     const { error } = await supabase.from('flujo_pago_marcas')
-      .upsert({ periodo, tipo: 'compra', doc_id: id, monto }, { onConflict: 'periodo,tipo,doc_id' })
+      .upsert({ periodo: PERIODO_MARCAS, tipo: 'compra', doc_id: id, monto }, { onConflict: 'periodo,tipo,doc_id' })
     if (error) {
       await loadMarcas() // resincronizar con la BD
       showToast(`Error al guardar el monto a pagar: ${error.message}`, 'error')
     }
-  }, [periodo, loadMarcas, showToast, supabase])
+  }, [loadMarcas, showToast, supabase])
 
   // Adelantar o atrasar el pago proyectado de una compra a otra semana del período.
   // null = volver a la semana que corresponda por su fecha de vencimiento.
@@ -456,18 +558,18 @@ function GastosFijosPage() {
       return next
     })
     const { error } = await supabase.from('flujo_pago_marcas')
-      .upsert({ periodo, tipo: 'compra', doc_id: id, semana_idx: semana }, { onConflict: 'periodo,tipo,doc_id' })
+      .upsert({ periodo: PERIODO_MARCAS, tipo: 'compra', doc_id: id, semana_idx: semana }, { onConflict: 'periodo,tipo,doc_id' })
     if (error) {
       await loadMarcas()
       showToast(`Error al guardar la semana de pago: ${error.message}`, 'error')
     }
-  }, [periodo, loadMarcas, showToast, supabase])
+  }, [loadMarcas, showToast, supabase])
 
   // ── Resumen del flujo de pago por semana ────────────────────────────────────
   const flujo = useMemo(() => {
-    const dateObjs = semanaFechas.map(d => new Date(d + 'T00:00:00'))
-    // Lo vencido antes de la fecha de corte cae en la primera semana >= corte
-    const cutoff = new Date(fechaResumen + 'T00:00:00')
+    const dateObjs = flujoFechas.map(parseISO)
+    // Lo vencido antes de la fecha de corte cae en la semana 1 (= corte)
+    const cutoff = parseISO(fechaResumen)
     const vencVentas = buildVencimientoViernes(facturasAll, dateObjs, cutoff)
     const vencPres = buildVencimientoSemanal(presupuestosAll, dateObjs, 'fecha_pago', cutoff)
     const vencComp = buildVencimientoSemanal(comprasAll, dateObjs, 'vencimiento', cutoff)
@@ -501,7 +603,7 @@ function GastosFijosPage() {
     const semanaCorteIdx = idxCorte === -1 ? 0 : idxCorte
 
     return { cobrosVentas, cobrosPres, pagosCompras, comprasPagar, semanaCorteIdx }
-  }, [semanaFechas, fechaResumen, facturasAll, presupuestosAll, comprasAll, marcasVentas, marcasPresupuestos, marcasCompras, montosPagaraCompras, semanasPagaraCompras])
+  }, [flujoFechas, fechaResumen, facturasAll, presupuestosAll, comprasAll, marcasVentas, marcasPresupuestos, marcasCompras, montosPagaraCompras, semanasPagaraCompras])
 
   // Detalle de compras a pagar agrupado por proveedor: N facturas, monto por semana y total
   const comprasPagarPorProveedor = useMemo(() => {
@@ -522,7 +624,7 @@ function GastosFijosPage() {
   }, [flujo.comprasPagar])
 
   const flujoNetoSemana = SEMANAS.map((_, i) =>
-    flujo.cobrosVentas[i] + flujo.cobrosPres[i] - flujo.pagosCompras[i] - totalesSemana[i])
+    flujo.cobrosVentas[i] + flujo.cobrosPres[i] - flujo.pagosCompras[i] - gastosFlujoSemana[i])
   const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0)
 
   // Saldo de bancos proyectado: arranca en la semana de corte con el saldo real
@@ -569,7 +671,7 @@ function GastosFijosPage() {
       .filter(gasto => gasto.activo)
       .flatMap(gasto => {
         const valores = montos[gasto.id] || emptyMontos()
-        return SEMANAS.map(semana => ({
+        return semanasGastos.map(semana => ({
           gasto_fijo_id: gasto.id,
           periodo,
           semana,
@@ -577,10 +679,10 @@ function GastosFijosPage() {
         }))
       })
 
-    const fechasRows = SEMANAS.map(semana => ({
+    const fechasRows = semanasGastos.map(semana => ({
       periodo,
       semana,
-      fecha: semanaFechas[semana - 1] || defaultWeekDates(periodoMes)[semana - 1],
+      fecha: semanaFechas[semana - 1] || fridaysOfMonth(periodoMes)[semana - 1],
     }))
 
     // Persistir nombres editados (solo filas con nombre no vacío)
@@ -667,12 +769,6 @@ function GastosFijosPage() {
     if (value) persistFecha(semanaIndex + 1, value)
   }
 
-  // Setter de fechas para las pestañas de vencimiento: persiste las que cambian
-  const setSemanaFechasPersist = useCallback((dates: string[]) => {
-    dates.forEach((f, i) => { if (f && f !== semanaFechas[i]) persistFecha(i + 1, f) })
-    setSemanaFechas(dates)
-  }, [semanaFechas, persistFecha])
-
   const toggleActivo = async (gasto: GastoFijo) => {
     const { error } = await supabase
       .from('gastos_fijos')
@@ -734,7 +830,7 @@ function GastosFijosPage() {
             <div style={{ fontSize: 11, color: '#6b7280' }}>Impresos Comerciales S.A. · Sistema Ogemi</div>
           </div>
           <div style={{ textAlign: 'right', fontSize: 10, color: '#6b7280' }}>
-            <div>Período: {periodoMes}</div>
+            <div>Corte: {formatDate(fechaResumen)} · Gastos: {periodoMes}</div>
             <div>Generado: {new Date().toLocaleString('es-PA')}</div>
           </div>
         </div>
@@ -749,8 +845,8 @@ function GastosFijosPage() {
               {pestana === 'ventas' && (
                 <VencimientoSemanalVentas
                   facturas={facturasAll}
-                  weekDates={semanaFechas}
-                  setWeekDates={setSemanaFechasPersist}
+                  weekDates={flujoFechas}
+                  datesReadOnly
                   pagaraSet={marcasVentas}
                   onTogglePagara={(id, marked) => toggleMarca('venta', id, marked)}
                   onToggleManyPagara={(ids, marked) => toggleMarcaMany('venta', ids, marked)}
@@ -760,8 +856,8 @@ function GastosFijosPage() {
               {pestana === 'presupuestos' && (
                 <VencimientoSemanalPresupuestos
                   presupuestos={presupuestosAll}
-                  weekDates={semanaFechas}
-                  setWeekDates={setSemanaFechasPersist}
+                  weekDates={flujoFechas}
+                  datesReadOnly
                   pagaraSet={marcasPresupuestos}
                   onTogglePagara={(id, marked) => toggleMarca('presupuesto', id, marked)}
                   onToggleManyPagara={(ids, marked) => toggleMarcaMany('presupuesto', ids, marked)}
@@ -771,8 +867,8 @@ function GastosFijosPage() {
               {pestana === 'compras' && (
                 <VencimientoSemanalCompras
                   compras={comprasAll}
-                  weekDates={semanaFechas}
-                  setWeekDates={setSemanaFechasPersist}
+                  weekDates={flujoFechas}
+                  datesReadOnly
                   pagaraSet={marcasCompras}
                   onTogglePagara={(id, marked) => toggleMarca('compra', id, marked)}
                   onToggleManyPagara={(ids, marked) => toggleMarcaMany('compra', ids, marked)}
@@ -793,36 +889,34 @@ function GastosFijosPage() {
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="card p-4">
             <div className="flex items-center gap-2 mb-3">
-              <CalendarDays size={16} className="text-brand-600" />
-              <h2 className="text-sm font-semibold text-gray-800">Periodo de gastos</h2>
-            </div>
-            <label>
-              <span className="label">Mes y año</span>
-              <input
-                type="month"
-                className="input"
-                value={periodoMes}
-                onChange={event => setPeriodoMes(event.target.value)}
-              />
-            </label>
-          </div>
-
-          <div className="card p-4">
-            <div className="flex items-center gap-2 mb-3">
               <WalletCards size={16} className="text-brand-600" />
-              <h2 className="text-sm font-semibold text-gray-800">Resumen a fecha</h2>
+              <h2 className="text-sm font-semibold text-gray-800">Fecha de corte</h2>
             </div>
             <label>
-              <span className="label">Fecha de corte</span>
+              <span className="label">La fecha de corte es la semana 1 del flujo; las siguientes van cada 7 días</span>
               <input
                 type="date"
                 className="input"
                 value={fechaResumen}
-                onChange={event => setFechaResumen(event.target.value)}
+                onChange={event => { if (event.target.value) setFechaResumen(event.target.value) }}
               />
             </label>
+            <p className="mt-2 text-xs text-gray-500">
+              Semanas: {flujoFechas.map(f => formatDate(f)).join(' · ')}
+            </p>
           </div>
 
+          <div className="card p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <CalendarDays size={16} className="text-brand-600" />
+              <h2 className="text-sm font-semibold text-gray-800">Gastos fijos del mes</h2>
+            </div>
+            <p className="text-lg font-semibold text-gray-900">{periodoMes}</p>
+            <p className="mt-1 text-xs text-gray-500">
+              {semanaFechas.length} semanas (viernes del mes). El flujo toma la semana de gastos que coincide con cada
+              semana del corte; si cruza de mes usa {periodoMesSig}{montosSig ? '' : ' (sin montos: se repiten los de este mes)'}.
+            </p>
+          </div>
         </section>
 
         <section className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -846,7 +940,7 @@ function GastosFijosPage() {
           <div className="card p-4">
             <p className="text-xs font-semibold uppercase text-gray-500">Total gastos</p>
             <p className="mt-2 text-lg font-bold text-red-600">{formatCurrency(totalGastos)}</p>
-            <p className="text-xs text-gray-400">4 semanas</p>
+            <p className="text-xs text-gray-400">4 semanas desde el corte</p>
           </div>
           <div className="card p-4">
             <p className="text-xs font-semibold uppercase text-gray-500">Compras a pagar</p>
@@ -884,7 +978,7 @@ function GastosFijosPage() {
         <section className="card overflow-hidden">
           <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
             <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-              Flujo de pago por semana - {periodoMes}
+              Flujo de pago por semana · corte {formatDate(fechaResumen)}
             </p>
           </div>
           {vencLoading || !vencLoaded ? (
@@ -900,7 +994,7 @@ function GastosFijosPage() {
                       <th key={semana} className="table-header text-right">
                         Semana {semana}
                         <span className="block font-normal text-[10px] text-gray-400">
-                          {semanaFechas[i] ? formatDate(semanaFechas[i]) : ''}
+                          {formatDate(flujoFechas[i])}
                         </span>
                       </th>
                     ))}
@@ -925,7 +1019,7 @@ function GastosFijosPage() {
                     { label: 'Cobros ventas (marcadas Pagarán)',       vals: flujo.cobrosVentas,  neg: false },
                     { label: 'Cobros presupuestos (marcadas Pagarán)', vals: flujo.cobrosPres,    neg: false },
                     { label: 'Compras a pagar (marcadas)',     vals: flujo.pagosCompras,  neg: true },
-                    { label: 'Gastos fijos',                   vals: totalesSemana,       neg: true },
+                    { label: 'Gastos fijos',                   vals: gastosFlujoSemana,   neg: true },
                   ].map(r => (
                     <tr key={r.label}>
                       <td className="table-cell text-sm font-medium">{r.label}</td>
@@ -1013,11 +1107,11 @@ function GastosFijosPage() {
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] table-fixed">
-              <ColsSemana />
+              <ColsSemana n={semanasGastos.length} />
               <thead>
                 <tr className="border-b border-gray-200">
                   <th className="table-header">Gasto fijo</th>
-                  {SEMANAS.map((semana, i) => (
+                  {semanasGastos.map((semana, i) => (
                     <th key={semana} className="table-header">
                       <div className="flex flex-col items-start gap-1">
                         <span>Semana {semana}</span>
@@ -1037,13 +1131,13 @@ function GastosFijosPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={7} className="text-center py-10 text-gray-400">Cargando...</td></tr>
+                  <tr><td colSpan={semanasGastos.length + 3} className="text-center py-10 text-gray-400">Cargando...</td></tr>
                 ) : gastos.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-10 text-gray-400">No hay gastos fijos creados.</td></tr>
+                  <tr><td colSpan={semanasGastos.length + 3} className="text-center py-10 text-gray-400">No hay gastos fijos creados.</td></tr>
                 ) : (
                   gastos.map(gasto => {
                     const fila = montos[gasto.id] || emptyMontos()
-                    const totalFila = SEMANAS.reduce((sum, s) => sum + (parseFloat(fila[s] || '0') || 0), 0)
+                    const totalFila = semanasGastos.reduce((sum, s) => sum + (parseFloat(fila[s] || '0') || 0), 0)
                     return (
                       <tr key={gasto.id} className={!gasto.activo ? 'opacity-50' : ''}>
                         <td className="table-cell">
@@ -1055,7 +1149,7 @@ function GastosFijosPage() {
                             disabled={!gasto.activo}
                           />
                         </td>
-                        {SEMANAS.map(semana => (
+                        {semanasGastos.map(semana => (
                           <td key={semana} className="table-cell">
                             <MontoInput
                               value={fila[semana] || ''}
@@ -1097,7 +1191,7 @@ function GastosFijosPage() {
                     {totalesSemana.map((total, i) => (
                       <td key={i} className="table-cell text-right font-bold">{formatCurrency(total)}</td>
                     ))}
-                    <td className="table-cell text-right font-bold text-brand-700">{formatCurrency(totalGastos)}</td>
+                    <td className="table-cell text-right font-bold text-brand-700">{formatCurrency(totalesSemana.reduce((a, b) => a + b, 0))}</td>
                     <td className="table-cell"></td>
                   </tr>
                   <tr className="bg-gray-50">
@@ -1120,7 +1214,7 @@ function GastosFijosPage() {
         <section className="card overflow-hidden">
           <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
             <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-              Compras a pagar (marcadas &quot;Pagará&quot;) - {periodoMes}
+              Compras a pagar (marcadas &quot;Pagará&quot;) · corte {formatDate(fechaResumen)}
             </p>
           </div>
           {vencLoading || !vencLoaded ? (
@@ -1140,7 +1234,7 @@ function GastosFijosPage() {
                       <th key={semana} className="table-header text-right">
                         Semana {semana}
                         <span className="block font-normal text-[10px] text-gray-400">
-                          {semanaFechas[i] ? formatDate(semanaFechas[i]) : ''}
+                          {formatDate(flujoFechas[i])}
                         </span>
                       </th>
                     ))}

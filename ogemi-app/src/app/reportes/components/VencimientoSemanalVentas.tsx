@@ -17,6 +17,8 @@ export interface VencimientoSemanalVentasProps {
   /** Fechas controladas (ej. las semanas del Flujo de Pago). Si se omiten, usa los próximos 4 viernes. */
   weekDates?: string[]
   setWeekDates?: (dates: string[]) => void
+  /** Fechas fijadas por el padre (corte + 7 días): se muestran como texto, no se editan. */
+  datesReadOnly?: boolean
   /** Marcas "Pagarán" controladas (persistidas por el padre). Si se omiten, estado local.
    *  Marcada = se espera que SÍ pague; solo lo marcado suma al probable pago. */
   pagaraSet?: Set<string>
@@ -27,7 +29,7 @@ export interface VencimientoSemanalVentasProps {
 }
 
 export default function VencimientoSemanalVentas({
-  facturas, weekDates: weekDatesProp, setWeekDates: setWeekDatesProp,
+  facturas, weekDates: weekDatesProp, setWeekDates: setWeekDatesProp, datesReadOnly,
   pagaraSet: pagaraProp, onTogglePagara, onToggleManyPagara, cutoffDate,
 }: VencimientoSemanalVentasProps) {
   const [internalDates, setInternalDates] = useState<string[]>(() =>
@@ -132,9 +134,13 @@ export default function VencimientoSemanalVentas({
           return (
             <div key={i} className={`card p-4 border-t-4 ${c.bg} ${c.border}`}>
               <p className={`text-xs font-semibold uppercase tracking-wide ${c.label}`}>Semana {i + 1}</p>
-              <input type="date" value={weekDates[i]}
-                onChange={e => { const nd = [...weekDates]; nd[i] = e.target.value; setWeekDates(nd) }}
-                className="text-xs text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 mt-0.5 mb-2 w-full bg-white focus:outline-none focus:border-gray-400" />
+              {datesReadOnly ? (
+                <p className="text-xs text-gray-600 mt-0.5 mb-2">{formatDate(weekDates[i])}</p>
+              ) : (
+                <input type="date" value={weekDates[i]}
+                  onChange={e => { const nd = [...weekDates]; nd[i] = e.target.value; setWeekDates(nd) }}
+                  className="text-xs text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 mt-0.5 mb-2 w-full bg-white focus:outline-none focus:border-gray-400" />
+              )}
               <p className={`text-lg font-bold ${c.text}`}>{formatMonto(totProbable[i])}</p>
               {noPaga > 0 && (
                 <p className="text-[11px] text-red-500 mt-0.5">
