@@ -104,7 +104,10 @@ export default function VencimientoSemanalVentas({
   // Arrastre: lo NO marcado en la semana inmediatamente anterior se muestra como vencido en la semana actual
   const arrastre = weekDateObjs.map((_, i) => (i === 0 ? 0 : totNoPaga[i - 1]))
   const totConArrastre = totProbable.map((t, i) => t + arrastre[i])
-  const arrastreLabel = (i: number) => `Vencidos semana ${i}`
+  const cntNoPaga = weekDateObjs.map((_, i) =>
+    vencViernes.rows.filter((r: any) => r.fridayIdx === i && !pagaraSet.has(r.id)).length
+  )
+  const arrastreLabel = (i: number) => `Vencidos semana ${i} (${cntNoPaga[i - 1]})`
 
   return (
     <div className="space-y-4">
@@ -157,9 +160,9 @@ export default function VencimientoSemanalVentas({
                     <span className="text-red-600">{arrastreLabel(i)}</span>
                     <span className="font-semibold text-red-600">{formatMonto(arrastre[i])}</span>
                   </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-gray-700">Total</span>
-                    <span className={`font-bold ${c.text}`}>{formatMonto(totConArrastre[i])}</span>
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs font-semibold text-gray-700">Total</span>
+                    <span className={`text-xl font-extrabold ${c.text}`}>{formatMonto(totConArrastre[i])}</span>
                   </div>
                 </div>
               )}
