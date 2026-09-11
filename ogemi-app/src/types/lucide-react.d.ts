@@ -11,6 +11,7 @@ declare module 'lucide-react' {
   export const AlertCircle: LucideIcon
   export const BarChart3: LucideIcon
   export const BookOpen: LucideIcon
+  export const Briefcase: LucideIcon
   export const Building2: LucideIcon
   export const Calendar: LucideIcon
   export const CalendarClock: LucideIcon
@@ -19,6 +20,7 @@ declare module 'lucide-react' {
   export const CameraOff: LucideIcon
   export const Check: LucideIcon
   export const CheckCircle: LucideIcon
+  export const ChevronDown: LucideIcon
   export const ChevronRight: LucideIcon
   export const Clock: LucideIcon
   export const Copy: LucideIcon
