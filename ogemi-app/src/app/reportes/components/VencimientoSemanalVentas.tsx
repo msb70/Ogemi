@@ -101,10 +101,10 @@ export default function VencimientoSemanalVentas({
   )
   const grandProbable = totProbable.reduce((s, t) => s + t, 0)
   const grandNoPaga = totNoPaga.reduce((s, t) => s + t, 0)
-  // Arrastre: lo NO marcado en las semanas anteriores sigue vencido y se acumula en la semana actual
-  const arrastre = weekDateObjs.map((_, i) => totNoPaga.slice(0, i).reduce((s, t) => s + t, 0))
+  // Arrastre: lo NO marcado en la semana inmediatamente anterior se muestra como vencido en la semana actual
+  const arrastre = weekDateObjs.map((_, i) => (i === 0 ? 0 : totNoPaga[i - 1]))
   const totConArrastre = totProbable.map((t, i) => t + arrastre[i])
-  const arrastreLabel = (i: number) => i === 1 ? 'Vencidos semana 1' : `Vencidos semanas 1–${i}`
+  const arrastreLabel = (i: number) => `Vencidos semana ${i}`
 
   return (
     <div className="space-y-4">
@@ -284,14 +284,14 @@ export default function VencimientoSemanalVentas({
                 <td className="table-cell" />
               </tr>
               <tr className="bg-red-50/60 text-xs font-semibold">
-                <td colSpan={4} className="table-cell text-right sticky left-0 bg-red-50/60 z-10 text-red-600">↳ Vencidos semanas anteriores (sin marcar)</td>
+                <td colSpan={4} className="table-cell text-right sticky left-0 bg-red-50/60 z-10 text-red-600">↳ Vencidos semana anterior (sin marcar)</td>
                 {arrastre.map((t, i) => (
                   <td key={i} className="table-cell text-right text-red-600">{t > 0 ? formatMonto(t) : '—'}</td>
                 ))}
                 <td className="table-cell" />
               </tr>
               <tr className="border-t border-gray-300 bg-gray-100 text-sm font-bold">
-                <td colSpan={4} className="table-cell text-right sticky left-0 bg-gray-100 z-10 text-gray-700">TOTAL (pagarán + vencidos anteriores)</td>
+                <td colSpan={4} className="table-cell text-right sticky left-0 bg-gray-100 z-10 text-gray-700">TOTAL (pagarán + vencidos semana anterior)</td>
                 {totConArrastre.map((t, i) => (
                   <td key={i} className="table-cell text-right text-brand-800">{t > 0 ? formatMonto(t) : '—'}</td>
                 ))}
