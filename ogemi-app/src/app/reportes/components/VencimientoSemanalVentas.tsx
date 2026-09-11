@@ -101,6 +101,10 @@ export default function VencimientoSemanalVentas({
   )
   const grandProbable = totProbable.reduce((s, t) => s + t, 0)
   const grandNoPaga = totNoPaga.reduce((s, t) => s + t, 0)
+  // Arrastre: lo NO marcado en las semanas anteriores sigue vencido y se acumula en la semana actual
+  const arrastre = weekDateObjs.map((_, i) => totNoPaga.slice(0, i).reduce((s, t) => s + t, 0))
+  const totConArrastre = totProbable.map((t, i) => t + arrastre[i])
+  const arrastreLabel = (i: number) => i === 1 ? 'Vencidos semana 1' : `Vencidos semanas 1–${i}`
 
   return (
     <div className="space-y-4">
@@ -146,6 +150,18 @@ export default function VencimientoSemanalVentas({
                 <p className="text-[11px] text-red-500 mt-0.5">
                   Sin marcar: −{formatMonto(noPaga)} · bruto {formatMonto(vencViernes.totals[i])}
                 </p>
+              )}
+              {i > 0 && (
+                <div className="mt-2 pt-2 border-t border-gray-200/70 space-y-0.5">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-red-600">{arrastreLabel(i)}</span>
+                    <span className="font-semibold text-red-600">{formatMonto(arrastre[i])}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-gray-700">Total</span>
+                    <span className={`font-bold ${c.text}`}>{formatMonto(totConArrastre[i])}</span>
+                  </div>
+                </div>
               )}
               <p className="text-xs text-gray-400 mt-1">{cnt} {cnt === 1 ? 'factura' : 'facturas'}</p>
             </div>
@@ -264,6 +280,20 @@ export default function VencimientoSemanalVentas({
                 <td colSpan={4} className="table-cell text-right sticky left-0 bg-red-50 z-10 text-red-600">↳ Sin marcar</td>
                 {totNoPaga.map((t, i) => (
                   <td key={i} className="table-cell text-right text-red-600">{t > 0 ? formatMonto(t) : '—'}</td>
+                ))}
+                <td className="table-cell" />
+              </tr>
+              <tr className="bg-red-50/60 text-xs font-semibold">
+                <td colSpan={4} className="table-cell text-right sticky left-0 bg-red-50/60 z-10 text-red-600">↳ Vencidos semanas anteriores (sin marcar)</td>
+                {arrastre.map((t, i) => (
+                  <td key={i} className="table-cell text-right text-red-600">{t > 0 ? formatMonto(t) : '—'}</td>
+                ))}
+                <td className="table-cell" />
+              </tr>
+              <tr className="border-t border-gray-300 bg-gray-100 text-sm font-bold">
+                <td colSpan={4} className="table-cell text-right sticky left-0 bg-gray-100 z-10 text-gray-700">TOTAL (pagarán + vencidos anteriores)</td>
+                {totConArrastre.map((t, i) => (
+                  <td key={i} className="table-cell text-right text-brand-800">{t > 0 ? formatMonto(t) : '—'}</td>
                 ))}
                 <td className="table-cell" />
               </tr>
