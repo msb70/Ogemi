@@ -39,6 +39,7 @@ const navItems: NavEntry[] = [
       link('/presupuestos',        'Presupuestos',        ClipboardList, 'presupuestos'),
       link('/cobros-presupuestos', 'Cobro presupuestos',  WalletCards,   'presupuestos'),
       link('/clientes',            'Clientes',            Users,         'clientes'),
+      link('/importar',            'Importar',            Upload,        'importar'),
     ],
   },
   {
@@ -53,7 +54,6 @@ const navItems: NavEntry[] = [
   link('/banco',        'Banco',         Building2,     'banco'),
   link('/gastos-fijos', 'Flujo de Pago', CalendarClock, 'gastos_fijos'),
   link('/reportes',     'Reportes',      BarChart3,     'reportes'),
-  link('/importar',     'Importar',      Upload,        'importar'),
   link('/usuarios',     'Usuarios',      ShieldCheck,   'usuarios'),
 ]
 
