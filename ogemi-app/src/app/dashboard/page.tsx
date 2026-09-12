@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import type { ReactNode } from 'react'
+import EmpresaFilter, { useEmpresaFiltro, filtrarEmpresa } from '@/components/EmpresaFilter'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { withPagePermission } from '@/components/PermissionGuard'
@@ -239,6 +240,7 @@ function DashboardPage() {
     [periodType, selYear, selMonth, selQuarter]
   )
 
+  const [empresaFiltro, setEmpresaFiltro] = useEmpresaFiltro()
   const loadDashboard = useCallback(async () => {
     setLoading(true)
     try {
@@ -255,18 +257,18 @@ function DashboardPage() {
       ] = await Promise.all([
         supabase.from('facturas').select('fecha,total,tipo_documento,cliente_id,clientes(nombre)').gte('fecha', start).lte('fecha', end),
         supabase.from('facturas').select('fecha,total,tipo_documento').gte('fecha', prevStart).lte('fecha', prevEnd),
-        supabase.from('compras').select('fecha,total,proveedor_id,proveedores(nombre)').gte('fecha', start).lte('fecha', end),
-        supabase.from('compras').select('fecha,total').gte('fecha', prevStart).lte('fecha', prevEnd),
+        supabase.from('compras').select('fecha,total,proveedor_id,empresa,proveedores(nombre)').gte('fecha', start).lte('fecha', end),
+        supabase.from('compras').select('fecha,total,empresa').gte('fecha', prevStart).lte('fecha', prevEnd),
         supabase.from('banco_cuentas').select('id,saldo_inicial').eq('activo', true),
         supabase.from('facturas').select('total,monto_pagado,tipo_documento').eq('estado', 'pendiente'),
-        supabase.from('compras').select('total,monto_pagado').eq('estado', 'pendiente'),
+        supabase.from('compras').select('total,monto_pagado,empresa').eq('estado', 'pendiente'),
         supabase.from('presupuestos').select('fecha,total,clientes(nombre)').gte('fecha', start).lte('fecha', end),
       ])
 
       // KPI actual
       const ventas = (facturasCur || []).filter(f => !isNotaCreditо(f.tipo_documento))
       const nc = (facturasCur || []).filter(f => isNotaCreditо(f.tipo_documento))
-      const comprasArr = comprasCur || []
+      const comprasArr = filtrarEmpresa(comprasCur || [], empresaFiltro)
 
       setKpi({
         ventasMonto: ventas.reduce((s, f) => s + (f.total || 0), 0),
@@ -280,7 +282,7 @@ function DashboardPage() {
       // KPI anterior
       const ventasPrev = (facturasPrev || []).filter(f => !isNotaCreditо(f.tipo_documento))
       const ncPrev = (facturasPrev || []).filter(f => isNotaCreditо(f.tipo_documento))
-      const comprasPrevArr = comprasPrev || []
+      const comprasPrevArr = filtrarEmpresa(comprasPrev || [], empresaFiltro)
       setPrevKpi({
         ventasMonto: ventasPrev.reduce((s, f) => s + (f.total || 0), 0),
         ventasCount: ventasPrev.length,
@@ -291,7 +293,7 @@ function DashboardPage() {
       })
 
       const ventasPendientes = (facturasPendientes || []).filter(f => !isNotaCreditо(f.tipo_documento))
-      const comprasPendientesArr = comprasPendientes || []
+      const comprasPendientesArr = filtrarEmpresa(comprasPendientes || [], empresaFiltro)
       setPendingSummary({
         ventasMonto: ventasPendientes.reduce((s, f) => s + Math.max(0, (f.total || 0) - (f.monto_pagado || 0)), 0),
         ventasCount: ventasPendientes.length,
@@ -366,7 +368,7 @@ function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [start, end, prevStart, prevEnd, periodType, selYear, selMonth, selQuarter])
+  }, [start, end, prevStart, prevEnd, periodType, selYear, selMonth, selQuarter, empresaFiltro])
 
   useEffect(() => { loadDashboard() }, [loadDashboard])
 
@@ -384,10 +386,13 @@ function DashboardPage() {
         title="Dashboard"
         subtitle={periodLabel}
         actions={
-          <button onClick={loadDashboard} className="btn-secondary flex items-center gap-2">
-            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-            Actualizar
-          </button>
+          <div className="flex items-center gap-2">
+            <EmpresaFilter value={empresaFiltro} onChange={setEmpresaFiltro} />
+            <button onClick={loadDashboard} className="btn-secondary flex items-center gap-2">
+              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+              Actualizar
+            </button>
+          </div>
         }
       />
 

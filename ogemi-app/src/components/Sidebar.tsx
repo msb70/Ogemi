@@ -38,6 +38,8 @@ const navItems: NavEntry[] = [
       link('/anticipos',           'Anticipos',           Wallet,        'facturas'),
       link('/presupuestos',        'Presupuestos',        ClipboardList, 'presupuestos'),
       link('/cobros-presupuestos', 'Cobro presupuestos',  WalletCards,   'presupuestos'),
+      link('/compras-impresos',       'Compras',       ShoppingCart, 'compras'),
+      link('/pagos-compras-impresos', 'Pago Compras',  WalletCards,  'compras'),
       link('/clientes',            'Clientes',            Users,         'clientes'),
       link('/importar',            'Importar',            Upload,        'importar'),
     ],

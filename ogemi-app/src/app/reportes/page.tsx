@@ -5,6 +5,7 @@ import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { CarteraVencida } from '@/types'
+import EmpresaFilter, { useEmpresaFiltro, filtrarEmpresa } from '@/components/EmpresaFilter'
 import {
   FileText, ShoppingCart, Building2, BookOpen, ClipboardList, Printer, FileSpreadsheet, CalendarDays,
 } from 'lucide-react'
@@ -35,10 +36,13 @@ function ReportesPage() {
   // Datos crudos
   const [facturas, setFacturas] = useState<any[]>([])
   const [notasCredito, setNotasCredito] = useState<any[]>([])
-  const [compras, setCompras] = useState<any[]>([])
+  const [comprasAll, setCompras] = useState<any[]>([])
   const [presupuestos, setPresupuestos] = useState<any[]>([])
   const [cartera, setCartera] = useState<CarteraVencida[]>([])
-  const [cxp, setCxp] = useState<any[]>([])
+  const [cxpAll, setCxp] = useState<any[]>([])
+  const [empresaFiltro, setEmpresaFiltro] = useEmpresaFiltro()
+  const compras = filtrarEmpresa(comprasAll, empresaFiltro)
+  const cxp = filtrarEmpresa(cxpAll, empresaFiltro)
   const [carteraPresupuestos, setCarteraPresupuestos] = useState<any[]>([])
 
   // Banco
@@ -276,6 +280,7 @@ function ReportesPage() {
       <Header title="Reportes" subtitle="Análisis financiero y contable"
         actions={
           <div className="flex items-center gap-2">
+            <EmpresaFilter value={empresaFiltro} onChange={setEmpresaFiltro} />
             <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2">
               <Printer size={16} /> Reporte PDF
             </button>

@@ -2,6 +2,8 @@ export type UserRole = 'admin' | 'operador' | 'lectura';
 export type PresupuestoEstado = 'pendiente' | 'pagada';
 export type FacturaEstado = 'pendiente' | 'pagada' | 'falta_retencion';
 export type CompraEstado = 'pendiente' | 'pagada';
+export type Empresa = 'ogemi' | 'impresos';
+export const EMPRESA_LABEL: Record<Empresa, string> = { ogemi: 'Ogemi', impresos: 'Impresos Comerciales' };
 export type MovimientoTipo = 'ingreso' | 'egreso';
 export type TramoCartera = 'corriente' | '1-30' | '31-60' | '61-90' | '91-120' | '+120';
 
@@ -135,6 +137,7 @@ export interface CarteraPresupuesto {
 
 export interface Compra {
   id: string;
+  empresa?: Empresa;
   fecha: string;
   vencimiento: string | null;
   proveedor_id: string;

@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/useToast'
 import { Toast } from '@/components/Toast'
 import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
 import { CalendarDays, Plus, Save, WalletCards, Trash2, FileText, ClipboardList, ShoppingCart, Printer } from 'lucide-react'
+import EmpresaFilter, { useEmpresaFiltro, filtrarEmpresa } from '@/components/EmpresaFilter'
 import VencimientoSemanalVentas from '@/app/reportes/components/VencimientoSemanalVentas'
 import VencimientoSemanalPresupuestos from '@/app/reportes/components/VencimientoSemanalPresupuestos'
 import VencimientoSemanalCompras from '@/app/reportes/components/VencimientoSemanalCompras'
@@ -187,7 +188,9 @@ function GastosFijosPage() {
   const [vencLoading, setVencLoading] = useState(false)
   const [facturasAll, setFacturasAll] = useState<any[]>([])
   const [presupuestosAll, setPresupuestosAll] = useState<any[]>([])
-  const [comprasAll, setComprasAll] = useState<any[]>([])
+  const [comprasRaw, setComprasAll] = useState<any[]>([])
+  const [empresaFiltro, setEmpresaFiltro] = useEmpresaFiltro()
+  const comprasAll = useMemo(() => filtrarEmpresa(comprasRaw, empresaFiltro), [comprasRaw, empresaFiltro])
 
   // Marcas persistidas por período: venta/presupuesto = "Pagarán" (solo lo marcado suma); compra = "Pagará"
   const [marcasVentas, setMarcasVentas] = useState<Set<string>>(new Set())
@@ -797,9 +800,12 @@ function GastosFijosPage() {
         title="Flujo de Pago"
         subtitle="Cobros probables, pagos y gastos fijos por semana"
         actions={
-          <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2">
-            <Printer size={16} /> Reporte PDF
-          </button>
+          <div className="flex items-center gap-2">
+            <EmpresaFilter value={empresaFiltro} onChange={setEmpresaFiltro} />
+            <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2">
+              <Printer size={16} /> Reporte PDF
+            </button>
+          </div>
         }
       />
 

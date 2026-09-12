@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import EmpresaFilter, { useEmpresaFiltro, filtrarEmpresa } from '@/components/EmpresaFilter'
 import { createClient } from '@/lib/supabase'
 import { formatMonto, formatDate } from '@/lib/utils'
 import { TIPOS_VENTA } from '@/lib/tiposVenta'
@@ -20,7 +21,7 @@ import { isNC } from '../reportes.utils'
  */
 
 type Cuenta = { id: string; nombre: string; banco: string; tipo: string | null; orden: number }
-type Doc = { id: string; fecha: string; total: number; monto: number; itbms: number; retencion_pct?: number | null; tipo_documento?: string | null; tipo_venta?: string | null }
+type Doc = { id: string; fecha: string; total: number; monto: number; itbms: number; retencion_pct?: number | null; tipo_documento?: string | null; tipo_venta?: string | null; empresa?: string | null }
 type Pago = { factura_id: string | null; compra_id: string | null; venta_ogemi_id: string | null; monto: number; fecha: string }
 
 const hoy = () => new Date().toISOString().split('T')[0]
@@ -41,7 +42,9 @@ export default function InformeDiarioTab() {
   const [saldos, setSaldos] = useState<Record<string, number>>({})
   const [facturas, setFacturas] = useState<Doc[]>([])
   const [ventasOgemi, setVentasOgemi] = useState<Doc[]>([])
-  const [compras, setCompras] = useState<Doc[]>([])
+  const [comprasRaw, setCompras] = useState<Doc[]>([])
+  const [empresaFiltro, setEmpresaFiltro] = useEmpresaFiltro()
+  const compras = useMemo(() => filtrarEmpresa(comprasRaw, empresaFiltro), [comprasRaw, empresaFiltro])
   const [notasCredito, setNotasCredito] = useState<{ fecha: string; monto: number }[]>([])
   const [pagos, setPagos] = useState<Pago[]>([])
   const [reversos, setReversos] = useState<Pago[]>([])
@@ -60,7 +63,7 @@ export default function InformeDiarioTab() {
       supabase.from('banco_cuentas').select('id,nombre,banco,tipo,orden').eq('activo', true).order('orden').order('nombre'),
       supabase.from('facturas').select('id,fecha,total,monto,itbms,retencion_pct,tipo_documento,tipo_venta').lte('fecha', fecha),
       supabase.from('ventas_ogemi').select('id,fecha,total,monto,itbms').lte('fecha', fecha),
-      supabase.from('compras').select('id,fecha,total,monto,itbms,tipo_documento').lte('fecha', fecha),
+      supabase.from('compras').select('id,fecha,total,monto,itbms,tipo_documento,empresa').lte('fecha', fecha),
       supabase.from('pagos').select('factura_id,compra_id,venta_ogemi_id,monto,fecha').lte('fecha', fecha),
       supabase.from('pago_reversos').select('factura_id,compra_id,venta_ogemi_id,monto,fecha').lte('fecha', fecha),
       supabase.from('notas_credito').select('fecha,monto').lte('fecha', fecha),
@@ -182,6 +185,7 @@ export default function InformeDiarioTab() {
           <label className="text-sm text-gray-500">Fecha del informe</label>
           <input type="date" className="input max-w-[170px]" value={fecha} max={hoy()} onChange={e => setFecha(e.target.value)} />
           <button className="btn-secondary text-sm" onClick={() => setFecha(hoy())}>Hoy</button>
+          <EmpresaFilter value={empresaFiltro} onChange={setEmpresaFiltro} className="ml-2" />
         </div>
         {inf.sinClasificar.n > 0 && (
           <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
