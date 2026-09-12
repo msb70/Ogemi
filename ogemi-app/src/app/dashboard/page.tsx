@@ -14,7 +14,7 @@ import {
 } from 'recharts'
 import {
   TrendingUp, TrendingDown, FileText, ShoppingCart,
-  Building2, RefreshCw, Minus, ClipboardList
+  Building2, RefreshCw, Minus, ClipboardList, CreditCard
 } from 'lucide-react'
 
 type PeriodType = 'monthly' | 'quarterly' | 'yearly'
@@ -49,8 +49,10 @@ function buildTop(rows: { nombre: string; total: number }[]): TopRow[] {
       pct: totalGlobal > 0 ? (v.monto / totalGlobal) * 100 : 0,
     }))
     .sort((a, b) => b.monto - a.monto)
-    .slice(0, 10)
 }
+type TopN = 10 | 15 | 20 | 30 | 'all'
+const TOP_N_OPCIONES: TopN[] = [10, 15, 20, 30, 'all']
+const TOP_N_KEY = 'ogemi.dashboard.topN'
 interface ChartTooltipPayload {
   dataKey: string
   fill: string
@@ -227,6 +229,18 @@ function DashboardPage() {
   const [prevKpi, setPrevKpi] = useState<KPI>({ ventasMonto:0, ventasCount:0, ncMonto:0, ncCount:0, comprasMonto:0, comprasCount:0 })
   const [pendingSummary, setPendingSummary] = useState<PendingSummary>({ ventasMonto:0, ventasCount:0, comprasMonto:0, comprasCount:0 })
   const [saldoBancos, setSaldoBancos] = useState(0)
+  const [deudaTarjetas, setDeudaTarjetas] = useState(0)
+  const [numTarjetas, setNumTarjetas] = useState(0)
+  const [topN, setTopN] = useState<TopN>(10)
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(TOP_N_KEY)
+      if (v === 'all') setTopN('all')
+      else if (v && [10, 15, 20, 30].includes(Number(v))) setTopN(Number(v) as TopN)
+    } catch { /* noop */ }
+  }, [])
+  const cambiarTopN = (v: TopN) => { setTopN(v); try { localStorage.setItem(TOP_N_KEY, String(v)) } catch { /* noop */ } }
+  const recortar = (rows: TopRow[]) => topN === 'all' ? rows : rows.slice(0, topN)
   const [barData, setBarData] = useState<BarPoint[]>([])
   const [pieVentas, setPieVentas] = useState<PiePoint[]>([])
   const [pieCompras, setPieCompras] = useState<PiePoint[]>([])
@@ -259,7 +273,7 @@ function DashboardPage() {
         supabase.from('facturas').select('fecha,total,tipo_documento').gte('fecha', prevStart).lte('fecha', prevEnd),
         supabase.from('compras').select('fecha,total,proveedor_id,empresa,proveedores(nombre)').gte('fecha', start).lte('fecha', end),
         supabase.from('compras').select('fecha,total,empresa').gte('fecha', prevStart).lte('fecha', prevEnd),
-        supabase.from('banco_cuentas').select('id,saldo_inicial').eq('activo', true),
+        supabase.from('banco_cuentas').select('id,saldo_inicial,tipo').eq('activo', true),
         supabase.from('facturas').select('total,monto_pagado,tipo_documento').eq('estado', 'pendiente'),
         supabase.from('compras').select('total,monto_pagado,empresa').eq('estado', 'pendiente'),
         supabase.from('presupuestos').select('fecha,total,clientes(nombre)').gte('fecha', start).lte('fecha', end),
@@ -301,18 +315,21 @@ function DashboardPage() {
         comprasCount: comprasPendientesArr.length,
       })
 
-      // Saldo bancos
+      // Saldo bancos = suma de saldos (RPC saldo_cuenta) de las cuentas ACTIVAS tipo banco.
+      // Las tarjetas de crédito se excluyen: su saldo negativo es deuda, se muestra aparte.
       if (cuentas && cuentas.length > 0) {
-        let totalSaldo = cuentas.reduce((s, c) => s + (c.saldo_inicial || 0), 0)
-        const { data: movs } = await supabase.from('banco_movimientos').select('tipo,monto')
-        if (movs) {
-          const ingresos = movs.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + m.monto, 0)
-          const egresos = movs.filter(m => m.tipo === 'egreso').reduce((s, m) => s + m.monto, 0)
-          totalSaldo += ingresos - egresos
-        }
-        setSaldoBancos(totalSaldo)
+        const hoyISO = new Date().toISOString().split('T')[0]
+        const saldos = await Promise.all(
+          cuentas.map(c => supabase.rpc('saldo_cuenta', { p_cuenta_id: c.id, p_hasta: hoyISO }).then(r => ({ tipo: c.tipo, saldo: Number(r.data || 0) })))
+        )
+        const bancos = saldos.filter(x => x.tipo !== 'tarjeta_credito')
+        const tarjetas = saldos.filter(x => x.tipo === 'tarjeta_credito')
+        setSaldoBancos(bancos.reduce((s, x) => s + x.saldo, 0))
+        // Deuda de tarjeta = -saldo (egreso = consumo, ingreso = pago)
+        setDeudaTarjetas(tarjetas.reduce((s, x) => s + Math.max(0, -x.saldo), 0))
+        setNumTarjetas(tarjetas.length)
       } else {
-        setSaldoBancos(0)
+        setSaldoBancos(0); setDeudaTarjetas(0); setNumTarjetas(0)
       }
 
       // Bar chart data
@@ -484,7 +501,7 @@ function DashboardPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <div className="card p-5">
                 <div className="flex items-start justify-between mb-3">
                   <div className="w-9 h-9 bg-sky-100 rounded-xl flex items-center justify-center">
@@ -514,8 +531,20 @@ function DashboardPage() {
                   </div>
                   <span className="badge bg-emerald-100 text-emerald-700">Bancos</span>
                 </div>
-                <p className="text-xs text-gray-500 font-medium">Saldo total de todos los bancos</p>
+                <p className="text-xs text-gray-500 font-medium">Saldo bancos activos (sin tarjetas)</p>
                 <p className="text-2xl font-bold text-emerald-800 mt-0.5">{formatCurrency(saldoBancos)}</p>
+              </div>
+
+              <div className="card p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-9 h-9 bg-purple-100 rounded-xl flex items-center justify-center">
+                    <CreditCard size={17} className="text-purple-700" />
+                  </div>
+                  <span className="badge bg-purple-100 text-purple-700">Tarjetas</span>
+                </div>
+                <p className="text-xs text-gray-500 font-medium">Deuda tarjetas de crédito activas</p>
+                <p className="text-2xl font-bold text-purple-800 mt-0.5">{formatCurrency(deudaTarjetas)}</p>
+                <p className="text-xs text-gray-400 mt-1">{numTarjetas} {numTarjetas === 1 ? 'tarjeta' : 'tarjetas'}</p>
               </div>
             </div>
 
@@ -527,7 +556,7 @@ function DashboardPage() {
                     <Building2 size={20} className="text-white" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-brand-100">Saldo total en bancos</p>
+                    <p className="text-sm font-medium text-brand-100">Saldo bancos activos (sin tarjetas)</p>
                     <p className="text-3xl font-bold">{formatCurrency(saldoBancos)}</p>
                   </div>
                 </div>
@@ -653,11 +682,27 @@ function DashboardPage() {
               </div>
             </div>
 
-            {/* Top 10 — ventas, compras y presupuestos */}
+            {/* Top N — ventas, compras y presupuestos */}
+            <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
+              <p className="text-sm font-semibold text-gray-700">Ranking del período</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">Mostrar</span>
+                <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                  {TOP_N_OPCIONES.map(n => (
+                    <button key={String(n)} onClick={() => cambiarTopN(n)}
+                      className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                        topN === n ? 'bg-brand-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                      }`}>
+                      {n === 'all' ? 'Todos' : `Top ${n}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <TopTable title="Top 10 ventas por cliente" rows={topVentas} unidad="Facturas" color="#0284c7" icon={<FileText size={16} />} />
-              <TopTable title="Top 10 compras por proveedor" rows={topCompras} unidad="Compras" color="#f97316" icon={<ShoppingCart size={16} />} />
-              <TopTable title="Top 10 presupuestos por cliente" rows={topPresupuestos} unidad="Presup." color="#7c3aed" icon={<ClipboardList size={16} />} />
+              <TopTable title={`${topN === 'all' ? 'Todas las' : `Top ${topN}`} ventas por cliente`} rows={recortar(topVentas)} unidad="Facturas" color="#0284c7" icon={<FileText size={16} />} />
+              <TopTable title={`${topN === 'all' ? 'Todas las' : `Top ${topN}`} compras por proveedor`} rows={recortar(topCompras)} unidad="Compras" color="#f97316" icon={<ShoppingCart size={16} />} />
+              <TopTable title={`${topN === 'all' ? 'Todos los' : `Top ${topN}`} presupuestos por cliente`} rows={recortar(topPresupuestos)} unidad="Presup." color="#7c3aed" icon={<ClipboardList size={16} />} />
             </div>
 
           </div>
