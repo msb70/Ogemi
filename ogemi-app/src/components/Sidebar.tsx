@@ -32,8 +32,8 @@ const navItems: NavEntry[] = [
     kind: 'group', id: 'impresos', label: 'Impresos Comerciales', icon: Briefcase, accent: 'sky',
     children: [
       link('/facturas',            'Facturas',            FileText,      'facturas'),
-      link('/cobros',              'Cobros',              CreditCard,    'facturas'),
       link('/factura-electronica', 'Factura Electrónica', QrCode,        'factura_electronica'),
+      link('/cobros',              'Cobros',              CreditCard,    'facturas'),
       link('/notas-credito',       'Notas de Crédito',    FileText,      'notas_credito'),
       link('/anticipos',           'Anticipos',           Wallet,        'facturas'),
       link('/presupuestos',        'Presupuestos',        ClipboardList, 'presupuestos'),
@@ -45,7 +45,7 @@ const navItems: NavEntry[] = [
   {
     kind: 'group', id: 'ogemi', label: 'Ogemi', icon: Printer, accent: 'amber',
     children: [
-      link('/ventas-ogemi',  'Facturas Ogemi', Printer,      'ventas_ogemi'),
+      link('/ventas-ogemi',  'Facturas',       Printer,      'ventas_ogemi'),
       link('/compras',       'Compras',        ShoppingCart, 'compras'),
       link('/pagos-compras', 'Pago Compras',   WalletCards,  'compras'),
       link('/proveedores',   'Proveedores',    Truck,        'proveedores'),

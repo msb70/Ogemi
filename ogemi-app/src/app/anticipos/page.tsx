@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import AppLayout from '@/components/AppLayout'
@@ -20,6 +20,11 @@ function AnticiposPage() {
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
+  const [filtroEstado, setFiltroEstado] = useState('all')
+  const [filtroCliente, setFiltroCliente] = useState('all')
+  const [filtroAplicado, setFiltroAplicado] = useState('all')
+  const [filtroCuenta, setFiltroCuenta] = useState('all')
+  const [agruparCliente, setAgruparCliente] = useState(false)
   const [printData, setPrintData] = useState<Anticipo | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
   const [saldos, setSaldos] = useState<Record<string, { saldo: number; aplicado: number }>>({})
@@ -124,7 +129,15 @@ function AnticiposPage() {
     setLoadingAplic(false)
   }
 
+  const aplicadoDe = (a: Anticipo) => saldos[a.id]?.aplicado ?? 0
+  const saldoDe = (a: Anticipo) => saldos[a.id]?.saldo ?? (a.estado === 'anulado' ? 0 : a.monto)
+
   const filtered = anticipos.filter(a => {
+    if (filtroEstado !== 'all' && (a.estado || 'sin estado') !== filtroEstado) return false
+    if (filtroCliente !== 'all' && a.cliente_id !== filtroCliente) return false
+    if (filtroCuenta !== 'all' && a.cuenta_id !== filtroCuenta) return false
+    if (filtroAplicado === 'aplicado' && aplicadoDe(a) <= 0) return false
+    if (filtroAplicado === 'no_aplicado' && aplicadoDe(a) > 0) return false
     if (!search) return true
     const q = search.toLowerCase()
     return (
@@ -134,6 +147,20 @@ function AnticiposPage() {
       String(a.numero_recibo).includes(q)
     )
   })
+
+  const hayFiltros = filtroEstado !== 'all' || filtroCliente !== 'all' || filtroAplicado !== 'all' || filtroCuenta !== 'all' || !!search
+  const limpiarFiltros = () => { setFiltroEstado('all'); setFiltroCliente('all'); setFiltroAplicado('all'); setFiltroCuenta('all'); setSearch('') }
+  // Clientes que realmente tienen anticipos (para el selector)
+  const clientesMap = new Map<string, string>()
+  anticipos.forEach(a => { if (a.cliente_id && !clientesMap.has(a.cliente_id)) clientesMap.set(a.cliente_id, a.clientes?.nombre || '—') })
+  const clientesConAnticipos: [string, string][] = Array.from(clientesMap.entries()).sort((x, y) => x[1].localeCompare(y[1]))
+  const gruposMap = new Map<string, Anticipo[]>()
+  if (agruparCliente) filtered.forEach(a => {
+    const k = a.clientes?.nombre || 'Sin nombre'
+    if (!gruposMap.has(k)) gruposMap.set(k, [])
+    gruposMap.get(k)!.push(a)
+  })
+  const gruposCliente: [string, Anticipo[]][] = Array.from(gruposMap.entries()).sort((x, y) => x[0].localeCompare(y[0]))
 
   // Resumen por cada estado existente (activo, aplicado, anulado, ...)
   const ORDEN_ESTADOS = ['activo', 'aplicado', 'anulado']
@@ -176,6 +203,64 @@ function AnticiposPage() {
       ] },
     ])
   }
+
+  const filaAnticipo = (a: Anticipo) => (
+    <tr key={a.id} className="hover:bg-gray-50">
+      <td className="table-cell font-mono text-sm text-gray-600">REC-{String(a.numero_recibo).padStart(5, '0')}</td>
+      <td className="table-cell text-gray-500">{formatDate(a.fecha)}</td>
+      <td className="table-cell font-medium">{a.clientes?.nombre}</td>
+      <td className="table-cell text-sm text-gray-500">
+        {a.banco_cuentas?.nombre} · {a.banco_cuentas?.banco}
+      </td>
+      <td className="table-cell text-sm text-gray-400 font-mono">
+        {a.numero_deposito || '—'}
+      </td>
+      <td className="table-cell text-right font-semibold text-brand-700">
+        {formatCurrency(a.monto)}
+      </td>
+      <td className="table-cell text-right text-gray-500">
+        {formatCurrency(saldos[a.id]?.aplicado ?? 0)}
+      </td>
+      <td className={`table-cell text-right font-semibold ${a.estado === 'anulado' ? 'text-gray-400' : 'text-green-700'}`}>
+        {formatCurrency(saldos[a.id]?.saldo ?? (a.estado === 'anulado' ? 0 : a.monto))}
+      </td>
+      <td className="table-cell">
+        <span className={`badge ${estadoBadge(a.estado)}`}>
+          {a.estado}
+        </span>
+      </td>
+      <td className="table-cell">
+        <div className="flex items-center gap-2">
+          {(saldos[a.id]?.aplicado ?? 0) > 0 && (
+            <button
+              onClick={() => openAplicaciones(a)}
+              className="text-xs text-brand-600 hover:text-brand-800 transition-colors"
+              title="Ver a qué facturas/presupuestos se aplicó"
+            >
+              Aplicaciones
+            </button>
+          )}
+          <button
+            onClick={() => handlePrint(a)}
+            className="flex items-center gap-1 text-xs text-gray-500 hover:text-brand-600 transition-colors"
+            title="Imprimir recibo"
+          >
+            <Printer size={14} />
+            Recibo
+          </button>
+          {a.estado === 'activo' && (
+            <button
+              onClick={() => handleAnular(a.id)}
+              className="flex items-center gap-1 text-xs text-red-400 hover:text-red-600 transition-colors"
+            >
+              <X size={14} />
+              Anular
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
+  )
 
   const estadoBadge = (estado: string) => {
     switch (estado) {
@@ -233,8 +318,8 @@ function AnticiposPage() {
 
       <div className="flex-1 overflow-auto p-6 space-y-4">
         {/* Búsqueda */}
-        <div className="flex items-center gap-3">
-          <div className="relative flex-1 max-w-sm">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               className="input pl-9"
@@ -248,6 +333,38 @@ function AnticiposPage() {
               </button>
             )}
           </div>
+          <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-2 py-2 text-gray-600 bg-white focus:outline-none focus:border-gray-400">
+            <option value="all">Todos los estados</option>
+            {estadosPresentes.map(e => <option key={e} value={e}>{e.charAt(0).toUpperCase() + e.slice(1)}</option>)}
+          </select>
+          <select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-2 py-2 text-gray-600 bg-white max-w-[220px] focus:outline-none focus:border-gray-400">
+            <option value="all">Todos los clientes</option>
+            {clientesConAnticipos.map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
+          </select>
+          <select value={filtroAplicado} onChange={e => setFiltroAplicado(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-2 py-2 text-gray-600 bg-white focus:outline-none focus:border-gray-400">
+            <option value="all">Aplicados y sin aplicar</option>
+            <option value="aplicado">Con aplicación</option>
+            <option value="no_aplicado">Sin aplicar</option>
+          </select>
+          <select value={filtroCuenta} onChange={e => setFiltroCuenta(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-2 py-2 text-gray-600 bg-white max-w-[220px] focus:outline-none focus:border-gray-400">
+            <option value="all">Todas las cuentas</option>
+            {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>)}
+          </select>
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none whitespace-nowrap">
+            <input type="checkbox" className="w-4 h-4 accent-brand-600 cursor-pointer"
+              checked={agruparCliente} onChange={e => setAgruparCliente(e.target.checked)} />
+            Agrupar por cliente
+          </label>
+          {hayFiltros && (
+            <button onClick={limpiarFiltros} className="text-xs text-gray-500 hover:text-brand-600 whitespace-nowrap">
+              Limpiar filtros
+            </button>
+          )}
+          <span className="text-xs text-gray-400 whitespace-nowrap">{filtered.length} de {anticipos.length}</span>
         </div>
 
         {/* Tabla */}
@@ -271,64 +388,21 @@ function AnticiposPage() {
               {loading ? (
                 <tr><td colSpan={10} className="text-center py-12 text-gray-400">Cargando...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={10} className="text-center py-12 text-gray-400">Sin anticipos registrados</td></tr>
-              ) : filtered.map(a => (
-                <tr key={a.id} className="hover:bg-gray-50">
-                  <td className="table-cell font-mono text-sm text-gray-600">REC-{String(a.numero_recibo).padStart(5, '0')}</td>
-                  <td className="table-cell text-gray-500">{formatDate(a.fecha)}</td>
-                  <td className="table-cell font-medium">{a.clientes?.nombre}</td>
-                  <td className="table-cell text-sm text-gray-500">
-                    {a.banco_cuentas?.nombre} · {a.banco_cuentas?.banco}
-                  </td>
-                  <td className="table-cell text-sm text-gray-400 font-mono">
-                    {a.numero_deposito || '—'}
-                  </td>
-                  <td className="table-cell text-right font-semibold text-brand-700">
-                    {formatCurrency(a.monto)}
-                  </td>
-                  <td className="table-cell text-right text-gray-500">
-                    {formatCurrency(saldos[a.id]?.aplicado ?? 0)}
-                  </td>
-                  <td className={`table-cell text-right font-semibold ${a.estado === 'anulado' ? 'text-gray-400' : 'text-green-700'}`}>
-                    {formatCurrency(saldos[a.id]?.saldo ?? (a.estado === 'anulado' ? 0 : a.monto))}
-                  </td>
-                  <td className="table-cell">
-                    <span className={`badge ${estadoBadge(a.estado)}`}>
-                      {a.estado}
-                    </span>
-                  </td>
-                  <td className="table-cell">
-                    <div className="flex items-center gap-2">
-                      {(saldos[a.id]?.aplicado ?? 0) > 0 && (
-                        <button
-                          onClick={() => openAplicaciones(a)}
-                          className="text-xs text-brand-600 hover:text-brand-800 transition-colors"
-                          title="Ver a qué facturas/presupuestos se aplicó"
-                        >
-                          Aplicaciones
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handlePrint(a)}
-                        className="flex items-center gap-1 text-xs text-gray-500 hover:text-brand-600 transition-colors"
-                        title="Imprimir recibo"
-                      >
-                        <Printer size={14} />
-                        Recibo
-                      </button>
-                      {a.estado === 'activo' && (
-                        <button
-                          onClick={() => handleAnular(a.id)}
-                          className="flex items-center gap-1 text-xs text-red-400 hover:text-red-600 transition-colors"
-                        >
-                          <X size={14} />
-                          Anular
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                <tr><td colSpan={10} className="text-center py-12 text-gray-400">{hayFiltros ? 'Sin resultados con estos filtros' : 'Sin anticipos registrados'}</td></tr>
+              ) : agruparCliente ? gruposCliente.map(([nombre, as]) => (
+                <Fragment key={nombre}>
+                  <tr className="bg-brand-50/40 border-t border-gray-200">
+                    <td colSpan={5} className="table-cell font-semibold text-brand-800">
+                      {nombre} <span className="text-xs text-gray-400 font-normal">({as.length} anticipo{as.length === 1 ? '' : 's'})</span>
+                    </td>
+                    <td className="table-cell text-right font-bold text-brand-800">{formatCurrency(as.reduce((s, a) => s + a.monto, 0))}</td>
+                    <td className="table-cell text-right font-bold text-gray-600">{formatCurrency(as.reduce((s, a) => s + aplicadoDe(a), 0))}</td>
+                    <td className="table-cell text-right font-bold text-green-700">{formatCurrency(as.reduce((s, a) => s + saldoDe(a), 0))}</td>
+                    <td colSpan={2} />
+                  </tr>
+                  {as.map(filaAnticipo)}
+                </Fragment>
+              )) : filtered.map(filaAnticipo)}
             </tbody>
           </table>
         </div>
