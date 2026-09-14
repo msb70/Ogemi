@@ -208,8 +208,9 @@ function GastosFijosPage() {
   const [montosPagaraCompras, setMontosPagaraCompras] = useState<Record<string, number>>({})
   // Semana elegida a mano para pagar una compra (0-3). Ausente = la del vencimiento.
   const [semanasPagaraCompras, setSemanasPagaraCompras] = useState<Record<string, number>>({})
-  // Ventas marcadas "Pagarán" con semana de cobro elegida (distinta a la de vencimiento)
+  // Ventas / presupuestos marcados "Pagarán" con semana de cobro elegida (distinta a la de vencimiento)
   const [semanasPagaraVentas, setSemanasPagaraVentas] = useState<Record<string, number>>({})
+  const [semanasPagaraPresupuestos, setSemanasPagaraPresupuestos] = useState<Record<string, number>>({})
 
   // Mes de gastos fijos = mes de la fecha de corte
   const periodoMes = useMemo(() => monthOf(fechaResumen), [fechaResumen])
@@ -468,12 +469,16 @@ function GastosFijosPage() {
     const montos: Record<string, number> = {}
     const semanas: Record<string, number> = {}
     const semanasV: Record<string, number> = {}
+    const semanasP: Record<string, number> = {}
     ;(data || []).forEach((m: { tipo: TipoMarca; doc_id: string; monto: number | null; semana_idx: number | null }) => {
       if (m.tipo === 'venta') {
         v.add(m.doc_id)
         if (m.semana_idx != null) semanasV[m.doc_id] = Number(m.semana_idx)
       }
-      else if (m.tipo === 'presupuesto') p.add(m.doc_id)
+      else if (m.tipo === 'presupuesto') {
+        p.add(m.doc_id)
+        if (m.semana_idx != null) semanasP[m.doc_id] = Number(m.semana_idx)
+      }
       else if (m.tipo === 'compra') {
         c.add(m.doc_id)
         if (m.monto != null) montos[m.doc_id] = Number(m.monto)
@@ -486,6 +491,7 @@ function GastosFijosPage() {
     setMontosPagaraCompras(montos)
     setSemanasPagaraCompras(semanas)
     setSemanasPagaraVentas(semanasV)
+    setSemanasPagaraPresupuestos(semanasP)
   }, [showToast, supabase])
 
   useEffect(() => { loadMarcas() }, [loadMarcas])
@@ -499,29 +505,24 @@ function GastosFijosPage() {
       return next
     })
     apply(marked)
-    // Ventas: la semana elegida (cobrar en la semana del filtro) se guarda con la marca; al desmarcar se descarta
-    if (tipo === 'venta') {
-      setSemanasPagaraVentas(prev => {
-        const next = { ...prev }
-        if (marked && semana != null) next[id] = semana; else delete next[id]
-        return next
-      })
-    }
-    // Al desmarcar una compra se descartan su monto parcial y su semana elegida
+    // La semana elegida (cobrar/pagar en la semana del filtro) se guarda con la marca; al desmarcar se descarta
+    const setSemanas = tipo === 'venta' ? setSemanasPagaraVentas : tipo === 'presupuesto' ? setSemanasPagaraPresupuestos : setSemanasPagaraCompras
+    setSemanas(prev => {
+      const next = { ...prev }
+      if (marked && semana != null) next[id] = semana; else delete next[id]
+      return next
+    })
+    // Al desmarcar una compra se descarta también su monto parcial
     if (tipo === 'compra' && !marked) {
       setMontosPagaraCompras(prev => {
         if (!(id in prev)) return prev
         const next = { ...prev }; delete next[id]; return next
       })
-      setSemanasPagaraCompras(prev => {
-        if (!(id in prev)) return prev
-        const next = { ...prev }; delete next[id]; return next
-      })
     }
     const { error } = marked
-      ? (tipo === 'venta'
+      ? (semana != null
           ? await supabase.from('flujo_pago_marcas')
-              .upsert({ periodo: PERIODO_MARCAS, tipo, doc_id: id, semana_idx: semana ?? null }, { onConflict: 'periodo,tipo,doc_id' })
+              .upsert({ periodo: PERIODO_MARCAS, tipo, doc_id: id, semana_idx: semana }, { onConflict: 'periodo,tipo,doc_id' })
           : await supabase.from('flujo_pago_marcas')
               .upsert({ periodo: PERIODO_MARCAS, tipo, doc_id: id }, { onConflict: 'periodo,tipo,doc_id', ignoreDuplicates: true }))
       : await supabase.from('flujo_pago_marcas')
@@ -541,29 +542,23 @@ function GastosFijosPage() {
       ids.forEach(id => marked ? next.add(id) : next.delete(id))
       return next
     })
-    if (tipo === 'venta') {
-      setSemanasPagaraVentas(prev => {
-        const next = { ...prev }
-        ids.forEach(id => { if (marked && semana != null) next[id] = semana; else delete next[id] })
-        return next
-      })
-    }
+    const setSemanas = tipo === 'venta' ? setSemanasPagaraVentas : tipo === 'presupuesto' ? setSemanasPagaraPresupuestos : setSemanasPagaraCompras
+    setSemanas(prev => {
+      const next = { ...prev }
+      ids.forEach(id => { if (marked && semana != null) next[id] = semana; else delete next[id] })
+      return next
+    })
     if (tipo === 'compra' && !marked) {
       setMontosPagaraCompras(prev => {
         const next = { ...prev }
         ids.forEach(id => { delete next[id] })
         return next
       })
-      setSemanasPagaraCompras(prev => {
-        const next = { ...prev }
-        ids.forEach(id => { delete next[id] })
-        return next
-      })
     }
     const { error } = marked
-      ? (tipo === 'venta'
+      ? (semana != null
           ? await supabase.from('flujo_pago_marcas')
-              .upsert(ids.map(id => ({ periodo: PERIODO_MARCAS, tipo, doc_id: id, semana_idx: semana ?? null })), { onConflict: 'periodo,tipo,doc_id' })
+              .upsert(ids.map(id => ({ periodo: PERIODO_MARCAS, tipo, doc_id: id, semana_idx: semana })), { onConflict: 'periodo,tipo,doc_id' })
           : await supabase.from('flujo_pago_marcas')
               .upsert(ids.map(id => ({ periodo: PERIODO_MARCAS, tipo, doc_id: id })), { onConflict: 'periodo,tipo,doc_id', ignoreDuplicates: true }))
       : await supabase.from('flujo_pago_marcas')
@@ -623,8 +618,12 @@ function GastosFijosPage() {
     const cobrosVentas = dateObjs.map((_, i) =>
       vencVentas.rows.filter((r: any) => marcasVentas.has(r.id) && ventasIdx(r) === i)
         .reduce((s: number, r: any) => s + ((r.saldo as number) || 0), 0))
+    const presIdx = (r: any) => {
+      const ov = semanasPagaraPresupuestos[r.id]
+      return ov != null && ov >= 0 && ov < dateObjs.length ? ov : r.fridayIdx
+    }
     const cobrosPres = dateObjs.map((_, i) =>
-      vencPres.rows.filter((r: any) => r.fridayIdx === i && marcasPresupuestos.has(r.id))
+      vencPres.rows.filter((r: any) => marcasPresupuestos.has(r.id) && presIdx(r) === i)
         .reduce((s: number, r: any) => s + (r.saldo || 0), 0))
     // Compras marcadas "Pagará": el monto proyectado es el parcial fijado por el
     // usuario (si existe) o el saldo completo. El flujo usa ese monto proyectado.
@@ -649,7 +648,7 @@ function GastosFijosPage() {
     const semanaCorteIdx = idxCorte === -1 ? 0 : idxCorte
 
     return { cobrosVentas, cobrosPres, pagosCompras, comprasPagar, semanaCorteIdx }
-  }, [flujoFechas, fechaResumen, facturasAll, presupuestosAll, comprasAll, marcasVentas, marcasPresupuestos, marcasCompras, montosPagaraCompras, semanasPagaraCompras, semanasPagaraVentas])
+  }, [flujoFechas, fechaResumen, facturasAll, presupuestosAll, comprasAll, marcasVentas, marcasPresupuestos, marcasCompras, montosPagaraCompras, semanasPagaraCompras, semanasPagaraVentas, semanasPagaraPresupuestos])
 
   // Detalle de compras a pagar agrupado por proveedor: N facturas, monto por semana y total
 
@@ -894,8 +893,9 @@ function GastosFijosPage() {
                   weekDates={flujoFechas}
                   datesReadOnly
                   pagaraSet={marcasPresupuestos}
-                  onTogglePagara={(id, marked) => toggleMarca('presupuesto', id, marked)}
-                  onToggleManyPagara={(ids, marked) => toggleMarcaMany('presupuesto', ids, marked)}
+                  pagaraSemanas={semanasPagaraPresupuestos}
+                  onTogglePagara={(id, marked, semana) => toggleMarca('presupuesto', id, marked, semana)}
+                  onToggleManyPagara={(ids, marked, semana) => toggleMarcaMany('presupuesto', ids, marked, semana)}
                   cutoffDate={fechaResumen}
                 />
               )}
@@ -905,8 +905,8 @@ function GastosFijosPage() {
                   weekDates={flujoFechas}
                   datesReadOnly
                   pagaraSet={marcasCompras}
-                  onTogglePagara={(id, marked) => toggleMarca('compra', id, marked)}
-                  onToggleManyPagara={(ids, marked) => toggleMarcaMany('compra', ids, marked)}
+                  onTogglePagara={(id, marked, semana) => toggleMarca('compra', id, marked, semana)}
+                  onToggleManyPagara={(ids, marked, semana) => toggleMarcaMany('compra', ids, marked, semana)}
                   pagaraMontos={montosPagaraCompras}
                   onChangeMontoPagara={setMontoPagaraCompra}
                   pagaraSemanas={semanasPagaraCompras}

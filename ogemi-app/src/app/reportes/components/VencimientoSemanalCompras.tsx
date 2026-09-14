@@ -21,8 +21,9 @@ export interface VencimientoSemanalComprasProps {
   datesReadOnly?: boolean
   /** Marcas "Pagará" controladas (persistidas por el padre). Si se omiten, estado local. */
   pagaraSet?: Set<string>
-  onTogglePagara?: (id: string, marked: boolean) => void
-  onToggleManyPagara?: (ids: string[], marked: boolean) => void
+  /** semana: índice 0-3 en que se pagará (al marcar con el filtro en una semana distinta a la de vencimiento); null = por vencimiento */
+  onTogglePagara?: (id: string, marked: boolean, semana?: number | null) => void
+  onToggleManyPagara?: (ids: string[], marked: boolean, semana?: number | null) => void
   /** Montos parciales proyectados por compra marcada (id → monto). Ausente = saldo completo. */
   pagaraMontos?: Record<string, number>
   /** Cambia el monto proyectado de una compra marcada. null = volver al saldo completo. */
@@ -93,8 +94,11 @@ export default function VencimientoSemanalCompras({
   const [compSemFilter, setCompSemFilter] = useState<string>('all')
   const [internalPagara, setInternalPagara] = useState<Set<string>>(new Set())
   const pagaraSet = pagaraProp ?? internalPagara
-  const togglePagara = (id: string, marked: boolean) => {
-    if (onTogglePagara) { onTogglePagara(id, marked); return }
+  const semanaSel = compSemFilter === 'all' ? null : parseInt(compSemFilter)
+  const semanaParaMarcar = (naturalIdx: number, marked: boolean): number | null =>
+    marked && semanaSel != null && semanaSel !== naturalIdx ? semanaSel : null
+  const togglePagara = (id: string, marked: boolean, naturalIdx: number) => {
+    if (onTogglePagara) { onTogglePagara(id, marked, semanaParaMarcar(naturalIdx, marked)); return }
     setInternalPagara(prev => { const next = new Set(prev); marked ? next.add(id) : next.delete(id); return next })
   }
 
@@ -121,7 +125,10 @@ export default function VencimientoSemanalCompras({
       (r.proveedores?.nombre || '').toLowerCase().includes(compSearch.toLowerCase()) ||
       (r.concepto || '').toLowerCase().includes(compSearch.toLowerCase()) ||
       (r.referencia || '').toLowerCase().includes(compSearch.toLowerCase())
-    const matchSem = compSemFilter === 'all' || r.fridayIdx === parseInt(compSemFilter)
+    // Semana N: lo que se paga en N + lo pendiente SIN marcar de semanas anteriores
+    const matchSem = semanaSel == null
+      || r.fridayIdx === semanaSel
+      || (r.fridayIdx < semanaSel && !pagaraSet.has(r.id))
     return matchSearch && matchSem
   })
 
@@ -149,8 +156,8 @@ export default function VencimientoSemanalCompras({
   const allMarked = compRows.length > 0 && compRows.every((r: any) => pagaraSet.has(r.id))
   const toggleAll = (marked: boolean) => {
     const ids = compRows.map((r: any) => r.id as string)
-    if (onToggleManyPagara) { onToggleManyPagara(ids, marked); return }
-    if (onTogglePagara) { ids.forEach(id => onTogglePagara(id, marked)); return }
+    if (onToggleManyPagara) { onToggleManyPagara(ids, marked, marked ? semanaSel : null); return }
+    if (onTogglePagara) { compRows.forEach((r: any) => onTogglePagara(r.id, marked, semanaParaMarcar(r.fridayIdxAuto, marked))); return }
     setInternalPagara(prev => {
       const next = new Set(prev)
       ids.forEach(id => marked ? next.add(id) : next.delete(id))
@@ -339,8 +346,9 @@ export default function VencimientoSemanalCompras({
                       </td>
                       <td className="table-cell text-center">
                         <input type="checkbox" checked={isPagara}
-                          onChange={e => togglePagara(c.id, e.target.checked)}
-                          className="w-4 h-4 accent-green-600 cursor-pointer" title="Marcar como Pagará" />
+                          onChange={e => togglePagara(c.id, e.target.checked, c.fridayIdxAuto)}
+                          className="w-4 h-4 accent-green-600 cursor-pointer"
+                          title={semanaSel != null && semanaSel !== c.fridayIdxAuto ? `Marcar: se pagará en la semana ${semanaSel + 1}` : 'Marcar como Pagará'} />
                       </td>
                     </tr>
                   )
