@@ -544,7 +544,7 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
                           {(c.proveedores as any)?.nombre || '—'}
                         </td>
                         <td className="table-cell text-gray-500 max-w-[160px]">
-                          <span className="truncate block" title={c.concepto || ''}>{c.concepto || '—'}</span>
+                          <span className="truncate block" title={c.concepto || ''}>{c.referencia || '—'}</span>
                         </td>
                         <td className="table-cell text-sm">
                           {c.vencimiento ? (
@@ -749,7 +749,7 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
                         </span>
                       )}
                     </div>
-                    {c.concepto && <p className="text-xs text-gray-500 mb-2 line-clamp-2">{c.concepto}</p>}
+                    {c.referencia && <p className="text-xs text-gray-500 mb-2 line-clamp-2">Ref. {c.referencia}</p>}
                     <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
                       <span>Fecha: {formatDate(c.fecha)}</span>
                       {c.vencimiento && (
@@ -806,7 +806,7 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
                   <tr className="border-b border-gray-200">
                     <th className="table-header">Fecha</th>
                     <th className="table-header">Proveedor</th>
-                    <th className="table-header">Concepto</th>
+                    <th className="table-header">Referencia</th>
                     <th className="table-header">Vencimiento</th>
                     <th className="table-header text-right">Monto</th>
                     <th className="table-header text-right">ITBMS</th>
