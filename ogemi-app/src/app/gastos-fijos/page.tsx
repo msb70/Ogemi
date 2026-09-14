@@ -39,7 +39,7 @@ type BancoCuentaLite = {
   banco: string
 }
 
-type Pestana = 'gastos' | 'ventas' | 'presupuestos' | 'compras'
+type Pestana = 'gastos' | 'ventas' | 'presupuestos' | 'compras' | 'gastosfijos'
 
 /** Semanas del flujo: siempre 4, arrancando en la fecha de corte (corte, +7, +14, +21). */
 const SEMANAS = [1, 2, 3, 4] as const
@@ -186,11 +186,18 @@ function GastosFijosPage() {
   // Datos para las pestañas de vencimiento semanal y el resumen del flujo
   const [vencLoaded, setVencLoaded] = useState(false)
   const [vencLoading, setVencLoading] = useState(false)
-  const [facturasAll, setFacturasAll] = useState<any[]>([])
-  const [presupuestosAll, setPresupuestosAll] = useState<any[]>([])
+  const [facturasRaw, setFacturasAll] = useState<any[]>([])
+  const [ventasOgemiRaw, setVentasOgemiRaw] = useState<any[]>([])
+  const [presupuestosRaw, setPresupuestosAll] = useState<any[]>([])
   const [comprasRaw, setComprasAll] = useState<any[]>([])
   const [empresaFiltro, setEmpresaFiltro] = useEmpresaFiltro()
   const comprasAll = useMemo(() => filtrarEmpresa(comprasRaw, empresaFiltro), [comprasRaw, empresaFiltro])
+  // Ventas: Impresos = facturas; Ogemi = ventas_ogemi (mapeada al shape de facturas). Presupuestos solo Impresos.
+  const facturasAll = useMemo(() => [
+    ...(empresaFiltro !== 'ogemi' ? facturasRaw : []),
+    ...(empresaFiltro !== 'impresos' ? ventasOgemiRaw.map((v: any) => ({ ...v, numero_factura: v.numero, tipo_documento: 'FACTURA', retencion_monto: 0, empresa: 'ogemi' })) : []),
+  ], [facturasRaw, ventasOgemiRaw, empresaFiltro])
+  const presupuestosAll = useMemo(() => empresaFiltro !== 'ogemi' ? presupuestosRaw : [], [presupuestosRaw, empresaFiltro])
 
   // Marcas persistidas por período: venta/presupuesto = "Pagarán" (solo lo marcado suma); compra = "Pagará"
   const [marcasVentas, setMarcasVentas] = useState<Set<string>>(new Set())
@@ -424,16 +431,19 @@ function GastosFijosPage() {
       { data: facturasData, error: e1 },
       { data: presupuestosData, error: e2 },
       { data: comprasData, error: e3 },
+      { data: ventasOgemiData, error: e4 },
     ] = await Promise.all([
       supabase.from('facturas').select('*, clientes(nombre)').order('fecha', { ascending: false }),
       supabase.from('presupuestos').select('*, clientes(nombre)').order('fecha', { ascending: false }),
       supabase.from('compras').select('*, proveedores(nombre)').order('fecha', { ascending: false }),
+      supabase.from('ventas_ogemi').select('*, clientes(nombre)').order('fecha', { ascending: false }),
     ])
-    const err = e1 || e2 || e3
+    const err = e1 || e2 || e3 || e4
     if (err) {
       showToast(`Error al cargar vencimientos: ${err.message}`, 'error')
     }
     setFacturasAll(facturasData || [])
+    setVentasOgemiRaw(ventasOgemiData || [])
     setPresupuestosAll(presupuestosData || [])
     setComprasAll(comprasData || [])
     setVencLoading(false)
@@ -791,6 +801,7 @@ function GastosFijosPage() {
     { key: 'ventas',       label: 'Ventas x semana',       icon: FileText },
     { key: 'presupuestos', label: 'Presupuestos x semana', icon: ClipboardList },
     { key: 'compras',      label: 'Compras x semana',      icon: ShoppingCart },
+    { key: 'gastosfijos',  label: 'Gastos fijos',          icon: CalendarDays },
   ]
 
   return (
@@ -801,7 +812,7 @@ function GastosFijosPage() {
         subtitle="Cobros probables, pagos y gastos fijos por semana"
         actions={
           <div className="flex items-center gap-2">
-            <EmpresaFilter value={empresaFiltro} onChange={setEmpresaFiltro} />
+            <EmpresaFilter value={empresaFiltro} onChange={setEmpresaFiltro} label="Empresa:" title="Ventas, presupuestos y compras de qué empresa se incluyen" />
             <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2">
               <Printer size={16} /> Reporte PDF
             </button>
@@ -890,6 +901,163 @@ function GastosFijosPage() {
         </div>
       )}
 
+
+      {pestana === 'gastosfijos' && (
+      <div className="p-6 space-y-6">
+        <section className="card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <CalendarDays size={16} className="text-brand-600" />
+            <h2 className="text-sm font-semibold text-gray-800">Gastos fijos del mes</h2>
+          </div>
+          <p className="text-lg font-semibold text-gray-900">{periodoMes}</p>
+          <p className="mt-1 text-xs text-gray-500">
+            El mes sale de la fecha de corte (pestaña Flujo de pago). {semanaFechas.length} semanas (viernes del mes).
+          </p>
+        </section>
+
+        <section className="card p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Plus size={16} className="text-brand-600" />
+            <h2 className="text-sm font-semibold text-gray-800">Crear gasto fijo</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
+            <label>
+              <span className="label">Nombre</span>
+              <input
+                className="input"
+                value={nuevoGastoNombre}
+                onChange={event => setNuevoGastoNombre(event.target.value)}
+                placeholder="Ej. Alquiler, planilla, internet"
+              />
+            </label>
+            <button className="btn-primary inline-flex items-center gap-2" onClick={crearGasto}>
+              <Plus size={16} />
+              Crear
+            </button>
+          </div>
+        </section>
+
+        <section className="card overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+              Montos de gastos fijos - {periodoMes}
+            </p>
+            <button
+              className="btn-secondary inline-flex items-center gap-2 py-1.5 text-xs"
+              onClick={guardarMontos}
+              disabled={savingMontos || loading || gastos.every(gasto => !gasto.activo)}
+            >
+              <Save size={14} />
+              {savingMontos ? 'Guardando' : 'Guardar'}
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] table-fixed">
+              <ColsSemana n={semanasGastos.length} />
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="table-header">Gasto fijo</th>
+                  {semanasGastos.map((semana, i) => (
+                    <th key={semana} className="table-header">
+                      <div className="flex flex-col items-start gap-1">
+                        <span>Semana {semana}</span>
+                        <input
+                          type="date"
+                          className="input py-1 text-xs max-w-[130px]"
+                          value={semanaFechas[i] || ''}
+                          onChange={event => updateFecha(i, event.target.value)}
+                          title="Fecha de la semana (editable)"
+                        />
+                      </div>
+                    </th>
+                  ))}
+                  <th className="table-header text-right">Total</th>
+                  <th className="table-header">Estado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {loading ? (
+                  <tr><td colSpan={semanasGastos.length + 3} className="text-center py-10 text-gray-400">Cargando...</td></tr>
+                ) : gastos.length === 0 ? (
+                  <tr><td colSpan={semanasGastos.length + 3} className="text-center py-10 text-gray-400">No hay gastos fijos creados.</td></tr>
+                ) : (
+                  gastos.map(gasto => {
+                    const fila = montos[gasto.id] || emptyMontos()
+                    const totalFila = semanasGastos.reduce((sum, s) => sum + (parseFloat(fila[s] || '0') || 0), 0)
+                    return (
+                      <tr key={gasto.id} className={!gasto.activo ? 'opacity-50' : ''}>
+                        <td className="table-cell">
+                          <input
+                            className="input min-w-[160px]"
+                            value={gasto.nombre}
+                            onChange={event => updateGasto(gasto.id, event.target.value)}
+                            onBlur={() => saveNombre(gasto)}
+                            disabled={!gasto.activo}
+                          />
+                        </td>
+                        {semanasGastos.map(semana => (
+                          <td key={semana} className="table-cell">
+                            <MontoInput
+                              value={fila[semana] || ''}
+                              onChange={v => updateMonto(gasto.id, semana, v)}
+                              onCommit={v => saveMonto(gasto.id, semana, v)}
+                              disabled={!gasto.activo}
+                            />
+                          </td>
+                        ))}
+                        <td className="table-cell text-right font-semibold">{formatCurrency(totalFila)}</td>
+                        <td className="table-cell">
+                          <div className="flex items-center gap-2">
+                            <button
+                              className={`badge ${gasto.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}
+                              onClick={() => toggleActivo(gasto)}
+                            >
+                              {gasto.activo ? 'Activo' : 'Inactivo'}
+                            </button>
+                            <PermissionGuard modulo="gastos_fijos" accion="borrar" silent>
+                              <button
+                                className="text-red-400 hover:text-red-600"
+                                onClick={() => setGastoAEliminar(gasto)}
+                                title="Eliminar gasto fijo"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </PermissionGuard>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+              {gastos.length > 0 && (
+                <tfoot>
+                  <tr className="border-t border-gray-200 bg-gray-50">
+                    <td className="table-cell font-bold">Total semana</td>
+                    {totalesSemana.map((total, i) => (
+                      <td key={i} className="table-cell text-right font-bold">{formatCurrency(total)}</td>
+                    ))}
+                    <td className="table-cell text-right font-bold text-brand-700">{formatCurrency(totalesSemana.reduce((a, b) => a + b, 0))}</td>
+                    <td className="table-cell"></td>
+                  </tr>
+                  <tr className="bg-gray-50">
+                    <td className="table-cell text-xs text-gray-500">CxC vencida a la fecha</td>
+                    {cxcSemana.map((v, i) => (
+                      <td key={i} className="table-cell text-right text-xs font-semibold text-orange-600">
+                        {formatCurrency(v)}
+                      </td>
+                    ))}
+                    <td className="table-cell"></td>
+                    <td className="table-cell"></td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </section>
+      </div>
+      )}
       {pestana === 'gastos' && (
       <div className="p-6 space-y-6">
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1074,147 +1242,6 @@ function GastosFijosPage() {
           )}
         </section>
 
-        <section className="card p-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Plus size={16} className="text-brand-600" />
-            <h2 className="text-sm font-semibold text-gray-800">Crear gasto fijo</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
-            <label>
-              <span className="label">Nombre</span>
-              <input
-                className="input"
-                value={nuevoGastoNombre}
-                onChange={event => setNuevoGastoNombre(event.target.value)}
-                placeholder="Ej. Alquiler, planilla, internet"
-              />
-            </label>
-            <button className="btn-primary inline-flex items-center gap-2" onClick={crearGasto}>
-              <Plus size={16} />
-              Crear
-            </button>
-          </div>
-        </section>
-
-        <section className="card overflow-hidden">
-          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-              Montos de gastos fijos - {periodoMes}
-            </p>
-            <button
-              className="btn-secondary inline-flex items-center gap-2 py-1.5 text-xs"
-              onClick={guardarMontos}
-              disabled={savingMontos || loading || gastos.every(gasto => !gasto.activo)}
-            >
-              <Save size={14} />
-              {savingMontos ? 'Guardando' : 'Guardar'}
-            </button>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] table-fixed">
-              <ColsSemana n={semanasGastos.length} />
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="table-header">Gasto fijo</th>
-                  {semanasGastos.map((semana, i) => (
-                    <th key={semana} className="table-header">
-                      <div className="flex flex-col items-start gap-1">
-                        <span>Semana {semana}</span>
-                        <input
-                          type="date"
-                          className="input py-1 text-xs max-w-[130px]"
-                          value={semanaFechas[i] || ''}
-                          onChange={event => updateFecha(i, event.target.value)}
-                          title="Fecha de la semana (editable)"
-                        />
-                      </div>
-                    </th>
-                  ))}
-                  <th className="table-header text-right">Total</th>
-                  <th className="table-header">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {loading ? (
-                  <tr><td colSpan={semanasGastos.length + 3} className="text-center py-10 text-gray-400">Cargando...</td></tr>
-                ) : gastos.length === 0 ? (
-                  <tr><td colSpan={semanasGastos.length + 3} className="text-center py-10 text-gray-400">No hay gastos fijos creados.</td></tr>
-                ) : (
-                  gastos.map(gasto => {
-                    const fila = montos[gasto.id] || emptyMontos()
-                    const totalFila = semanasGastos.reduce((sum, s) => sum + (parseFloat(fila[s] || '0') || 0), 0)
-                    return (
-                      <tr key={gasto.id} className={!gasto.activo ? 'opacity-50' : ''}>
-                        <td className="table-cell">
-                          <input
-                            className="input min-w-[160px]"
-                            value={gasto.nombre}
-                            onChange={event => updateGasto(gasto.id, event.target.value)}
-                            onBlur={() => saveNombre(gasto)}
-                            disabled={!gasto.activo}
-                          />
-                        </td>
-                        {semanasGastos.map(semana => (
-                          <td key={semana} className="table-cell">
-                            <MontoInput
-                              value={fila[semana] || ''}
-                              onChange={v => updateMonto(gasto.id, semana, v)}
-                              onCommit={v => saveMonto(gasto.id, semana, v)}
-                              disabled={!gasto.activo}
-                            />
-                          </td>
-                        ))}
-                        <td className="table-cell text-right font-semibold">{formatCurrency(totalFila)}</td>
-                        <td className="table-cell">
-                          <div className="flex items-center gap-2">
-                            <button
-                              className={`badge ${gasto.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}
-                              onClick={() => toggleActivo(gasto)}
-                            >
-                              {gasto.activo ? 'Activo' : 'Inactivo'}
-                            </button>
-                            <PermissionGuard modulo="gastos_fijos" accion="borrar" silent>
-                              <button
-                                className="text-red-400 hover:text-red-600"
-                                onClick={() => setGastoAEliminar(gasto)}
-                                title="Eliminar gasto fijo"
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            </PermissionGuard>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-              {gastos.length > 0 && (
-                <tfoot>
-                  <tr className="border-t border-gray-200 bg-gray-50">
-                    <td className="table-cell font-bold">Total semana</td>
-                    {totalesSemana.map((total, i) => (
-                      <td key={i} className="table-cell text-right font-bold">{formatCurrency(total)}</td>
-                    ))}
-                    <td className="table-cell text-right font-bold text-brand-700">{formatCurrency(totalesSemana.reduce((a, b) => a + b, 0))}</td>
-                    <td className="table-cell"></td>
-                  </tr>
-                  <tr className="bg-gray-50">
-                    <td className="table-cell text-xs text-gray-500">CxC vencida a la fecha</td>
-                    {cxcSemana.map((v, i) => (
-                      <td key={i} className="table-cell text-right text-xs font-semibold text-orange-600">
-                        {formatCurrency(v)}
-                      </td>
-                    ))}
-                    <td className="table-cell"></td>
-                    <td className="table-cell"></td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
-        </section>
 
         {/* Detalle: compras marcadas como "Pagará" */}
         <section className="card overflow-hidden">
