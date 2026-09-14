@@ -57,6 +57,7 @@ const navItems: NavEntry[] = [
   },
   link('/banco',        'Banco',         Building2,     'banco'),
   link('/gastos-fijos', 'Flujo de Pago', CalendarClock, 'gastos_fijos'),
+  link('/obligaciones', 'Obligaciones', Wallet,         'obligaciones'),
   link('/reportes',     'Reportes',      BarChart3,     'reportes'),
   link('/usuarios',     'Usuarios',      ShieldCheck,   'usuarios'),
 ]

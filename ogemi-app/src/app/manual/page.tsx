@@ -22,6 +22,7 @@ const ICONS: Record<string, LucideIcon> = {
   proveedores: Truck,
   banco: Wallet,
   gastos_fijos: CalendarClock,
+  obligaciones: Wallet,
   reportes: BarChart3,
   importar: Upload,
   usuarios: Shield,

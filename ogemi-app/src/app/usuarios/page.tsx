@@ -35,6 +35,7 @@ const MODULES: { id: Modulo; label: string }[] = [
   { id: 'proveedores', label: 'Proveedores' },
   { id: 'banco', label: 'Banco' },
   { id: 'gastos_fijos', label: 'Flujo de Pago' },
+  { id: 'obligaciones', label: 'Obligaciones' },
   { id: 'ventas_ogemi', label: 'Ventas Ogemi' },
   { id: 'reportes', label: 'Reportes' },
   { id: 'importar', label: 'Importar' },
