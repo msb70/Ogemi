@@ -48,7 +48,7 @@ export default function ComprasTab({
       <tr key={c.id} className="hover:bg-gray-50">
         <td className="table-cell text-sm">{formatDate(c.fecha)}</td>
         <td className="table-cell font-medium">{c.proveedores?.nombre}</td>
-        <td className="table-cell text-sm text-gray-500 max-w-[150px]"><span className="truncate block">{c.concepto || '—'}</span></td>
+        <td className="table-cell text-sm text-gray-500 max-w-[150px]"><span className="truncate block" title={c.concepto || ''}>{c.referencia || '—'}</span></td>
         <td className="table-cell text-right">{formatMonto(c.monto)}</td>
         <td className="table-cell text-right text-gray-400">{formatMonto(c.itbms)}</td>
         <td className="table-cell text-right font-semibold">{formatMonto(c.total)}</td>
@@ -150,7 +150,7 @@ export default function ComprasTab({
               <thead><tr className="border-b border-gray-200">
                 <th className="table-header">Fecha</th>
                 <th className="table-header">Proveedor</th>
-                <th className="table-header">Concepto</th>
+                <th className="table-header">Referencia</th>
                 <th className="table-header text-right">Monto</th>
                 <th className="table-header text-right">ITBMS</th>
                 <th className="table-header text-right">Total</th>
