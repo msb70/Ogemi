@@ -22,15 +22,18 @@ export interface VencimientoSemanalVentasProps {
   /** Marcas "Pagarán" controladas (persistidas por el padre). Si se omiten, estado local.
    *  Marcada = se espera que SÍ pague; solo lo marcado suma al probable pago. */
   pagaraSet?: Set<string>
-  onTogglePagara?: (id: string, marked: boolean) => void
-  onToggleManyPagara?: (ids: string[], marked: boolean) => void
+  /** semana: índice 0-3 en que se cobrará (cuando se marca con el filtro en una semana distinta a la de vencimiento); null = por vencimiento */
+  onTogglePagara?: (id: string, marked: boolean, semana?: number | null) => void
+  onToggleManyPagara?: (ids: string[], marked: boolean, semana?: number | null) => void
+  /** Semana elegida (persistida) por factura marcada: doc_id → 0-3 */
+  pagaraSemanas?: Record<string, number>
   /** Fecha de corte: lo vencido antes de esta fecha cae en la primera semana >= corte. Default: hoy. */
   cutoffDate?: string
 }
 
 export default function VencimientoSemanalVentas({
   facturas, weekDates: weekDatesProp, setWeekDates: setWeekDatesProp, datesReadOnly,
-  pagaraSet: pagaraProp, onTogglePagara, onToggleManyPagara, cutoffDate,
+  pagaraSet: pagaraProp, onTogglePagara, onToggleManyPagara, cutoffDate, pagaraSemanas = {},
 }: VencimientoSemanalVentasProps) {
   const [internalDates, setInternalDates] = useState<string[]>(() =>
     getNextFridays(4).map(d => d.toISOString().split('T')[0])
@@ -41,20 +44,39 @@ export default function VencimientoSemanalVentas({
   const [semanaFilter, setSemanaFilter] = useState<string>('all')
   const [internalPagara, setInternalPagara] = useState<Set<string>>(new Set())
   const pagaraSet = pagaraProp ?? internalPagara
-  const togglePagara = (id: string, marked: boolean) => {
-    if (onTogglePagara) { onTogglePagara(id, marked); return }
+  const semanaSel = semanaFilter === 'all' ? null : parseInt(semanaFilter)
+  // Semana en la que se cobrará al marcar: la del filtro activo (si difiere de la de vencimiento); null = por vencimiento
+  const semanaParaMarcar = (naturalIdx: number, marked: boolean): number | null =>
+    marked && semanaSel != null && semanaSel !== naturalIdx ? semanaSel : null
+  const togglePagara = (id: string, marked: boolean, naturalIdx: number) => {
+    if (onTogglePagara) { onTogglePagara(id, marked, semanaParaMarcar(naturalIdx, marked)); return }
     setInternalPagara(prev => { const next = new Set(prev); marked ? next.add(id) : next.delete(id); return next })
   }
 
   const weekDateObjs = weekDates.map(d => new Date(d + 'T00:00:00'))
   const cutoff = new Date((cutoffDate || new Date().toISOString().split('T')[0]) + 'T00:00:00')
-  const vencViernes = buildVencimientoViernes(facturas, weekDateObjs, cutoff)
+  const vencBase = buildVencimientoViernes(facturas, weekDateObjs, cutoff)
+  // fridayIdx efectivo: si la factura está marcada con una semana elegida, se cobra en esa semana.
+  // semanaNatural conserva la semana que le toca por vencimiento.
+  const rowsEff = vencBase.rows.map((r: any) => {
+    const ov = pagaraSet.has(r.id) ? pagaraSemanas[r.id] : undefined
+    const fridayIdx = ov != null && ov >= 0 && ov < weekDateObjs.length ? ov : r.fridayIdx
+    return { ...r, semanaNatural: r.fridayIdx, fridayIdx }
+  })
+  const vencViernes = {
+    rows: rowsEff,
+    totals: weekDateObjs.map((_, i) => rowsEff.filter((r: any) => r.fridayIdx === i).reduce((s: number, r: any) => s + (r.saldo || 0), 0)),
+    grandTotal: vencBase.grandTotal,
+  }
 
   const viernesRows = vencViernes.rows.filter((r: any) => {
     const matchSearch = !viernesSearch ||
       (r.clientes?.nombre || '').toLowerCase().includes(viernesSearch.toLowerCase()) ||
       String(r.numero_factura).includes(viernesSearch)
-    const matchSemana = semanaFilter === 'all' || r.fridayIdx === parseInt(semanaFilter)
+    // Semana N: lo que se cobra en N + lo pendiente SIN marcar de semanas anteriores (se puede marcar para cobrarlo en N)
+    const matchSemana = semanaSel == null
+      || r.fridayIdx === semanaSel
+      || (r.fridayIdx < semanaSel && !pagaraSet.has(r.id))
     return matchSearch && matchSemana
   })
 
@@ -82,8 +104,9 @@ export default function VencimientoSemanalVentas({
   const allMarked = viernesRows.length > 0 && viernesRows.every((r: any) => pagaraSet.has(r.id))
   const toggleAll = (marked: boolean) => {
     const ids = viernesRows.map((r: any) => r.id as string)
-    if (onToggleManyPagara) { onToggleManyPagara(ids, marked); return }
-    if (onTogglePagara) { ids.forEach(id => onTogglePagara(id, marked)); return }
+    // Con filtro de semana activo, todo lo marcado se cobra en esa semana
+    if (onToggleManyPagara) { onToggleManyPagara(ids, marked, marked ? semanaSel : null); return }
+    if (onTogglePagara) { viernesRows.forEach((r: any) => onTogglePagara(r.id, marked, semanaParaMarcar(r.semanaNatural, marked))); return }
     setInternalPagara(prev => {
       const next = new Set(prev)
       ids.forEach(id => marked ? next.add(id) : next.delete(id))
@@ -236,8 +259,13 @@ export default function VencimientoSemanalVentas({
                       {weekDateObjs.map((_, i) => (
                         <td key={i} className="table-cell text-right text-sm">
                           {f.fridayIdx === i
-                            ? <span className={i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>
+                            ? <span className={f.fridayIdx !== f.semanaNatural
+                                ? 'inline-block font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5'
+                                : i === 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-700'}>
                                 {formatMonto(f.saldo)}
+                                {f.fridayIdx !== f.semanaNatural && (
+                                  <span className="block text-[10px] font-normal text-amber-600">vence sem {f.semanaNatural + 1}</span>
+                                )}
                                 {(f.monto_pagado || 0) > 0 && (
                                   <span className="block text-[10px] font-normal text-gray-400">
                                     abonado {formatMonto(f.monto_pagado)} de {formatMonto(f.total)}
@@ -249,8 +277,9 @@ export default function VencimientoSemanalVentas({
                       ))}
                       <td className="table-cell text-center">
                         <input type="checkbox" checked={isPagara}
-                          onChange={e => togglePagara(f.id, e.target.checked)}
-                          className="w-4 h-4 accent-green-600 cursor-pointer" title="Marcar como Pagarán" />
+                          onChange={e => togglePagara(f.id, e.target.checked, f.semanaNatural)}
+                          className="w-4 h-4 accent-green-600 cursor-pointer"
+                          title={semanaSel != null && semanaSel !== f.semanaNatural ? `Marcar: se cobrará en la semana ${semanaSel + 1}` : 'Marcar como Pagarán'} />
                       </td>
                     </tr>
                   )
