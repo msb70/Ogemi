@@ -268,6 +268,9 @@ function DashboardPage() {
         { data: facturasPendientes },
         { data: comprasPendientes },
         { data: presupuestosCur },
+        { data: voCur },
+        { data: voPrev },
+        { data: voPendientes },
       ] = await Promise.all([
         supabase.from('facturas').select('fecha,total,tipo_documento,cliente_id,clientes(nombre)').gte('fecha', start).lte('fecha', end),
         supabase.from('facturas').select('fecha,total,tipo_documento').gte('fecha', prevStart).lte('fecha', prevEnd),
@@ -277,11 +280,23 @@ function DashboardPage() {
         supabase.from('facturas').select('total,monto_pagado,tipo_documento').eq('estado', 'pendiente'),
         supabase.from('compras').select('total,monto_pagado,empresa').eq('estado', 'pendiente'),
         supabase.from('presupuestos').select('fecha,total,clientes(nombre)').gte('fecha', start).lte('fecha', end),
+        supabase.from('ventas_ogemi').select('fecha,total,cliente_id,clientes(nombre)').gte('fecha', start).lte('fecha', end),
+        supabase.from('ventas_ogemi').select('fecha,total').gte('fecha', prevStart).lte('fecha', prevEnd),
+        supabase.from('ventas_ogemi').select('total,monto_pagado').eq('estado', 'pendiente'),
       ])
 
+      // Empresa: Impresos = facturas/NC/presupuestos; Ogemi = ventas_ogemi. Compras por columna empresa.
+      const incImpresos = empresaFiltro !== 'ogemi'
+      const incOgemi = empresaFiltro !== 'impresos'
+      const mapVO = (rows: any[] | null) => (rows || []).map((v: any) => ({ ...v, tipo_documento: 'FACTURA' }))
+      const facturasCurE: any[] = [...(incImpresos ? (facturasCur || []) : []), ...(incOgemi ? mapVO(voCur) : [])]
+      const facturasPrevE: any[] = [...(incImpresos ? (facturasPrev || []) : []), ...(incOgemi ? mapVO(voPrev) : [])]
+      const facturasPendE: any[] = [...(incImpresos ? (facturasPendientes || []) : []), ...(incOgemi ? mapVO(voPendientes) : [])]
+      const presupuestosE: any[] = incImpresos ? (presupuestosCur || []) : []
+
       // KPI actual
-      const ventas = (facturasCur || []).filter(f => !isNotaCreditо(f.tipo_documento))
-      const nc = (facturasCur || []).filter(f => isNotaCreditо(f.tipo_documento))
+      const ventas = facturasCurE.filter(f => !isNotaCreditо(f.tipo_documento))
+      const nc = facturasCurE.filter(f => isNotaCreditо(f.tipo_documento))
       const comprasArr = filtrarEmpresa(comprasCur || [], empresaFiltro)
 
       setKpi({
@@ -294,8 +309,8 @@ function DashboardPage() {
       })
 
       // KPI anterior
-      const ventasPrev = (facturasPrev || []).filter(f => !isNotaCreditо(f.tipo_documento))
-      const ncPrev = (facturasPrev || []).filter(f => isNotaCreditо(f.tipo_documento))
+      const ventasPrev = facturasPrevE.filter(f => !isNotaCreditо(f.tipo_documento))
+      const ncPrev = facturasPrevE.filter(f => isNotaCreditо(f.tipo_documento))
       const comprasPrevArr = filtrarEmpresa(comprasPrev || [], empresaFiltro)
       setPrevKpi({
         ventasMonto: ventasPrev.reduce((s, f) => s + (f.total || 0), 0),
@@ -306,7 +321,7 @@ function DashboardPage() {
         comprasCount: comprasPrevArr.length,
       })
 
-      const ventasPendientes = (facturasPendientes || []).filter(f => !isNotaCreditо(f.tipo_documento))
+      const ventasPendientes = facturasPendE.filter(f => !isNotaCreditо(f.tipo_documento))
       const comprasPendientesArr = filtrarEmpresa(comprasPendientes || [], empresaFiltro)
       setPendingSummary({
         ventasMonto: ventasPendientes.reduce((s, f) => s + Math.max(0, (f.total || 0) - (f.monto_pagado || 0)), 0),
@@ -379,8 +394,8 @@ function DashboardPage() {
       // Top 10 ventas (por cliente), compras (por proveedor), presupuestos (por cliente)
       setTopVentas(buildTop(ventas.map(f => ({ nombre: (f.clientes as any)?.nombre || 'Sin nombre', total: f.total || 0 }))))
       setTopCompras(buildTop(comprasArr.map(c => ({ nombre: (c.proveedores as any)?.nombre || 'Sin nombre', total: c.total || 0 }))))
-      setTopPresupuestos(buildTop((presupuestosCur || []).map((p: any) => ({ nombre: (p.clientes as any)?.nombre || 'Sin nombre', total: p.total || 0 }))))
-      setPresupuestosMonto((presupuestosCur || []).reduce((s: number, p: any) => s + (p.total || 0), 0))
+      setTopPresupuestos(buildTop(presupuestosE.map((p: any) => ({ nombre: (p.clientes as any)?.nombre || 'Sin nombre', total: p.total || 0 }))))
+      setPresupuestosMonto(presupuestosE.reduce((s: number, p: any) => s + (p.total || 0), 0))
 
     } finally {
       setLoading(false)
@@ -404,7 +419,7 @@ function DashboardPage() {
         subtitle={periodLabel}
         actions={
           <div className="flex items-center gap-2">
-            <EmpresaFilter value={empresaFiltro} onChange={setEmpresaFiltro} />
+            <EmpresaFilter value={empresaFiltro} onChange={setEmpresaFiltro} label="Empresa:" title="Ventas, compras y presupuestos de qué empresa se incluyen" />
             <button onClick={loadDashboard} className="btn-secondary flex items-center gap-2">
               <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
               Actualizar

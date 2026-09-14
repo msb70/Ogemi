@@ -31,14 +31,16 @@ export function filtrarEmpresa(rows: any[], filtro: EmpresaFiltro): any[] {
   return rows.filter(r => ((r && r.empresa) || 'ogemi') === filtro)
 }
 
-export default function EmpresaFilter({ value, onChange, className = '' }: {
+export default function EmpresaFilter({ value, onChange, className = '', label = 'Compras:', title = 'Compras de qué empresa se incluyen' }: {
   value: EmpresaFiltro
   onChange: (v: EmpresaFiltro) => void
   className?: string
+  label?: string
+  title?: string
 }) {
   return (
-    <div className={`flex items-center gap-2 print:hidden ${className}`} title="Compras de qué empresa se incluyen">
-      <span className="text-xs text-gray-500 whitespace-nowrap">Compras:</span>
+    <div className={`flex items-center gap-2 print:hidden ${className}`} title={title}>
+      <span className="text-xs text-gray-500 whitespace-nowrap">{label}</span>
       <div className="flex rounded-lg border border-gray-200 overflow-hidden">
         {OPCIONES.map(([val, label]) => (
           <button key={val} type="button" onClick={() => onChange(val)}
