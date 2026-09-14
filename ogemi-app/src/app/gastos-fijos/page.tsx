@@ -619,22 +619,6 @@ function GastosFijosPage() {
   }, [flujoFechas, fechaResumen, facturasAll, presupuestosAll, comprasAll, marcasVentas, marcasPresupuestos, marcasCompras, montosPagaraCompras, semanasPagaraCompras])
 
   // Detalle de compras a pagar agrupado por proveedor: N facturas, monto por semana y total
-  const comprasPagarPorProveedor = useMemo(() => {
-    const m = new Map<string, { nombre: string; count: number; semanas: number[]; countSemanas: number[]; total: number }>()
-    flujo.comprasPagar.forEach((c: any) => {
-      const nombre = c.proveedores?.nombre || '—'
-      if (!m.has(nombre)) m.set(nombre, { nombre, count: 0, semanas: SEMANAS.map(() => 0), countSemanas: SEMANAS.map(() => 0), total: 0 })
-      const g = m.get(nombre)!
-      const monto = c.pagoProyectado || 0
-      g.count += 1
-      g.total += monto
-      if (c.fridayIdx >= 0 && c.fridayIdx < SEMANAS.length) {
-        g.semanas[c.fridayIdx] += monto
-        g.countSemanas[c.fridayIdx] += 1
-      }
-    })
-    return Array.from(m.values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
-  }, [flujo.comprasPagar])
 
   const flujoNetoSemana = SEMANAS.map((_, i) =>
     flujo.cobrosVentas[i] + flujo.cobrosPres[i] - flujo.pagosCompras[i] - gastosFlujoSemana[i])
@@ -1242,81 +1226,6 @@ function GastosFijosPage() {
           )}
         </section>
 
-
-        {/* Detalle: compras marcadas como "Pagará" */}
-        <section className="card overflow-hidden">
-          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-              Compras a pagar (marcadas &quot;Pagará&quot;) · corte {formatDate(fechaResumen)}
-            </p>
-          </div>
-          {vencLoading || !vencLoaded ? (
-            <div className="p-6 text-center text-sm text-gray-400">Cargando datos...</div>
-          ) : flujo.comprasPagar.length === 0 ? (
-            <div className="p-6 text-center text-sm text-gray-400">
-              No hay compras marcadas como &quot;Pagará&quot;. Márcalas en la pestaña Compras x semana.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px] table-fixed">
-                <ColsSemana />
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="table-header">Proveedor</th>
-                    {SEMANAS.map((semana, i) => (
-                      <th key={semana} className="table-header text-right">
-                        Semana {semana}
-                        <span className="block font-normal text-[10px] text-gray-400">
-                          {formatDate(flujoFechas[i])}
-                        </span>
-                      </th>
-                    ))}
-                    <th className="table-header text-right">Total</th>
-                    <th className="table-header"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {comprasPagarPorProveedor.map(g => (
-                    <tr key={g.nombre} className="hover:bg-gray-50">
-                      <td className="table-cell text-sm font-medium">
-                        {g.nombre}
-                        <span className="block text-[10px] font-normal text-gray-400">
-                          {g.count} {g.count === 1 ? 'factura' : 'facturas'}
-                        </span>
-                      </td>
-                      {SEMANAS.map((_, i) => (
-                        <td key={i} className="table-cell text-right text-sm">
-                          {g.semanas[i] > 0
-                            ? (
-                              <span className="font-medium text-red-600">
-                                −{formatCurrency(g.semanas[i])}
-                                {g.countSemanas[i] > 1 && (
-                                  <span className="block text-[10px] font-normal text-gray-400">{g.countSemanas[i]} facturas</span>
-                                )}
-                              </span>
-                            )
-                            : <span className="text-gray-200">—</span>}
-                        </td>
-                      ))}
-                      <td className="table-cell text-right font-semibold text-red-600">−{formatCurrency(g.total)}</td>
-                      <td className="table-cell"></td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
-                    <td className="table-cell text-right text-sm text-gray-600">TOTAL A PAGAR</td>
-                    {flujo.pagosCompras.map((v, i) => (
-                      <td key={i} className="table-cell text-right text-red-600">{v > 0 ? `−${formatCurrency(v)}` : '—'}</td>
-                    ))}
-                    <td className="table-cell text-right text-red-600">−{formatCurrency(sum(flujo.pagosCompras))}</td>
-                    <td className="table-cell"></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
-        </section>
       </div>
       )}
       </div>
