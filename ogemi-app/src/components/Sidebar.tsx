@@ -42,6 +42,7 @@ const navItems: NavEntry[] = [
       link('/pagos-compras-impresos', 'Pago Compras',  WalletCards,  'compras'),
       link('/clientes',            'Clientes',            Users,         'clientes'),
       link('/importar',            'Importar',            Upload,        'importar'),
+      link('/reportes-impresos',   'Reportes',            BarChart3,     'reportes'),
     ],
   },
   {
@@ -51,6 +52,7 @@ const navItems: NavEntry[] = [
       link('/compras',       'Compras',        ShoppingCart, 'compras'),
       link('/pagos-compras', 'Pago Compras',   WalletCards,  'compras'),
       link('/proveedores',   'Proveedores',    Truck,        'proveedores'),
+      link('/reportes-ogemi', 'Reportes',      BarChart3,    'reportes'),
     ],
   },
   link('/banco',        'Banco',         Building2,     'banco'),

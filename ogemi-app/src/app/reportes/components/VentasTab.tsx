@@ -45,11 +45,13 @@ interface VentasTabProps extends FiltrosBarProps {
   topClientesVentas: [string, number][]
   ventasPorMes: { mes: string; ventas: number; count: number }[]
   ncFiltradas: any[]
+  /** Sub-pestañas que no aplican (ej. Ogemi: sin estado de cuenta, movimiento ni NC) */
+  ocultarSubTabs?: VentasSubTab[]
 }
 
 export default function VentasTab({
   ventasFiltradas, facturas, cartera, topClientesVentas, ventasPorMes, ncFiltradas,
-  search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta,
+  search, setSearch, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta, ocultarSubTabs = [],
 }: VentasTabProps) {
   const [ventasTab, setVentasTab] = useState<VentasSubTab>('listado')
   const [agruparCliente, setAgruparCliente] = useState(false)
@@ -99,7 +101,7 @@ export default function VentasTab({
           { key: 'pormes',            label: 'Por período' },
           { key: 'antiguedad_pivot',  label: 'Antigüedad de cartera' },
           { key: 'nc',                label: 'Notas de crédito' },
-        ].map(s => (
+        ].filter(s => !ocultarSubTabs.includes(s.key as VentasSubTab)).map(s => (
           <button key={s.key} onClick={() => setVentasTab(s.key as VentasSubTab)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
               ventasTab === s.key ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'
