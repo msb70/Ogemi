@@ -1063,18 +1063,6 @@ function GastosFijosPage() {
               Semanas: {flujoFechas.map(f => formatDate(f)).join(' · ')}
             </p>
           </div>
-
-          <div className="card p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <CalendarDays size={16} className="text-brand-600" />
-              <h2 className="text-sm font-semibold text-gray-800">Gastos fijos del mes</h2>
-            </div>
-            <p className="text-lg font-semibold text-gray-900">{periodoMes}</p>
-            <p className="mt-1 text-xs text-gray-500">
-              {semanaFechas.length} semanas (viernes del mes). El flujo toma la semana de gastos que coincide con cada
-              semana del corte; si cruza de mes usa {periodoMesSig}{montosSig ? '' : ' (sin montos: se repiten los de este mes)'}.
-            </p>
-          </div>
         </section>
 
         <section className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
