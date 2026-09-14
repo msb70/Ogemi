@@ -271,6 +271,8 @@ function DashboardPage() {
         { data: voCur },
         { data: voPrev },
         { data: voPendientes },
+        { data: ncCur },
+        { data: ncPrevData },
       ] = await Promise.all([
         supabase.from('facturas').select('fecha,total,tipo_documento,cliente_id,clientes(nombre)').gte('fecha', start).lte('fecha', end),
         supabase.from('facturas').select('fecha,total,tipo_documento').gte('fecha', prevStart).lte('fecha', prevEnd),
@@ -283,6 +285,9 @@ function DashboardPage() {
         supabase.from('ventas_ogemi').select('fecha,total,cliente_id,clientes(nombre)').gte('fecha', start).lte('fecha', end),
         supabase.from('ventas_ogemi').select('fecha,total').gte('fecha', prevStart).lte('fecha', prevEnd),
         supabase.from('ventas_ogemi').select('total,monto_pagado').eq('estado', 'pendiente'),
+        // Las notas de crédito viven en notas_credito (no en facturas.tipo_documento)
+        supabase.from('notas_credito').select('fecha,total').gte('fecha', start).lte('fecha', end),
+        supabase.from('notas_credito').select('fecha,total').gte('fecha', prevStart).lte('fecha', prevEnd),
       ])
 
       // Empresa: Impresos = facturas/NC/presupuestos; Ogemi = ventas_ogemi. Compras por columna empresa.
@@ -296,7 +301,10 @@ function DashboardPage() {
 
       // KPI actual
       const ventas = facturasCurE.filter(f => !isNotaCreditо(f.tipo_documento))
-      const nc = facturasCurE.filter(f => isNotaCreditо(f.tipo_documento))
+      const nc: any[] = [
+        ...facturasCurE.filter(f => isNotaCreditо(f.tipo_documento)),
+        ...(incImpresos ? (ncCur || []) : []),
+      ]
       const comprasArr = filtrarEmpresa(comprasCur || [], empresaFiltro)
 
       setKpi({
@@ -310,7 +318,10 @@ function DashboardPage() {
 
       // KPI anterior
       const ventasPrev = facturasPrevE.filter(f => !isNotaCreditо(f.tipo_documento))
-      const ncPrev = facturasPrevE.filter(f => isNotaCreditо(f.tipo_documento))
+      const ncPrev: any[] = [
+        ...facturasPrevE.filter(f => isNotaCreditо(f.tipo_documento)),
+        ...(incImpresos ? (ncPrevData || []) : []),
+      ]
       const comprasPrevArr = filtrarEmpresa(comprasPrev || [], empresaFiltro)
       setPrevKpi({
         ventasMonto: ventasPrev.reduce((s, f) => s + (f.total || 0), 0),
