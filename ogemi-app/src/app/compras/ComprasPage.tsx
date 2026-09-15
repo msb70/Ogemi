@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
+import { fetchAll } from '@/lib/fetchAll'
 // formatMonto: montos sin el símbolo USD/US$ (pedido del usuario)
 import { formatMonto as formatCurrency, formatDate } from '@/lib/utils'
 import { Compra, Proveedor, BancoCuenta, Empresa, EMPRESA_LABEL } from '@/types'
@@ -118,7 +119,7 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
   const load = useCallback(async () => {
     setLoading(true)
     const [{ data: comprasData }, { data: provData }, { data: cuentasData }] = await Promise.all([
-      supabase.from('compras').select('*, proveedores(nombre), banco_cuentas(nombre, banco)').eq('empresa', empresa).order('fecha', { ascending: false }),
+      fetchAll(() => supabase.from('compras').select('*, proveedores(nombre), banco_cuentas(nombre, banco)').eq('empresa', empresa).order('fecha', { ascending: false })),
       supabase.from('proveedores').select('*').eq('activo', true).order('nombre'),
       supabase.from('banco_cuentas').select('*').eq('activo', true).order('orden').order('nombre'),
     ])

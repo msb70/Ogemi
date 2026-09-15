@@ -6,6 +6,7 @@ import Link from 'next/link'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
+import { fetchAll } from '@/lib/fetchAll'
 import { formatCurrency, formatDate, classifyTramo, tramoColor } from '@/lib/utils'
 import { FeDocumento, FeArticulo, FeConfig, FeDocumentoLinea, FeDocumentoPago } from '@/types'
 import { Plus, Search, X, Pencil, Trash2, Copy, QrCode, AlertCircle, CheckCircle, Loader2, Save, FileText, Printer, Eye } from 'lucide-react'
@@ -92,9 +93,9 @@ function FacturaElectronicaPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     const [{ data: docsData }, { data: artData }] = await Promise.all([
-      supabase.from('fe_documentos')
+      fetchAll(() => supabase.from('fe_documentos')
         .select('*, facturas:factura_id(id, numero_factura, total, monto_pagado, retencion_monto, fecha_pago, estado, fecha_cobro)')
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })),
       supabase.from('fe_articulos').select('*').order('codigo'),
     ])
     setDocs((docsData || []) as FeDocumento[])

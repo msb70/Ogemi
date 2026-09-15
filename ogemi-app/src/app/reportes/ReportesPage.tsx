@@ -6,6 +6,7 @@ import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { CarteraVencida } from '@/types'
 import { filtrarEmpresa } from '@/components/EmpresaFilter'
+import { fetchAll } from '@/lib/fetchAll'
 import {
   FileText, ShoppingCart, Building2, BookOpen, ClipboardList, Printer, FileSpreadsheet, CalendarDays,
 } from 'lucide-react'
@@ -80,15 +81,15 @@ function ReportesPage({ scope }: { scope: ReporteScope }) {
       { data: notasCreditoData },
       { data: ventasOgemiData },
     ] = await Promise.all([
-      esImpresos ? supabase.from('facturas').select('*, clientes(nombre)').order('fecha', { ascending: false }) : Promise.resolve({ data: [] as any[] }),
-      scope !== 'general' ? supabase.from('compras').select('*, proveedores(nombre), banco_cuentas(nombre,banco)').eq('empresa', scope).order('fecha', { ascending: false }) : Promise.resolve({ data: [] as any[] }),
-      esImpresos ? supabase.from('cartera_vencida').select('*').order('dias_vencida', { ascending: false }) : Promise.resolve({ data: [] as any[] }),
-      scope !== 'general' ? supabase.from('compras_vencidas').select('*').eq('empresa', scope).order('dias_vencida', { ascending: false }) : Promise.resolve({ data: [] as any[] }),
+      esImpresos ? fetchAll(() => supabase.from('facturas').select('*, clientes(nombre)').order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
+      scope !== 'general' ? fetchAll(() => supabase.from('compras').select('*, proveedores(nombre), banco_cuentas(nombre,banco)').eq('empresa', scope).order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
+      esImpresos ? fetchAll(() => supabase.from('cartera_vencida').select('*').order('dias_vencida', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
+      scope !== 'general' ? fetchAll(() => supabase.from('compras_vencidas').select('*').eq('empresa', scope).order('dias_vencida', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
       scope === 'general' ? supabase.from('banco_cuentas').select('*').eq('activo', true).order('orden').order('nombre') : Promise.resolve({ data: [] as any[] }),
-      esImpresos ? supabase.from('presupuestos').select('*, clientes(nombre)').order('fecha', { ascending: false }) : Promise.resolve({ data: [] as any[] }),
-      esImpresos ? supabase.from('cartera_presupuestos').select('*').order('dias_vencida', { ascending: false }) : Promise.resolve({ data: [] as any[] }),
-      esImpresos ? supabase.from('notas_credito').select('*, clientes(nombre), factura_aplicada:facturas!factura_aplicada_id(numero_factura)').order('fecha', { ascending: false }) : Promise.resolve({ data: [] as any[] }),
-      esOgemi ? supabase.from('ventas_ogemi').select('*, clientes(nombre)').order('fecha', { ascending: false }) : Promise.resolve({ data: [] as any[] }),
+      esImpresos ? fetchAll(() => supabase.from('presupuestos').select('*, clientes(nombre)').order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
+      esImpresos ? fetchAll(() => supabase.from('cartera_presupuestos').select('*').order('dias_vencida', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
+      esImpresos ? fetchAll(() => supabase.from('notas_credito').select('*, clientes(nombre), factura_aplicada:facturas!factura_aplicada_id(numero_factura)').order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
+      esOgemi ? fetchAll(() => supabase.from('ventas_ogemi').select('*, clientes(nombre)').order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
     ])
     setFacturas(facturasData || [])
     setNotasCredito(notasCreditoData || [])
@@ -111,7 +112,7 @@ function ReportesPage({ scope }: { scope: ReporteScope }) {
     const saldosMap: Record<string, number> = {}
     const tarjetasInfo: ResumenTarjeta[] = []
     for (const c of (cuentasData || [])) {
-      const { data: movs } = await supabase.from('banco_movimientos').select('tipo,monto,fecha').eq('cuenta_id', c.id)
+      const { data: movs } = await fetchAll<{ tipo: string; monto: number; fecha: string }>(() => supabase.from('banco_movimientos').select('tipo,monto,fecha').eq('cuenta_id', c.id))
       const ing = movs?.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + m.monto, 0) || 0
       const egr = movs?.filter(m => m.tipo === 'egreso').reduce((s, m) => s + m.monto, 0) || 0
       saldosMap[c.id] = (c.saldo_inicial || 0) + ing - egr
@@ -132,16 +133,18 @@ function ReportesPage({ scope }: { scope: ReporteScope }) {
     // Base: saldo inicial + neto de movimientos anteriores a "desde"
     let base = saldoInicial
     if (fechaDesde) {
-      const { data: prev } = await supabase.from('banco_movimientos')
-        .select('tipo,monto').eq('cuenta_id', cuentaSeleccionada).lt('fecha', fechaDesde)
+      const { data: prev } = await fetchAll<{ tipo: string; monto: number }>(() => supabase.from('banco_movimientos')
+        .select('tipo,monto').eq('cuenta_id', cuentaSeleccionada).lt('fecha', fechaDesde))
       const ing = prev?.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + m.monto, 0) || 0
       const egr = prev?.filter(m => m.tipo === 'egreso').reduce((s, m) => s + m.monto, 0) || 0
       base = saldoInicial + ing - egr
     }
-    let q = supabase.from('banco_movimientos').select('*').eq('cuenta_id', cuentaSeleccionada)
-    if (fechaDesde) q = q.gte('fecha', fechaDesde)
-    if (fechaHasta) q = q.lte('fecha', fechaHasta)
-    const { data } = await q.order('fecha', { ascending: true }).order('created_at', { ascending: true }).limit(1000)
+    const { data } = await fetchAll(() => {
+      let q = supabase.from('banco_movimientos').select('*').eq('cuenta_id', cuentaSeleccionada)
+      if (fechaDesde) q = q.gte('fecha', fechaDesde)
+      if (fechaHasta) q = q.lte('fecha', fechaHasta)
+      return q.order('fecha', { ascending: true }).order('created_at', { ascending: true })
+    })
     // Saldo corrido (ascendente), luego mostrar descendente
     let running = base
     const conSaldo = (data || []).map(m => {
@@ -159,11 +162,13 @@ function ReportesPage({ scope }: { scope: ReporteScope }) {
 
   const loadFlujo = useCallback(async () => {
     if (flujoCuentas.length === 0) { setFlujoMovs([]); return }
-    let q = supabase.from('banco_movimientos').select('tipo,monto,fecha,cuenta_id')
-      .in('cuenta_id', flujoCuentas)
-    if (flujoDesde) q = q.gte('fecha', flujoDesde)
-    if (flujoHasta) q = q.lte('fecha', flujoHasta)
-    const { data } = await q.limit(5000)
+    const { data } = await fetchAll(() => {
+      let q = supabase.from('banco_movimientos').select('tipo,monto,fecha,cuenta_id')
+        .in('cuenta_id', flujoCuentas)
+      if (flujoDesde) q = q.gte('fecha', flujoDesde)
+      if (flujoHasta) q = q.lte('fecha', flujoHasta)
+      return q
+    })
     setFlujoMovs(data || [])
   }, [flujoCuentas, flujoDesde, flujoHasta])
 

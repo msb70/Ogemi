@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { formatMonto, formatDate } from '@/lib/utils'
 import { TIPOS_VENTA } from '@/lib/tiposVenta'
 import { isNC } from '../reportes.utils'
+import { fetchAll } from '@/lib/fetchAll'
 
 /**
  * INFORME DIARIO — réplica del "Movimiento diario" que se hacía a mano:
@@ -23,21 +24,6 @@ import { isNC } from '../reportes.utils'
 type Cuenta = { id: string; nombre: string; banco: string; tipo: string | null; orden: number }
 type Doc = { id: string; fecha: string; total: number; monto: number; itbms: number; retencion_pct?: number | null; tipo_documento?: string | null; tipo_venta?: string | null; empresa?: string | null }
 type Pago = { factura_id: string | null; compra_id: string | null; venta_ogemi_id: string | null; monto: number; fecha: string }
-
-const PAGE = 1000
-/** Supabase/PostgREST corta cada consulta en 1000 filas (max-rows). `pagos` ya supera ese
- *  límite, así que se pagina con .range() hasta agotar; si no, el informe pierde cobros/pagos
- *  y sobrestima CxC/CxP. */
-async function fetchAll<T>(build: () => any): Promise<{ data: T[]; error: { message: string } | null }> {
-  const out: T[] = []
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await build().range(from, from + PAGE - 1)
-    if (error) return { data: out, error }
-    out.push(...((data || []) as T[]))
-    if (!data || data.length < PAGE) break
-  }
-  return { data: out, error: null }
-}
 
 const hoy = () => new Date().toISOString().split('T')[0]
 
@@ -82,12 +68,12 @@ export default function InformeDiarioTab() {
       { data: nc, error: e7 },
     ] = await Promise.all([
       fetchAll<Cuenta>(() => supabase.from('banco_cuentas').select('id,nombre,banco,tipo,orden').eq('activo', true).order('orden').order('nombre')),
-      fetchAll<Doc>(() => supabase.from('facturas').select('id,fecha,total,monto,itbms,retencion_pct,tipo_documento,tipo_venta').lte('fecha', fecha).order('id')),
-      fetchAll<Doc>(() => supabase.from('ventas_ogemi').select('id,fecha,total,monto,itbms').lte('fecha', fecha).order('id')),
-      fetchAll<Doc>(() => supabase.from('compras').select('id,fecha,total,monto,itbms,tipo_documento,empresa').lte('fecha', fecha).order('id')),
-      fetchAll<Pago>(() => supabase.from('pagos').select('factura_id,compra_id,venta_ogemi_id,monto,fecha').lte('fecha', fecha).order('id')),
-      fetchAll<Pago>(() => supabase.from('pago_reversos').select('factura_id,compra_id,venta_ogemi_id,monto,fecha').lte('fecha', fecha).order('id')),
-      fetchAll<{ fecha: string; monto: number }>(() => supabase.from('notas_credito').select('fecha,monto').lte('fecha', fecha).order('id')),
+      fetchAll<Doc>(() => supabase.from('facturas').select('id,fecha,total,monto,itbms,retencion_pct,tipo_documento,tipo_venta').lte('fecha', fecha)),
+      fetchAll<Doc>(() => supabase.from('ventas_ogemi').select('id,fecha,total,monto,itbms').lte('fecha', fecha)),
+      fetchAll<Doc>(() => supabase.from('compras').select('id,fecha,total,monto,itbms,tipo_documento,empresa').lte('fecha', fecha)),
+      fetchAll<Pago>(() => supabase.from('pagos').select('factura_id,compra_id,venta_ogemi_id,monto,fecha').lte('fecha', fecha)),
+      fetchAll<Pago>(() => supabase.from('pago_reversos').select('factura_id,compra_id,venta_ogemi_id,monto,fecha').lte('fecha', fecha)),
+      fetchAll<{ fecha: string; monto: number }>(() => supabase.from('notas_credito').select('fecha,monto').lte('fecha', fecha)),
     ])
     const err = e1 || e2 || e3 || e4 || e5 || e6 || e7
     if (err) setError(err.message)

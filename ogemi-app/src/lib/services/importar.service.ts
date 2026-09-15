@@ -16,6 +16,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ExcelRow, ImportResult } from '@/types'
+import { fetchAll } from '@/lib/fetchAll'
 
 // ── Interfaces internas ───────────────────────────────────────────────────────
 
@@ -157,9 +158,9 @@ export async function importarLibroVentas(
   // 1. Cargar estado actual en paralelo. Las NC ahora viven en notas_credito,
   //    así que también cargamos las existentes para deduplicar.
   const [{ data: clientesDB }, { data: facturasDB }, { data: ncDB }] = await Promise.all([
-    supabase.from('clientes').select('id, nombre'),
-    supabase.from('facturas').select('numero_factura, tipo_documento'),
-    supabase.from('notas_credito').select('cliente_id, fecha, total'),
+    fetchAll<{ id: string; nombre: string }>(() => supabase.from('clientes').select('id, nombre')),
+    fetchAll<{ numero_factura: number; tipo_documento: string }>(() => supabase.from('facturas').select('numero_factura, tipo_documento')),
+    fetchAll<{ cliente_id: string; fecha: string; total: number }>(() => supabase.from('notas_credito').select('cliente_id, fecha, total')),
   ])
 
   const clientesMap: Record<string, string> = {}

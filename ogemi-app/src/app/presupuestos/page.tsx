@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
+import { fetchAll } from '@/lib/fetchAll'
 // formatMonto: montos sin el símbolo USD/US$ (pedido del usuario)
 import { formatMonto as formatCurrency, formatDate, tramoColor } from '@/lib/utils'
 import { BancoCuenta, Cliente } from '@/types'
@@ -111,17 +112,20 @@ function PresupuestosPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    let query = supabase
-      .from('presupuestos')
-      .select('*, clientes(nombre, dias_credito), banco_cuentas(nombre, banco)')
-      .order('fecha', { ascending: false })
-      .order('numero_presupuesto', { ascending: false })
-    if (estadoFilter !== 'todos') query = query.eq('estado', estadoFilter)
-    if (fechaDesde) query = query.gte('fecha', fechaDesde)
-    if (fechaHasta) query = query.lte('fecha', fechaHasta)
+    const query = () => {
+      let q = supabase
+        .from('presupuestos')
+        .select('*, clientes(nombre, dias_credito), banco_cuentas(nombre, banco)')
+        .order('fecha', { ascending: false })
+        .order('numero_presupuesto', { ascending: false })
+      if (estadoFilter !== 'todos') q = q.eq('estado', estadoFilter)
+      if (fechaDesde) q = q.gte('fecha', fechaDesde)
+      if (fechaHasta) q = q.lte('fecha', fechaHasta)
+      return q
+    }
 
     const [{ data: presData }, { data: cliData }, { data: cuentasData }] = await Promise.all([
-      query,
+      fetchAll(query),
       supabase.from('clientes').select('*').eq('activo', true).order('nombre'),
       supabase.from('banco_cuentas').select('*').eq('activo', true).order('orden').order('nombre'),
     ])

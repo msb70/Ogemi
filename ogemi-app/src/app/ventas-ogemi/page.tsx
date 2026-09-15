@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
+import { fetchAll } from '@/lib/fetchAll'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Cliente, BancoCuenta, VentaOgemi } from '@/types'
 import { Plus, Search, X, Pencil, Trash2, Wallet, RefreshCw, Download } from 'lucide-react'
@@ -63,8 +64,8 @@ function VentasOgemiPage() {
   const load = useCallback(async () => {
     setLoading(true)
     const [{ data: v, error }, { data: c }, { data: b }] = await Promise.all([
-      supabase.from('ventas_ogemi').select('*, clientes(nombre, dias_credito)')
-        .order('fecha', { ascending: false }).order('numero', { ascending: false }),
+      fetchAll(() => supabase.from('ventas_ogemi').select('*, clientes(nombre, dias_credito)')
+        .order('fecha', { ascending: false }).order('numero', { ascending: false })),
       supabase.from('clientes').select('*').eq('activo', true).order('nombre'),
       supabase.from('banco_cuentas').select('*').eq('activo', true).order('orden').order('nombre'),
     ])

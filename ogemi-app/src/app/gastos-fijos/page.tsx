@@ -10,6 +10,7 @@ import { Toast } from '@/components/Toast'
 import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
 import { CalendarDays, Plus, Save, WalletCards, Trash2, FileText, ClipboardList, ShoppingCart, Printer } from 'lucide-react'
 import EmpresaFilter, { useEmpresaFiltro, filtrarEmpresa } from '@/components/EmpresaFilter'
+import { fetchAll } from '@/lib/fetchAll'
 import VencimientoSemanalVentas from '@/app/reportes/components/VencimientoSemanalVentas'
 import VencimientoSemanalPresupuestos from '@/app/reportes/components/VencimientoSemanalPresupuestos'
 import VencimientoSemanalCompras from '@/app/reportes/components/VencimientoSemanalCompras'
@@ -402,11 +403,11 @@ function GastosFijosPage() {
     const results = await Promise.all(
       fechas.map(async fecha => {
         if (!fecha) return 0
-        const { data } = await supabase
+        const { data } = await fetchAll<{ total: number; monto_pagado: number }>(() => supabase
           .from('facturas')
           .select('total,monto_pagado')
           .eq('estado', 'pendiente')
-          .lte('fecha_pago', fecha)
+          .lte('fecha_pago', fecha))
         return (data || []).reduce(
           (sum, f) => sum + Math.max(0, (f.total || 0) - (f.monto_pagado || 0)),
           0
@@ -436,10 +437,10 @@ function GastosFijosPage() {
       { data: comprasData, error: e3 },
       { data: ventasOgemiData, error: e4 },
     ] = await Promise.all([
-      supabase.from('facturas').select('*, clientes(nombre)').order('fecha', { ascending: false }),
-      supabase.from('presupuestos').select('*, clientes(nombre)').order('fecha', { ascending: false }),
-      supabase.from('compras').select('*, proveedores(nombre)').order('fecha', { ascending: false }),
-      supabase.from('ventas_ogemi').select('*, clientes(nombre)').order('fecha', { ascending: false }),
+      fetchAll(() => supabase.from('facturas').select('*, clientes(nombre)').order('fecha', { ascending: false })),
+      fetchAll(() => supabase.from('presupuestos').select('*, clientes(nombre)').order('fecha', { ascending: false })),
+      fetchAll(() => supabase.from('compras').select('*, proveedores(nombre)').order('fecha', { ascending: false })),
+      fetchAll(() => supabase.from('ventas_ogemi').select('*, clientes(nombre)').order('fecha', { ascending: false })),
     ])
     const err = e1 || e2 || e3 || e4
     if (err) {

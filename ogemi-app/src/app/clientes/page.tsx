@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
+import { fetchAll } from '@/lib/fetchAll'
 import { Cliente } from '@/types'
 import { FE_TIPO_CONTRIBUYENTE, FE_TIPO_CLIENTE } from '@/lib/fe-catalogos'
 import { Plus, Pencil, Search, X, Download, AlertCircle } from 'lucide-react'
@@ -143,10 +144,10 @@ function ClientesPage() {
 
   useEffect(() => {
     async function loadStats() {
-      const { data } = await supabase
+      const { data } = await fetchAll<{ cliente_id: string; estado: string; total: number }>(() => supabase
         .from('facturas')
         .select('cliente_id, estado, total')
-        .gt('total', 0)
+        .gt('total', 0))
 
       if (!data) return
       const stats: Record<string, { pendiente: number; total: number }> = {}

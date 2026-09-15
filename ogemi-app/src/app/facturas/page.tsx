@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
+import { fetchAll } from '@/lib/fetchAll'
 // formatMonto: montos sin el símbolo USD/US$ (pedido del usuario)
 import { formatMonto as formatCurrency, formatDate, tramoColor, classifyTramo } from '@/lib/utils'
 import { Factura, BancoCuenta } from '@/types'
@@ -241,17 +242,19 @@ function FacturasPage() {
         const { data } = await supabase.from('clientes').select('id').ilike('nombre', `%${search.trim()}%`)
         clienteIds = data?.map(c => c.id) || []
       }
-      let q = supabase.from('facturas')
-        .select('*, clientes(nombre), banco_cuentas(nombre)')
-        .order('fecha', { ascending: false }).order('numero_factura', { ascending: false })
-      if (estadoFilter !== 'todos') q = q.eq('estado', estadoFilter)
-      if (fechaDesde) q = q.gte('fecha', fechaDesde)
-      if (fechaHasta) q = q.lte('fecha', fechaHasta)
-      if (search.trim()) {
-        if (/^\d+$/.test(search.trim())) q = q.eq('numero_factura', parseInt(search.trim()))
-        else if (clienteIds) q = q.in('cliente_id', clienteIds.length ? clienteIds : ['00000000-0000-0000-0000-000000000000'])
-      }
-      const { data } = await q
+      const { data } = await fetchAll(() => {
+        let q = supabase.from('facturas')
+          .select('*, clientes(nombre), banco_cuentas(nombre)')
+          .order('fecha', { ascending: false }).order('numero_factura', { ascending: false })
+        if (estadoFilter !== 'todos') q = q.eq('estado', estadoFilter)
+        if (fechaDesde) q = q.gte('fecha', fechaDesde)
+        if (fechaHasta) q = q.lte('fecha', fechaHasta)
+        if (search.trim()) {
+          if (/^\d+$/.test(search.trim())) q = q.eq('numero_factura', parseInt(search.trim()))
+          else if (clienteIds) q = q.in('cliente_id', clienteIds.length ? clienteIds : ['00000000-0000-0000-0000-000000000000'])
+        }
+        return q
+      })
       const rows = (data || []) as any[]
       const etiqueta = estadoFilter === 'todos' ? 'Todas' : estadoFilter === 'pagada' ? 'Pagadas' : 'Pendientes'
       const kpis: [string, number][] = resumen ? [
