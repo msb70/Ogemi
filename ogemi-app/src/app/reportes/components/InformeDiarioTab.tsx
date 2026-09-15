@@ -24,6 +24,21 @@ type Cuenta = { id: string; nombre: string; banco: string; tipo: string | null; 
 type Doc = { id: string; fecha: string; total: number; monto: number; itbms: number; retencion_pct?: number | null; tipo_documento?: string | null; tipo_venta?: string | null; empresa?: string | null }
 type Pago = { factura_id: string | null; compra_id: string | null; venta_ogemi_id: string | null; monto: number; fecha: string }
 
+const PAGE = 1000
+/** Supabase/PostgREST corta cada consulta en 1000 filas (max-rows). `pagos` ya supera ese
+ *  límite, así que se pagina con .range() hasta agotar; si no, el informe pierde cobros/pagos
+ *  y sobrestima CxC/CxP. */
+async function fetchAll<T>(build: () => any): Promise<{ data: T[]; error: { message: string } | null }> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build().range(from, from + PAGE - 1)
+    if (error) return { data: out, error }
+    out.push(...((data || []) as T[]))
+    if (!data || data.length < PAGE) break
+  }
+  return { data: out, error: null }
+}
+
 const hoy = () => new Date().toISOString().split('T')[0]
 
 const FECHA_LARGA = (iso: string) => {
@@ -40,10 +55,16 @@ export default function InformeDiarioTab() {
 
   const [cuentas, setCuentas] = useState<Cuenta[]>([])
   const [saldos, setSaldos] = useState<Record<string, number>>({})
-  const [facturas, setFacturas] = useState<Doc[]>([])
-  const [ventasOgemi, setVentasOgemi] = useState<Doc[]>([])
+  const [facturasRaw, setFacturas] = useState<Doc[]>([])
+  const [ventasOgemiRaw, setVentasOgemi] = useState<Doc[]>([])
   const [comprasRaw, setCompras] = useState<Doc[]>([])
+  // Filtro de empresa igual que en Flujo de Pago: Impresos = facturas + compras impresos;
+  // Ogemi = ventas_ogemi + compras ogemi; Ambas = todo.
   const [empresaFiltro, setEmpresaFiltro] = useEmpresaFiltro()
+  const incImpresos = empresaFiltro !== 'ogemi'
+  const incOgemi = empresaFiltro !== 'impresos'
+  const facturas = useMemo(() => incImpresos ? facturasRaw : [], [facturasRaw, incImpresos])
+  const ventasOgemi = useMemo(() => incOgemi ? ventasOgemiRaw : [], [ventasOgemiRaw, incOgemi])
   const compras = useMemo(() => filtrarEmpresa(comprasRaw, empresaFiltro), [comprasRaw, empresaFiltro])
   const [notasCredito, setNotasCredito] = useState<{ fecha: string; monto: number }[]>([])
   const [pagos, setPagos] = useState<Pago[]>([])
@@ -60,24 +81,24 @@ export default function InformeDiarioTab() {
       { data: rv, error: e6 },
       { data: nc, error: e7 },
     ] = await Promise.all([
-      supabase.from('banco_cuentas').select('id,nombre,banco,tipo,orden').eq('activo', true).order('orden').order('nombre'),
-      supabase.from('facturas').select('id,fecha,total,monto,itbms,retencion_pct,tipo_documento,tipo_venta').lte('fecha', fecha),
-      supabase.from('ventas_ogemi').select('id,fecha,total,monto,itbms').lte('fecha', fecha),
-      supabase.from('compras').select('id,fecha,total,monto,itbms,tipo_documento,empresa').lte('fecha', fecha),
-      supabase.from('pagos').select('factura_id,compra_id,venta_ogemi_id,monto,fecha').lte('fecha', fecha),
-      supabase.from('pago_reversos').select('factura_id,compra_id,venta_ogemi_id,monto,fecha').lte('fecha', fecha),
-      supabase.from('notas_credito').select('fecha,monto').lte('fecha', fecha),
+      fetchAll<Cuenta>(() => supabase.from('banco_cuentas').select('id,nombre,banco,tipo,orden').eq('activo', true).order('orden').order('nombre')),
+      fetchAll<Doc>(() => supabase.from('facturas').select('id,fecha,total,monto,itbms,retencion_pct,tipo_documento,tipo_venta').lte('fecha', fecha).order('id')),
+      fetchAll<Doc>(() => supabase.from('ventas_ogemi').select('id,fecha,total,monto,itbms').lte('fecha', fecha).order('id')),
+      fetchAll<Doc>(() => supabase.from('compras').select('id,fecha,total,monto,itbms,tipo_documento,empresa').lte('fecha', fecha).order('id')),
+      fetchAll<Pago>(() => supabase.from('pagos').select('factura_id,compra_id,venta_ogemi_id,monto,fecha').lte('fecha', fecha).order('id')),
+      fetchAll<Pago>(() => supabase.from('pago_reversos').select('factura_id,compra_id,venta_ogemi_id,monto,fecha').lte('fecha', fecha).order('id')),
+      fetchAll<{ fecha: string; monto: number }>(() => supabase.from('notas_credito').select('fecha,monto').lte('fecha', fecha).order('id')),
     ])
     const err = e1 || e2 || e3 || e4 || e5 || e6 || e7
     if (err) setError(err.message)
-    const cts = (ctas || []) as Cuenta[]
+    const cts = ctas
     setCuentas(cts)
-    setFacturas((fac || []) as Doc[])
-    setVentasOgemi((vo || []) as Doc[])
-    setCompras((cmp || []) as Doc[])
-    setPagos((pg || []) as Pago[])
-    setReversos((rv || []) as Pago[])
-    setNotasCredito((nc || []) as { fecha: string; monto: number }[])
+    setFacturas(fac)
+    setVentasOgemi(vo)
+    setCompras(cmp)
+    setPagos(pg)
+    setReversos(rv)
+    setNotasCredito(nc)
 
     // Saldo de cada cuenta a la fecha (misma función que usa Banco)
     const res = await Promise.all(cts.map(c => supabase.rpc('saldo_cuenta', { p_cuenta_id: c.id, p_hasta: fecha })))
@@ -120,9 +141,12 @@ export default function InformeDiarioTab() {
     const totalCxC = cxcImpresos + cxcOgemi
 
     // CxP proveedores
-    const cxpProveedores = compras
+    const cxpDe = (rows: Doc[]) => rows
       .filter(c => !isNC(c.tipo_documento || '') && Number(c.total) > 0)
       .reduce((s, c) => s + Math.max(0, Number(c.total) - (pagComp[c.id] || 0)), 0)
+    const cxpOgemi = cxpDe(compras.filter(c => (c.empresa || 'ogemi') === 'ogemi'))
+    const cxpImpresos = cxpDe(compras.filter(c => (c.empresa || 'ogemi') === 'impresos'))
+    const cxpProveedores = cxpOgemi + cxpImpresos
     const totalCxP = cxpProveedores + totalTarjetas
 
     const saldoEfectivo = totalBancos + totalCxC - totalCxP
@@ -144,8 +168,8 @@ export default function InformeDiarioTab() {
       n: ventasImp.filter(f => !f.tipo_venta && enAnio(f.fecha)).length,
     }
     const ncs = {
-      mes: notasCredito.filter(n => enMes(n.fecha)).reduce((s, n) => s + Number(n.monto || 0), 0),
-      anio: notasCredito.filter(n => enAnio(n.fecha)).reduce((s, n) => s + Number(n.monto || 0), 0),
+      mes: (incImpresos ? notasCredito : []).filter(n => enMes(n.fecha)).reduce((s, n) => s + Number(n.monto || 0), 0),
+      anio: (incImpresos ? notasCredito : []).filter(n => enAnio(n.fecha)).reduce((s, n) => s + Number(n.monto || 0), 0),
     }
     const ogemiIng = {
       mes: ventasOgemi.filter(v => enMes(v.fecha)).reduce((s, v) => s + Number(v.monto || 0), 0),
@@ -156,8 +180,8 @@ export default function InformeDiarioTab() {
       anio: porTipo.reduce((s, t) => s + t.anio, 0) + sinClasificar.anio - ncs.anio + ogemiIng.anio,
     }
 
-    return { bancos, tarjetas, totalBancos, totalTarjetas, cxcImpresos, cxcOgemi, totalCxC, cxpProveedores, totalCxP, saldoEfectivo, porTipo, sinClasificar, ncs, ogemiIng, totalIng }
-  }, [cuentas, saldos, facturas, ventasOgemi, compras, pagos, reversos, notasCredito, fecha])
+    return { bancos, tarjetas, totalBancos, totalTarjetas, cxcImpresos, cxcOgemi, totalCxC, cxpOgemi, cxpImpresos, cxpProveedores, totalCxP, saldoEfectivo, porTipo, sinClasificar, ncs, ogemiIng, totalIng }
+  }, [cuentas, saldos, facturas, ventasOgemi, compras, pagos, reversos, notasCredito, fecha, incImpresos])
 
   const Fila = ({ label, valor, indent = false, muted = false }: { label: string; valor: number; indent?: boolean; muted?: boolean }) => (
     <div className={`flex items-center justify-between py-0.5 ${indent ? 'pl-4' : ''} ${muted ? 'text-gray-400' : 'text-gray-700'}`}>
@@ -185,9 +209,9 @@ export default function InformeDiarioTab() {
           <label className="text-sm text-gray-500">Fecha del informe</label>
           <input type="date" className="input max-w-[170px]" value={fecha} max={hoy()} onChange={e => setFecha(e.target.value)} />
           <button className="btn-secondary text-sm" onClick={() => setFecha(hoy())}>Hoy</button>
-          <EmpresaFilter value={empresaFiltro} onChange={setEmpresaFiltro} className="ml-2" />
+          <EmpresaFilter value={empresaFiltro} onChange={setEmpresaFiltro} className="ml-2" label="Empresa:" title="Ventas y compras de qué empresa se incluyen" />
         </div>
-        {inf.sinClasificar.n > 0 && (
+        {incImpresos && inf.sinClasificar.n > 0 && (
           <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
             {inf.sinClasificar.n} factura{inf.sinClasificar.n === 1 ? '' : 's'} del año sin tipo de venta — clasifícalas en Facturas para que el desglose de Ingresos sea correcto.
           </span>
@@ -198,7 +222,7 @@ export default function InformeDiarioTab() {
 
       <div className="card p-6 max-w-3xl mx-auto space-y-5 informe-hoja">
         <div className="text-center">
-          <h2 className="text-xl font-bold text-gray-900 tracking-wide">INFORME DIARIO</h2>
+          <h2 className="text-xl font-bold text-gray-900 tracking-wide">INFORME DIARIO{empresaFiltro === 'ogemi' ? ' — IMPRESORA OGEMI' : empresaFiltro === 'impresos' ? ' — IMPRESOS COMERCIALES' : ''}</h2>
           <p className="text-sm font-semibold text-gray-600">{FECHA_LARGA(fecha)}</p>
           {loading && <p className="text-xs text-gray-400 mt-1">Calculando...</p>}
         </div>
@@ -210,13 +234,14 @@ export default function InformeDiarioTab() {
         </Seccion>
 
         <Seccion titulo="CUENTAS POR COBRAR">
-          <Fila label="CUENTAS X COBRAR - IMPRESORA OGEMI" valor={inf.cxcOgemi} />
-          <Fila label="CUENTAS X COBRAR - IMP. COMERCIALES" valor={inf.cxcImpresos} />
+          {incOgemi && <Fila label="CUENTAS X COBRAR - IMPRESORA OGEMI" valor={inf.cxcOgemi} />}
+          {incImpresos && <Fila label="CUENTAS X COBRAR - IMP. COMERCIALES" valor={inf.cxcImpresos} />}
           <Total label="TOTAL CUENTAS POR COBRAR" valor={inf.totalCxC} />
         </Seccion>
 
         <Seccion titulo="CUENTAS POR PAGAR">
-          <Fila label="CUENTAS POR PAGAR - PROVEEDORES" valor={inf.cxpProveedores} />
+          {incOgemi && <Fila label="CUENTAS X PAGAR - PROVEEDORES IMPRESORA OGEMI" valor={inf.cxpOgemi} />}
+          {incImpresos && <Fila label="CUENTAS X PAGAR - PROVEEDORES IMP. COMERCIALES" valor={inf.cxpImpresos} />}
           <Fila label="TARJETAS DE CRÉDITO" valor={inf.totalTarjetas} />
           {inf.tarjetas.map(t => <Fila key={t.id} label={t.nombre.trim()} valor={t.deuda} indent muted />)}
           <Total label="TOTAL CUENTAS POR PAGAR" valor={inf.totalCxP} />
@@ -238,7 +263,7 @@ export default function InformeDiarioTab() {
               </tr>
             </thead>
             <tbody>
-              {inf.porTipo.map(t => (
+              {incImpresos && inf.porTipo.map(t => (
                 <tr key={t.cuenta}>
                   <td className="py-0.5 text-gray-500 font-mono text-xs">{t.cuenta}</td>
                   <td className="py-0.5 text-gray-700">{t.nombre}</td>
@@ -246,7 +271,7 @@ export default function InformeDiarioTab() {
                   <td className="py-0.5 text-right tabular-nums">{formatMonto(t.anio)}</td>
                 </tr>
               ))}
-              {(inf.sinClasificar.mes !== 0 || inf.sinClasificar.anio !== 0) && (
+              {incImpresos && (inf.sinClasificar.mes !== 0 || inf.sinClasificar.anio !== 0) && (
                 <tr className="text-amber-700">
                   <td className="py-0.5 font-mono text-xs">—</td>
                   <td className="py-0.5">Sin clasificar</td>
@@ -262,12 +287,12 @@ export default function InformeDiarioTab() {
                   <td className="py-0.5 text-right tabular-nums">−{formatMonto(inf.ncs.anio)}</td>
                 </tr>
               )}
-              <tr>
+              {incOgemi && <tr>
                 <td className="py-0.5 text-gray-500 font-mono text-xs">OGEMI</td>
                 <td className="py-0.5 text-gray-700">Ventas Impresora Ogemi</td>
                 <td className="py-0.5 text-right tabular-nums">{formatMonto(inf.ogemiIng.mes)}</td>
                 <td className="py-0.5 text-right tabular-nums">{formatMonto(inf.ogemiIng.anio)}</td>
-              </tr>
+              </tr>}
             </tbody>
             <tfoot>
               <tr className="bg-green-100 font-bold">

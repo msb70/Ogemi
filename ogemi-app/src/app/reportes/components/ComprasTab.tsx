@@ -241,6 +241,13 @@ export default function ComprasTab({
               )
             })}
           </div>
+          {/* Total de la cartera por pagar: en pantalla bajo los KPI; en el PDF el CSS lo reordena después del listado */}
+          <div className="card p-4 bg-brand-50 border-brand-200 cxp-total">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium text-brand-700">Total cartera pendiente</span>
+              <span className="text-2xl font-bold text-brand-800">{formatMonto(totalCarteraCxp)}</span>
+            </div>
+          </div>
           <div className="card overflow-hidden cxp-tabla">
             <table className="w-full">
               <thead><tr className="border-b border-gray-200">
@@ -314,13 +321,6 @@ export default function ComprasTab({
                     ))}
               </tbody>
             </table>
-          </div>
-          {/* Total de la cartera por pagar — solo en el PDF, va después del listado */}
-          <div className="hidden print:block card p-4 bg-brand-50 border-brand-200 cxp-total">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-brand-700">Total cartera pendiente</span>
-              <span className="text-2xl font-bold text-brand-800">{formatMonto(totalCarteraCxp)}</span>
-            </div>
           </div>
         </div>
       )}
