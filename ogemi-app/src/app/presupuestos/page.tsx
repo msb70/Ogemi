@@ -170,7 +170,7 @@ function PresupuestosPage() {
         .eq('presupuesto_id', p.id).order('fecha', { ascending: false }),
       supabase.from('anticipos_saldos')
         .select('id, fecha, monto, saldo, numero_deposito, cuenta_id')
-        .eq('cliente_id', p.cliente_id).eq('estado', 'activo').gt('saldo', 0).order('fecha'),
+        .eq('cliente_id', p.cliente_id).eq('empresa', 'impresos').eq('estado', 'activo').gt('saldo', 0).order('fecha'),
     ])
     setPagosExistentes(pagosData || [])
     setAnticipos((anticData || []) as AnticipoDisp[])

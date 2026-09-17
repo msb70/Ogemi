@@ -258,6 +258,8 @@ export interface Anticipo {
   numero_deposito: string | null;
   notas: string | null;
   estado: 'activo' | 'aplicado' | 'anulado';
+  // Empresa dueña del anticipo: solo se aplica a documentos de esa empresa
+  empresa: 'ogemi' | 'impresos';
   created_at: string;
   updated_at: string;
   // Joins

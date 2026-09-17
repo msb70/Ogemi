@@ -49,6 +49,7 @@ const navItems: NavEntry[] = [
     kind: 'group', id: 'ogemi', label: 'Ogemi', icon: Printer, accent: 'amber',
     children: [
       link('/ventas-ogemi',  'Facturas',       Printer,      'ventas_ogemi'),
+      link('/anticipos-ogemi', 'Anticipos',    Wallet,       'ventas_ogemi'),
       link('/compras',       'Compras',        ShoppingCart, 'compras'),
       link('/pagos-compras', 'Pago Compras',   WalletCards,  'compras'),
       link('/proveedores',   'Proveedores',    Truck,        'proveedores'),

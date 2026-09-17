@@ -124,6 +124,7 @@ function CobrosPage() {
         .from('anticipos_saldos')
         .select('id, fecha, monto, saldo, numero_deposito, cuenta_id')
         .eq('cliente_id', c.id)
+        .eq('empresa', 'impresos')
         .eq('estado', 'activo')
         .gt('saldo', 0)
         .order('fecha', { ascending: true }),

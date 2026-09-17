@@ -12,7 +12,9 @@ import { Plus, Printer, Search, X, CheckCircle, AlertCircle, Download } from 'lu
 import { withPagePermission } from '@/components/PermissionGuard'
 import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 
-function AnticiposPage() {
+// Anticipos de Impresora Ogemi: mismo formato y funcionalidad que /anticipos
+// (Impresos), pero separados por empresa. Solo se aplican a ventas de Ogemi.
+function AnticiposOgemiPage() {
   const [anticipos, setAnticipos] = useState<Anticipo[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [cuentas, setCuentas] = useState<BancoCuenta[]>([])
@@ -51,12 +53,12 @@ function AnticiposPage() {
       supabase
         .from('anticipos')
         .select('*, clientes(nombre), banco_cuentas(nombre, banco, numero_cuenta)')
-        .eq('empresa', 'impresos')
+        .eq('empresa', 'ogemi')
         .order('fecha', { ascending: false })
         .order('created_at', { ascending: false }),
       supabase.from('clientes').select('*').eq('activo', true).order('nombre'),
       supabase.from('banco_cuentas').select('*').eq('activo', true).order('orden').order('nombre'),
-      supabase.from('anticipos_saldos').select('id, saldo, aplicado').eq('empresa', 'impresos'),
+      supabase.from('anticipos_saldos').select('id, saldo, aplicado').eq('empresa', 'ogemi'),
     ])
     setAnticipos(anticData || [])
     setClientes(clientesData || [])
@@ -75,7 +77,7 @@ function AnticiposPage() {
     const { data, error } = await supabase
       .from('anticipos')
       .insert({
-        empresa: 'impresos',
+        empresa: 'ogemi',
         cliente_id: form.cliente_id,
         cuenta_id: form.cuenta_id,
         fecha: form.fecha,
@@ -124,10 +126,14 @@ function AnticiposPage() {
     setAplicaciones([])
     const { data } = await supabase
       .from('pagos')
-      .select('id, fecha, monto, referencia, facturas(numero_factura), presupuestos(numero_presupuesto)')
+      .select('id, fecha, monto, referencia, ventas_ogemi(numero), pago_reversos(id)')
       .eq('anticipo_id', a.id)
       .order('fecha', { ascending: false })
-    setAplicaciones(data || [])
+    // Las aplicaciones reversadas ya no cuentan contra el saldo del anticipo
+    setAplicaciones((data || []).filter((p: any) => {
+      const rev = Array.isArray(p.pago_reversos) ? p.pago_reversos[0] : p.pago_reversos
+      return !rev
+    }))
     setLoadingAplic(false)
   }
 
@@ -182,8 +188,8 @@ function AnticiposPage() {
   )
 
   const exportExcel = () => {
-    exportXLSX(`anticipos_${new Date().toISOString().split('T')[0]}.xlsx`, [
-      kpiSheet('Anticipos', `${filtered.length} registros`, [
+    exportXLSX(`anticipos_ogemi_${new Date().toISOString().split('T')[0]}.xlsx`, [
+      kpiSheet('Anticipos Ogemi', `${filtered.length} registros`, [
         ['# Anticipos', anticipos.length],
         ...estadosPresentes.map(e => (
           [`Anticipos ${e} (monto)`, porEstado[e].monto] as [string, number]
@@ -237,7 +243,7 @@ function AnticiposPage() {
             <button
               onClick={() => openAplicaciones(a)}
               className="text-xs text-brand-600 hover:text-brand-800 transition-colors"
-              title="Ver a qué facturas/presupuestos se aplicó"
+              title="Ver a qué facturas de Ogemi se aplicó"
             >
               Aplicaciones
             </button>
@@ -286,7 +292,7 @@ function AnticiposPage() {
 
       <Header
         title="Anticipos"
-        subtitle="Depósitos anticipados de clientes"
+        subtitle="Depósitos anticipados de clientes de Impresora Ogemi"
         actions={
           <div className="flex items-center gap-2">
             <button className="btn-secondary flex items-center gap-2" onClick={exportExcel}>
@@ -569,8 +575,7 @@ function AnticiposPage() {
                   <div key={ap.id} className="flex justify-between items-center text-sm bg-gray-50 rounded-lg px-3 py-2">
                     <div>
                       <span className="font-medium text-gray-700">
-                        {ap.facturas ? `Factura #${ap.facturas.numero_factura}` :
-                         ap.presupuestos ? `Presupuesto #${ap.presupuestos.numero_presupuesto}` : 'Documento'}
+                        {ap.ventas_ogemi ? `Factura Ogemi #${ap.ventas_ogemi.numero}` : 'Documento'}
                       </span>
                       <span className="text-gray-400 text-xs ml-2">{formatDate(ap.fecha)}</span>
                     </div>
@@ -597,7 +602,7 @@ function AnticiposPage() {
   )
 }
 
-export default withPagePermission(AnticiposPage, 'facturas', 'ver')
+export default withPagePermission(AnticiposOgemiPage, 'ventas_ogemi', 'ver')
 
 // ============================================================
 // Componente: Recibo de anticipo
@@ -618,19 +623,10 @@ function ReciboAnticipo({ anticipo, preview = false, fullPage = false }: { antic
         {/* Encabezado con logo y marca */}
         <div
           className={`flex items-center text-white ${fullPage ? 'gap-6 px-10 py-8' : 'gap-4 px-6 py-5'}`}
-          style={{ ...exact, background: 'linear-gradient(135deg, #0f766e 0%, #115e59 100%)' }}
+          style={{ ...exact, background: 'linear-gradient(135deg, #b45309 0%, #92400e 100%)' }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/logo.jpeg"
-            alt="Logo"
-            className={`rounded-xl bg-white object-contain p-1 shrink-0 ${fullPage ? 'w-24 h-24' : 'w-16 h-16'}`}
-            style={exact}
-          />
           <div className="flex-1 min-w-0">
-            <h1 className={`font-bold leading-tight ${fullPage ? 'text-2xl' : 'text-lg'}`}>IMPRESOS COMERCIALES S.A.</h1>
-            <p className={`text-white/80 ${fullPage ? 'text-sm' : 'text-xs'}`}>RUC 1635517-1-672731 DV 0 · Río Abajo, Calle 8</p>
-            <p className={`text-white/80 ${fullPage ? 'text-sm' : 'text-xs'}`}>Tel. 6931-8390</p>
+            <h1 className={`font-bold leading-tight ${fullPage ? 'text-2xl' : 'text-lg'}`}>IMPRESORA OGEMI</h1>
           </div>
           <div className="text-right shrink-0">
             <p className={`uppercase tracking-widest text-white/70 ${fullPage ? 'text-xs' : 'text-[10px]'}`}>Recibo de</p>
@@ -679,10 +675,10 @@ function ReciboAnticipo({ anticipo, preview = false, fullPage = false }: { antic
           {/* Monto */}
           <div
             className={`rounded-xl text-center border-2 ${fullPage ? 'px-8 py-8' : 'px-6 py-5 mb-5'}`}
-            style={{ ...exact, borderColor: '#0f766e', background: '#f0fdfa' }}
+            style={{ ...exact, borderColor: '#b45309', background: '#fffbeb' }}
           >
-            <p className={`text-teal-700 uppercase tracking-widest mb-1 ${fullPage ? 'text-sm' : 'text-[11px]'}`}>Monto recibido</p>
-            <p className={`font-extrabold ${fullPage ? 'text-6xl' : 'text-4xl'}`} style={{ color: '#0f766e' }}>{formatCurrency(anticipo.monto)}</p>
+            <p className={`text-amber-700 uppercase tracking-widest mb-1 ${fullPage ? 'text-sm' : 'text-[11px]'}`}>Monto recibido</p>
+            <p className={`font-extrabold ${fullPage ? 'text-6xl' : 'text-4xl'}`} style={{ color: '#b45309' }}>{formatCurrency(anticipo.monto)}</p>
           </div>
 
           {/* Espaciador para empujar firmas al fondo en página completa */}

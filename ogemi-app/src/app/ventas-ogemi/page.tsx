@@ -16,6 +16,29 @@ import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 
 type Filtro = 'todas' | 'pendiente' | 'pagada'
 
+// Cobro por líneas, igual que en Facturas (Impresos): cuenta bancaria o anticipo
+interface LineaCobro {
+  origen: 'cuenta' | 'anticipo'
+  cuenta_id: string
+  anticipo_id: string
+  monto: string
+  referencia: string
+}
+
+type AnticipoDisp = {
+  id: string
+  fecha: string
+  monto: number
+  saldo: number
+  numero_deposito: string | null
+  numero_recibo: number
+  cuenta_id: string
+}
+
+const emptyLinea = (cuentaId = ''): LineaCobro => ({
+  origen: 'cuenta', cuenta_id: cuentaId, anticipo_id: '', monto: '', referencia: '',
+})
+
 const hoy = () => new Date().toISOString().split('T')[0]
 
 const emptyForm = () => ({
@@ -48,7 +71,9 @@ function VentasOgemiPage() {
 
   // Cobro
   const [cobrar, setCobrar] = useState<VentaOgemi | null>(null)
-  const [cobroForm, setCobroForm] = useState({ cuenta_id: '', fecha: hoy(), monto: '', referencia: '' })
+  const [fechaCobro, setFechaCobro] = useState(hoy())
+  const [lineas, setLineas] = useState<LineaCobro[]>([emptyLinea()])
+  const [anticipos, setAnticipos] = useState<AnticipoDisp[]>([])
   const [cobrando, setCobrando] = useState(false)
 
   // Historial de cobros / reverso
@@ -140,27 +165,88 @@ function VentasOgemiPage() {
 
   // ── Cobro ─────────────────────────────────────────────────────────────────
   const saldoDe = (v: VentaOgemi) => Math.max(0, (v.total || 0) - (v.monto_pagado || 0))
-  const abrirCobro = (v: VentaOgemi) => {
+  const abrirCobro = async (v: VentaOgemi) => {
     setCobrar(v)
-    setCobroForm({ cuenta_id: cuentas[0]?.id || '', fecha: hoy(), monto: saldoDe(v).toFixed(2), referencia: '' })
+    setFechaCobro(hoy())
+    const l0 = emptyLinea(cuentas[0]?.id || '')
+    l0.monto = saldoDe(v).toFixed(2)
+    setLineas([l0])
+    setAnticipos([])
+    // Anticipos de Ogemi del cliente con saldo disponible
+    const { data } = await supabase
+      .from('anticipos_saldos')
+      .select('id, fecha, monto, saldo, numero_deposito, numero_recibo, cuenta_id')
+      .eq('cliente_id', v.cliente_id)
+      .eq('empresa', 'ogemi')
+      .eq('estado', 'activo')
+      .gt('saldo', 0)
+      .order('fecha')
+    setAnticipos((data || []) as AnticipoDisp[])
   }
+
+  const addLinea = () => setLineas(prev => [...prev, emptyLinea(cuentas[0]?.id || '')])
+  const removeLinea = (idx: number) => setLineas(prev => prev.filter((_, i) => i !== idx))
+  const updateLinea = (idx: number, field: keyof LineaCobro, value: string) =>
+    setLineas(prev => prev.map((l, i) => i === idx ? ({ ...l, [field]: value } as LineaCobro) : l))
+  const totalLineas = lineas.reduce((t, l) => t + (parseFloat(l.monto) || 0), 0)
+
   const registrarCobro = async () => {
     if (!cobrar) return
-    const m = parseFloat(cobroForm.monto) || 0
-    if (!cobroForm.cuenta_id) { showToast('Selecciona la cuenta de banco', 'error'); return }
-    if (!(m > 0)) { showToast('El monto debe ser mayor a cero', 'error'); return }
-    if (m > saldoDe(cobrar) + 0.005) { showToast('El monto supera el saldo pendiente', 'error'); return }
+    const validas = lineas.filter(l => parseFloat(l.monto) > 0 && (l.origen === 'cuenta' ? l.cuenta_id : l.anticipo_id))
+    if (validas.length === 0) { showToast('Agrega al menos un pago con monto y origen', 'error'); return }
+    if (totalLineas > saldoDe(cobrar) + 0.005) { showToast('El monto supera el saldo pendiente', 'error'); return }
+
+    // Un anticipo puede usarse en varias líneas: validar el acumulado contra su saldo
+    const usoAnt = new Map<string, number>()
+    validas.filter(l => l.origen === 'anticipo').forEach(l => usoAnt.set(l.anticipo_id, (usoAnt.get(l.anticipo_id) || 0) + parseFloat(l.monto)))
+    for (const [id, usado] of Array.from(usoAnt.entries())) {
+      const ant = anticipos.find(a => a.id === id)
+      if (ant && usado > ant.saldo + 0.01) {
+        showToast(`El monto supera el saldo del anticipo (${formatCurrency(ant.saldo)})`, 'error')
+        return
+      }
+    }
+
     setCobrando(true)
-    const { error } = await supabase.from('pagos').insert({
+
+    // 1) Anticipos: vía RPC (valida empresa, cliente, saldo del anticipo y de la venta; no mueve banco)
+    if (usoAnt.size > 0) {
+      const { error: eAnt } = await supabase.rpc('registrar_cobro_lote_ventas_ogemi', {
+        p_cliente_id: cobrar.cliente_id,
+        p_fecha: fechaCobro,
+        p_cuenta_id: null,
+        p_referencia: null,
+        p_pagos: [],
+        p_anticipos: Array.from(usoAnt.entries()).map(([anticipo_id, monto]) => ({
+          anticipo_id, venta_ogemi_id: cobrar.id, monto: Math.round(monto * 100) / 100,
+        })),
+      })
+      if (eAnt) {
+        setCobrando(false)
+        showToast(`No se pudo aplicar el anticipo: ${eAnt.message}`, 'error')
+        return
+      }
+    }
+
+    // 2) Cuentas bancarias: pagos normales (generan el ingreso en banco)
+    const pagosInsert = validas.filter(l => l.origen === 'cuenta').map(l => ({
       venta_ogemi_id: cobrar.id,
-      cuenta_id: cobroForm.cuenta_id,
-      fecha: cobroForm.fecha,
-      monto: m,
-      referencia: cobroForm.referencia.trim() || null,
-    })
+      cuenta_id: l.cuenta_id,
+      fecha: fechaCobro,
+      monto: parseFloat(l.monto),
+      referencia: l.referencia.trim() || null,
+    }))
+    const { error } = pagosInsert.length > 0
+      ? await supabase.from('pagos').insert(pagosInsert)
+      : { error: null }
+
     setCobrando(false)
-    if (error) { showToast(`No se pudo registrar el cobro: ${error.message}`, 'error'); return }
-    showToast('Cobro registrado en banco', 'success')
+    if (error) {
+      showToast(`${usoAnt.size > 0 ? 'El anticipo se aplicó, pero no' : 'No'} se pudo registrar el cobro en banco: ${error.message}`, 'error')
+      if (usoAnt.size > 0) { setCobrar(null); load() }
+      return
+    }
+    showToast(pagosInsert.length > 0 ? 'Cobro registrado' : 'Anticipo aplicado', 'success')
     setCobrar(null)
     load()
   }
@@ -170,7 +256,7 @@ function VentasOgemiPage() {
     setHistorial(v)
     const { data } = await supabase
       .from('pagos')
-      .select('id, fecha, monto, referencia, numero_recibo, cuenta_id, banco_cuentas(nombre, banco), pago_reversos(id, fecha, motivo)')
+      .select('id, fecha, monto, referencia, numero_recibo, cuenta_id, anticipo_id, banco_cuentas(nombre, banco), pago_reversos(id, fecha, motivo)')
       .eq('venta_ogemi_id', v.id)
       .order('fecha', { ascending: false })
     setPagos(data || [])
@@ -370,26 +456,127 @@ function VentasOgemiPage() {
         </div>
       </div>
 
-      {/* Modal cobro */}
+      {/* Modal cobro — mismo formato que Facturas (Impresos): líneas con origen cuenta/anticipo */}
       {cobrar && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setCobrar(null)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 space-y-3" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <h3 className="font-semibold text-gray-900">Cobrar venta #{cobrar.numero}</h3>
-            <p className="text-sm text-gray-500">{cobrar.clientes?.nombre} · saldo {formatCurrency(saldoDe(cobrar))}</p>
-            <div>
-              <label className="label">Cuenta de banco</label>
-              <select className="input" value={cobroForm.cuenta_id} onChange={e => setCobroForm(p => ({ ...p, cuenta_id: e.target.value }))}>
-                {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>)}
-              </select>
+            <p className="text-sm text-gray-500 mb-3">{cobrar.clientes?.nombre} · saldo {formatCurrency(saldoDe(cobrar))}</p>
+
+            {anticipos.length > 0 && (
+              <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                El cliente tiene {anticipos.length} anticipo{anticipos.length === 1 ? '' : 's'} disponible{anticipos.length === 1 ? '' : 's'} por {formatCurrency(anticipos.reduce((t, a) => t + a.saldo, 0))}. Elige el origen &quot;Anticipo&quot; para aplicarlo.
+              </div>
+            )}
+
+            <div className="mb-4">
+              <label className="label">Fecha de cobro</label>
+              <input type="date" className="input" value={fechaCobro} onChange={e => setFechaCobro(e.target.value)} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="label">Fecha</label><input type="date" className="input" value={cobroForm.fecha} onChange={e => setCobroForm(p => ({ ...p, fecha: e.target.value }))} /></div>
-              <div><label className="label">Monto</label><input type="number" step="0.01" min={0} className="input" value={cobroForm.monto} onChange={e => setCobroForm(p => ({ ...p, monto: e.target.value }))} /></div>
+
+            <div className="space-y-3 mb-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-gray-700">Forma de pago</p>
+                <button onClick={addLinea} className="text-xs flex items-center gap-1 text-brand-600 hover:text-brand-800">
+                  <Plus size={13} /> Agregar pago
+                </button>
+              </div>
+
+              {lineas.map((linea, idx) => (
+                <div key={idx} className="border border-gray-200 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500 font-medium">Pago {idx + 1}</span>
+                    {lineas.length > 1 && (
+                      <button onClick={() => removeLinea(idx)} className="text-red-400 hover:text-red-600"><Trash2 size={13} /></button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="label text-xs">Origen</label>
+                      <select className="input text-sm" value={linea.origen} onChange={e => updateLinea(idx, 'origen', e.target.value)}>
+                        <option value="cuenta">Cuenta bancaria</option>
+                        <option value="anticipo" disabled={anticipos.length === 0}>
+                          {anticipos.length === 0 ? 'Anticipo (sin saldo)' : 'Anticipo'}
+                        </option>
+                      </select>
+                    </div>
+                    <div>
+                      {linea.origen === 'cuenta' ? (
+                        <>
+                          <label className="label text-xs">Cuenta bancaria</label>
+                          <select className="input text-sm" value={linea.cuenta_id} onChange={e => updateLinea(idx, 'cuenta_id', e.target.value)}>
+                            <option value="">Seleccionar cuenta...</option>
+                            {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>)}
+                          </select>
+                        </>
+                      ) : (
+                        <>
+                          <label className="label text-xs">Anticipo</label>
+                          <select
+                            className="input text-sm"
+                            value={linea.anticipo_id}
+                            onChange={e => {
+                              const a = anticipos.find(x => x.id === e.target.value)
+                              // Sugerir el menor entre el saldo del anticipo y lo que falta por cubrir
+                              const otros = lineas.reduce((t, l, i) => i === idx ? t : t + (parseFloat(l.monto) || 0), 0)
+                              const falta = Math.max(0, saldoDe(cobrar) - otros)
+                              setLineas(prev => prev.map((l, i) => i === idx ? ({
+                                ...l, anticipo_id: e.target.value,
+                                monto: a ? Math.min(a.saldo, falta).toFixed(2) : l.monto,
+                              }) : l))
+                            }}
+                          >
+                            <option value="">Seleccionar anticipo...</option>
+                            {anticipos.map(a => (
+                              <option key={a.id} value={a.id}>
+                                REC-{String(a.numero_recibo).padStart(5, '0')} · {formatDate(a.fecha)} · saldo {formatCurrency(a.saldo)}{a.numero_deposito ? ` · ${a.numero_deposito}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="label text-xs">Monto</label>
+                      <input type="number" step="0.01" min="0.01" className="input text-sm" placeholder="0.00"
+                        value={linea.monto} onChange={e => updateLinea(idx, 'monto', e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="label text-xs">Referencia</label>
+                      <input className="input text-sm" placeholder="Cheque, transferencia..." value={linea.referencia}
+                        disabled={linea.origen === 'anticipo'}
+                        title={linea.origen === 'anticipo' ? 'La referencia se genera con el N° de recibo del anticipo' : undefined}
+                        onChange={e => updateLinea(idx, 'referencia', e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {lineas.length > 1 && (
+                <div className="flex justify-between text-sm font-semibold bg-brand-50 rounded-lg px-3 py-2">
+                  <span className="text-brand-700">Total este abono</span>
+                  <span className="text-brand-800">{formatCurrency(totalLineas)}</span>
+                </div>
+              )}
+
+              {totalLineas > saldoDe(cobrar) + 0.01 && (
+                <div className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">
+                  ⚠ El monto supera el saldo pendiente ({formatCurrency(saldoDe(cobrar))})
+                </div>
+              )}
             </div>
-            <div><label className="label">Referencia</label><input className="input" value={cobroForm.referencia} onChange={e => setCobroForm(p => ({ ...p, referencia: e.target.value }))} placeholder="N° depósito, transferencia..." /></div>
-            <div className="flex gap-2 pt-1">
-              <button className="btn-primary" onClick={registrarCobro} disabled={cobrando}>{cobrando ? 'Registrando...' : 'Registrar cobro'}</button>
-              <button className="btn-secondary" onClick={() => setCobrar(null)}>Cancelar</button>
+
+            <div className="flex gap-3">
+              <button className="btn-secondary flex-1" onClick={() => setCobrar(null)}>Cancelar</button>
+              <button
+                className="btn-primary flex-1"
+                onClick={registrarCobro}
+                disabled={cobrando || lineas.every(l => !l.monto || (l.origen === 'cuenta' ? !l.cuenta_id : !l.anticipo_id))}
+              >
+                {cobrando ? 'Registrando...' : 'Registrar cobro'}
+              </button>
             </div>
           </div>
         </div>
@@ -415,7 +602,7 @@ function VentasOgemiPage() {
                       <tr key={p.id} className={rev ? 'opacity-50' : ''}>
                         <td className="table-cell font-mono text-xs">{p.numero_recibo ? `REC-${String(p.numero_recibo).padStart(5, '0')}` : '—'}</td>
                         <td className="table-cell">{formatDate(p.fecha)}</td>
-                        <td className="table-cell text-gray-500">{p.banco_cuentas?.nombre}</td>
+                        <td className="table-cell text-gray-500">{p.anticipo_id ? <span className="badge bg-amber-100 text-amber-700">Anticipo</span> : p.banco_cuentas?.nombre}</td>
                         <td className="table-cell text-right font-semibold">{formatCurrency(p.monto)}</td>
                         <td className="table-cell">
                           {rev ? (
@@ -442,7 +629,9 @@ function VentasOgemiPage() {
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={() => setReversar(null)}>
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 space-y-3" onClick={e => e.stopPropagation()}>
             <h3 className="font-semibold text-gray-900">Reversar cobro de {formatCurrency(reversar.monto)}</h3>
-            <p className="text-sm text-gray-500">Se registrará un egreso en banco por el mismo monto y la venta volverá a pendiente.</p>
+            <p className="text-sm text-gray-500">{reversar.anticipo_id
+              ? 'Se devolverá el monto al saldo del anticipo (sin movimiento en banco) y la venta volverá a pendiente.'
+              : 'Se registrará un egreso en banco por el mismo monto y la venta volverá a pendiente.'}</p>
             <div><label className="label">Motivo</label><input className="input" value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Mínimo 3 caracteres" /></div>
             <div className="flex gap-2">
               <button className="btn-primary bg-red-600 hover:bg-red-700" onClick={confirmarReverso} disabled={reversando || motivo.trim().length < 3}>{reversando ? 'Reversando...' : 'Reversar'}</button>

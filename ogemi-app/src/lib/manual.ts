@@ -205,6 +205,7 @@ export const MANUAL_MODULOS: ManualModulo[] = [
           'Al cobrar una factura o presupuesto, en la línea elija el origen "anticipo".',
           'Seleccione el anticipo del cliente; el sistema descuenta del saldo disponible.',
           'No se duplica el ingreso en banco (ya entró al registrar el anticipo).',
+          'Ogemi tiene su propio módulo de Anticipos (menú Ogemi): esos anticipos solo se aplican al cobrar Facturas de Ogemi, y los de Impresos solo a documentos de Impresos.',
         ],
       },
       {
