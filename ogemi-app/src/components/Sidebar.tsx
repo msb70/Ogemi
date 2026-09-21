@@ -61,6 +61,7 @@ const navItems: NavEntry[] = [
   link('/obligaciones', 'Obligaciones', Wallet,         'obligaciones'),
   link('/reportes',     'Reportes',      BarChart3,     'reportes'),
   link('/usuarios',     'Usuarios',      ShieldCheck,   'usuarios'),
+  link('/bitacora',     'Bitácora',      ClipboardList, 'usuarios'),
 ]
 
 const ACCENT = {

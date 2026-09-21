@@ -10,6 +10,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { Anticipo, Cliente, BancoCuenta } from '@/types'
 import { Plus, Printer, Search, X, CheckCircle, AlertCircle, Download } from 'lucide-react'
 import { withPagePermission } from '@/components/PermissionGuard'
+import CambiarClienteAnticipo from '@/components/CambiarClienteAnticipo'
 import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 
 // Anticipos de Impresora Ogemi: mismo formato y funcionalidad que /anticipos
@@ -256,6 +257,8 @@ function AnticiposOgemiPage() {
             <Printer size={14} />
             Recibo
           </button>
+          <CambiarClienteAnticipo anticipo={a} clientes={clientes} modulo="ventas_ogemi"
+            aplicado={saldos[a.id]?.aplicado ?? 0} onChanged={() => load()} />
           {a.estado === 'activo' && (
             <button
               onClick={() => handleAnular(a.id)}
