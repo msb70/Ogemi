@@ -8,7 +8,8 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
 import { Toast } from '@/components/Toast'
 import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
-import { CalendarDays, Plus, Save, WalletCards, Trash2, FileText, ClipboardList, ShoppingCart, Printer } from 'lucide-react'
+import { CalendarDays, Plus, Save, WalletCards, Trash2, FileText, ClipboardList, ShoppingCart, Printer, GripVertical } from 'lucide-react'
+import { useAuth } from '@/context/AuthContext'
 import EmpresaFilter, { useEmpresaFiltro, filtrarEmpresa } from '@/components/EmpresaFilter'
 import { fetchAll } from '@/lib/fetchAll'
 import VencimientoSemanalVentas from '@/app/reportes/components/VencimientoSemanalVentas'
@@ -108,16 +109,24 @@ const flujoWeekDates = (corte: string): string[] => SEMANAS.map((_, i) => addDay
  * entre las tablas de flujo, gastos fijos y compras a pagar.
  * Estructura: [concepto flexible] [N semanas] [total] [estado/espaciador]
  */
-const ColsSemana = ({ n = SEMANAS.length }: { n?: number }) => (
+const ColsSemana = ({ n = SEMANAS.length, total = true }: { n?: number; total?: boolean }) => (
   <colgroup>
     <col />
     {Array.from({ length: n }, (_, i) => (
       <col key={i} className="w-36" />
     ))}
-    <col className="w-32" />
+    {total && <col className="w-32" />}
     <col className="w-28" />
   </colgroup>
 )
+
+/** Orden de gastos fijos: primero activos, luego inactivos; dentro de cada grupo por `orden` (manual) y nombre. */
+const ordenarGastos = <T extends { activo: boolean; orden: number; nombre: string }>(list: T[]): T[] =>
+  [...list].sort((a, b) =>
+    (a.activo === b.activo ? 0 : a.activo ? -1 : 1) ||
+    ((a.orden ?? 0) - (b.orden ?? 0)) ||
+    a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' })
+  )
 
 /**
  * Input de monto sin flechas (type="text"): mientras se edita muestra el valor
@@ -169,6 +178,10 @@ function GastosFijosPage() {
     return todayISO()
   })
   const [gastos, setGastos] = useState<GastoFijo[]>([])
+  const { puedeHacer } = useAuth()
+  const puedeOrdenar = puedeHacer('gastos_fijos', 'editar')
+  const [dragGastoId, setDragGastoId] = useState<string | null>(null)
+  const [overGastoId, setOverGastoId] = useState<string | null>(null)
   // Montos del mes del corte (editable) y del mes siguiente (solo para el flujo)
   const [montos, setMontos] = useState<Record<string, MontosSemana>>({})
   const [montosSig, setMontosSig] = useState<Record<string, MontosSemana> | null>(null)
@@ -272,7 +285,7 @@ function GastosFijosPage() {
       return
     }
 
-    setGastos(data || [])
+    setGastos(ordenarGastos((data || []) as GastoFijo[]))
   }, [supabase, showToast])
 
   const loadMontos = useCallback(async () => {
@@ -683,7 +696,7 @@ function GastosFijosPage() {
 
     const { error } = await supabase.from('gastos_fijos').insert({
       nombre,
-      orden: gastos.length + 1,
+      orden: gastos.reduce((m, g) => Math.max(m, g.orden || 0), 0) + 1,
     })
 
     if (error) {
@@ -797,6 +810,43 @@ function GastosFijosPage() {
   const updateFecha = (semanaIndex: number, value: string) => {
     setSemanaFechas(prev => prev.map((f, i) => (i === semanaIndex ? value : f)))
     if (value) persistFecha(semanaIndex + 1, value)
+  }
+
+  /** Guarda la posición (orden = índice + 1) de la lista completa; solo actualiza las filas que cambiaron. */
+  const persistOrden = async (lista: GastoFijo[]) => {
+    const previo = new Map(gastos.map(g => [g.id, g.orden]))
+    const reordenados = lista.map((g, i) => ({ ...g, orden: i + 1 }))
+    setGastos(reordenados)
+    const cambiados = reordenados.filter(g => previo.get(g.id) !== g.orden)
+    const results = await Promise.all(
+      cambiados.map(g => supabase.from('gastos_fijos').update({ orden: g.orden }).eq('id', g.id))
+    )
+    const err = results.find(r => r.error)?.error
+    if (err) {
+      showToast(`No se pudo guardar el orden: ${err.message}`, 'error')
+      loadGastos()
+    }
+  }
+
+  /** Orden manual (arrastrar): solo dentro del mismo grupo (activos o inactivos). */
+  const moverGasto = (fromId: string, toId: string) => {
+    if (fromId === toId) return
+    const from = gastos.findIndex(g => g.id === fromId)
+    const to = gastos.findIndex(g => g.id === toId)
+    if (from < 0 || to < 0 || gastos[from].activo !== gastos[to].activo) return
+    const next = [...gastos]
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
+    persistOrden(next)
+  }
+
+  /** Vuelve al orden alfabético (activos primero, luego inactivos). */
+  const ordenarAZ = () => {
+    const az = [...gastos].sort((a, b) =>
+      (a.activo === b.activo ? 0 : a.activo ? -1 : 1) ||
+      a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' })
+    )
+    persistOrden(az)
   }
 
   const toggleActivo = async (gasto: GastoFijo) => {
@@ -934,7 +984,7 @@ function GastosFijosPage() {
           </p>
         </section>
 
-        <section className="card p-4">
+        <section className="card p-4 print:hidden">
           <div className="flex items-center gap-2 mb-4">
             <Plus size={16} className="text-brand-600" />
             <h2 className="text-sm font-semibold text-gray-800">Crear gasto fijo</h2>
@@ -961,6 +1011,17 @@ function GastosFijosPage() {
             <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
               Montos de gastos fijos - {periodoMes}
             </p>
+            <div className="flex items-center gap-2">
+            {puedeOrdenar && (
+              <button
+                className="btn-secondary inline-flex items-center gap-2 py-1.5 text-xs"
+                onClick={ordenarAZ}
+                disabled={loading || gastos.length < 2}
+                title="Reordenar alfabéticamente (activos primero). También puedes arrastrar las filas para ordenarlas a mano."
+              >
+                Ordenar A–Z
+              </button>
+            )}
             <button
               className="btn-secondary inline-flex items-center gap-2 py-1.5 text-xs"
               onClick={guardarMontos}
@@ -969,11 +1030,12 @@ function GastosFijosPage() {
               <Save size={14} />
               {savingMontos ? 'Guardando' : 'Guardar'}
             </button>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] table-fixed">
-              <ColsSemana n={semanasGastos.length} />
+              <ColsSemana n={semanasGastos.length} total={false} />
               <thead>
                 <tr className="border-b border-gray-200">
                   <th className="table-header">Gasto fijo</th>
@@ -991,22 +1053,46 @@ function GastosFijosPage() {
                       </div>
                     </th>
                   ))}
-                  <th className="table-header text-right">Total</th>
                   <th className="table-header">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={semanasGastos.length + 3} className="text-center py-10 text-gray-400">Cargando...</td></tr>
+                  <tr><td colSpan={semanasGastos.length + 2} className="text-center py-10 text-gray-400">Cargando...</td></tr>
                 ) : gastos.length === 0 ? (
-                  <tr><td colSpan={semanasGastos.length + 3} className="text-center py-10 text-gray-400">No hay gastos fijos creados.</td></tr>
+                  <tr><td colSpan={semanasGastos.length + 2} className="text-center py-10 text-gray-400">No hay gastos fijos creados.</td></tr>
                 ) : (
                   gastos.map(gasto => {
                     const fila = montos[gasto.id] || emptyMontos()
-                    const totalFila = semanasGastos.reduce((sum, s) => sum + (parseFloat(fila[s] || '0') || 0), 0)
+                    const dropOk = !!dragGastoId && dragGastoId !== gasto.id &&
+                      gastos.find(g => g.id === dragGastoId)?.activo === gasto.activo
                     return (
-                      <tr key={gasto.id} className={!gasto.activo ? 'opacity-50' : ''}>
+                      <tr
+                        key={gasto.id}
+                        className={`${!gasto.activo ? 'opacity-50' : ''} ${overGastoId === gasto.id && dropOk ? 'outline outline-2 -outline-offset-2 outline-brand-400 bg-brand-50' : ''} ${dragGastoId === gasto.id ? 'opacity-40' : ''}`}
+                        onDragOver={e => { if (!dropOk) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (overGastoId !== gasto.id) setOverGastoId(gasto.id) }}
+                        onDragLeave={() => { if (overGastoId === gasto.id) setOverGastoId(null) }}
+                        onDrop={e => { e.preventDefault(); if (dragGastoId && dropOk) moverGasto(dragGastoId, gasto.id); setDragGastoId(null); setOverGastoId(null) }}
+                      >
                         <td className="table-cell">
+                          <div className="flex items-center gap-1.5">
+                          {puedeOrdenar && (
+                            <span
+                              className="print:hidden cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 shrink-0"
+                              draggable
+                              onDragStart={e => {
+                                setDragGastoId(gasto.id)
+                                e.dataTransfer.effectAllowed = 'move'
+                                e.dataTransfer.setData('text/plain', gasto.id)
+                                const tr = e.currentTarget.closest('tr')
+                                if (tr) e.dataTransfer.setDragImage(tr, 10, 10)
+                              }}
+                              onDragEnd={() => { setDragGastoId(null); setOverGastoId(null) }}
+                              title="Arrastrar para ordenar"
+                            >
+                              <GripVertical size={16} />
+                            </span>
+                          )}
                           <input
                             className="input min-w-[160px]"
                             value={gasto.nombre}
@@ -1014,6 +1100,7 @@ function GastosFijosPage() {
                             onBlur={() => saveNombre(gasto)}
                             disabled={!gasto.activo}
                           />
+                          </div>
                         </td>
                         {semanasGastos.map(semana => (
                           <td key={semana} className="table-cell">
@@ -1025,7 +1112,6 @@ function GastosFijosPage() {
                             />
                           </td>
                         ))}
-                        <td className="table-cell text-right font-semibold">{formatCurrency(totalFila)}</td>
                         <td className="table-cell">
                           <div className="flex items-center gap-2">
                             <button
@@ -1057,7 +1143,6 @@ function GastosFijosPage() {
                     {totalesSemana.map((total, i) => (
                       <td key={i} className="table-cell text-right font-bold">{formatCurrency(total)}</td>
                     ))}
-                    <td className="table-cell text-right font-bold text-brand-700">{formatCurrency(totalesSemana.reduce((a, b) => a + b, 0))}</td>
                     <td className="table-cell"></td>
                   </tr>
                   <tr className="bg-gray-50">
@@ -1067,7 +1152,6 @@ function GastosFijosPage() {
                         {formatCurrency(v)}
                       </td>
                     ))}
-                    <td className="table-cell"></td>
                     <td className="table-cell"></td>
                   </tr>
                 </tfoot>

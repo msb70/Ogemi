@@ -251,22 +251,23 @@ export default function VencimientoSemanalCompras({
       {vencCompras.rows.length === 0 ? (
         <div className="card p-12 text-center text-gray-400">No hay compras pendientes en las próximas 4 semanas</div>
       ) : (
-        <div className="card overflow-auto">
-          <table className="w-full min-w-max">
+        <div className="card overflow-auto print:overflow-visible">
+          {/* En PDF: sin anchos mínimos (la tabla cabe en la hoja) y sin repetir el proveedor en cada fila */}
+          <table className="w-full min-w-max print:min-w-0">
             <thead>
               <tr className="border-b-2 border-gray-300 bg-gray-50">
-                <th className="table-header text-left sticky left-0 bg-gray-50 z-10 min-w-[180px]">Proveedor</th>
-                <th className="table-header text-center min-w-[140px]">Concepto</th>
-                <th className="table-header text-center min-w-[100px]">F. Compra</th>
-                <th className="table-header text-center min-w-[100px]">F. Vencimiento</th>
+                <th className="table-header text-left sticky left-0 bg-gray-50 z-10 min-w-[180px] print:static print:min-w-0 vsc-prov"><span className="print:hidden">Proveedor</span></th>
+                <th className="table-header text-center min-w-[140px] print:min-w-0 print:text-left">Concepto</th>
+                <th className="table-header text-center min-w-[100px] print:min-w-0">F. Compra</th>
+                <th className="table-header text-center min-w-[100px] print:min-w-0">F. Vencimiento</th>
                 {compWeekDateObjs.map((fri, i) => (
-                  <th key={i} className="table-header text-right min-w-[120px]">
+                  <th key={i} className="table-header text-right min-w-[120px] print:min-w-0">
                     Sem {i + 1}<br />
                     <span className="font-normal text-[10px] opacity-80">{formatDateObj(fri).slice(0, 5)}</span>
                   </th>
                 ))}
-                <th className="table-header text-right min-w-[120px] text-[11px]">Monto a pagar</th>
-                <th className="table-header text-center min-w-[60px] text-[11px]">
+                <th className="table-header text-right min-w-[120px] print:min-w-0 text-[11px]">Monto a pagar</th>
+                <th className="table-header text-center min-w-[60px] print:min-w-0 text-[11px]">
                   <div className="flex flex-col items-center gap-1">
                     <span>Pagará</span>
                     <input type="checkbox" checked={allMarked}
@@ -280,7 +281,7 @@ export default function VencimientoSemanalCompras({
             <tbody className="divide-y divide-gray-100">
               {compGroups.flatMap((g) => [
                 <tr key={`h-${g.nombre}`} className="bg-gray-100 border-t-2 border-gray-300">
-                  <td colSpan={4 + compWeekDateObjs.length + 2} className="table-cell sticky left-0 bg-gray-100 z-10 font-bold text-gray-800 text-sm">
+                  <td colSpan={4 + compWeekDateObjs.length + 2} className="table-cell sticky left-0 print:static bg-gray-100 z-10 font-bold text-gray-800 text-sm">
                     {g.nombre}
                     <span className="text-xs font-normal text-gray-400"> · {g.rows.length} {g.rows.length === 1 ? 'compra' : 'compras'} · {formatMonto(g.total)}</span>
                   </td>
@@ -289,11 +290,11 @@ export default function VencimientoSemanalCompras({
                   const isPagara = pagaraSet.has(c.id)
                   return (
                     <tr key={c.id} className={`hover:bg-gray-50 transition-colors ${isPagara ? 'bg-green-50/50' : ''}`}>
-                      <td className={`table-cell sticky left-0 z-10 max-w-[180px] ${isPagara ? 'bg-green-50' : 'bg-white'}`}>
-                        <span className="truncate block text-sm font-medium">{c.proveedores?.nombre || '—'}</span>
+                      <td className={`table-cell sticky left-0 z-10 max-w-[180px] print:static vsc-prov ${isPagara ? 'bg-green-50' : 'bg-white'}`}>
+                        <span className="truncate block text-sm font-medium print:hidden">{c.proveedores?.nombre || '—'}</span>
                       </td>
-                      <td className="table-cell text-center text-sm text-gray-500 max-w-[140px]">
-                        <span className="truncate block">{c.concepto || c.referencia || '—'}</span>
+                      <td className="table-cell text-center text-sm text-gray-500 max-w-[140px] print:max-w-none print:text-left">
+                        <span className="truncate block print:whitespace-normal">{c.concepto || c.referencia || '—'}</span>
                       </td>
                       <td className="table-cell text-center text-sm text-gray-400">{formatDate(c.fecha)}</td>
                       <td className="table-cell text-center text-sm font-semibold text-red-600">{formatDate(c.vencimiento)}</td>
@@ -316,11 +317,15 @@ export default function VencimientoSemanalCompras({
                         {isPagara ? (
                           onChangeMontoPagara ? (
                             <div className="flex flex-col items-end gap-1">
+                              {/* PDF: el monto como texto (el input se corta al imprimir) */}
+                              <span className="hidden print:inline whitespace-nowrap font-semibold text-green-700">{formatMonto(montoPagara(c))}</span>
+                              <div className="print:hidden">
                               <MontoPagaraInput
                                 saldo={c.saldo ?? c.total ?? 0}
                                 value={pagaraMontos?.[c.id]}
                                 onCommit={v => onChangeMontoPagara(c.id, v)}
                               />
+                              </div>
                               {onChangeSemanaPagara && (
                                 <select
                                   value={c.fridayIdx}
@@ -388,6 +393,13 @@ export default function VencimientoSemanalCompras({
           </table>
         </div>
       )}
+
+      {/* PDF: la columna Proveedor se colapsa (el nombre ya va en la fila de agrupamiento) */}
+      <style>{`
+        @media print {
+          #flujo-print .vsc-prov, #reporte-print .vsc-prov { padding: 0 !important; width: 0 !important; max-width: 0 !important; }
+        }
+      `}</style>
 
       {compSearch && compRows.length === 0 && (
         <p className="text-center text-gray-400 text-sm">Sin resultados para &quot;{compSearch}&quot;</p>
