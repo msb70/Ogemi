@@ -65,13 +65,15 @@ async function scanPdfForQr(blob: Blob, jsQR: any): Promise<string | null> {
     'pdfjs-dist/build/pdf.worker.min.mjs',
     import.meta.url
   ).toString()
-  const loadingTask = pdfjs.getDocument({ data: await blob.arrayBuffer() })
+  // wasmUrl: pdfjs v6 decodifica las imágenes CCITT/JBIG2 (QR de 1 bit que generan algunos PAC) con WASM;
+  // sin esto la imagen del QR no se dibuja y nunca se encuentra. Archivos en public/pdfjs-wasm (prebuild).
+  const loadingTask = pdfjs.getDocument({ data: await blob.arrayBuffer(), wasmUrl: '/pdfjs-wasm/' })
   const doc = await loadingTask.promise
   try {
     const maxPages = Math.min(doc.numPages, 3)
     for (let p = 1; p <= maxPages; p++) {
       const page = await doc.getPage(p)
-      for (const scale of [2.5, 4]) {
+      for (const scale of [2.5, 4, 3, 5]) {
         const viewport = page.getViewport({ scale })
         const canvas = document.createElement('canvas')
         canvas.width = Math.ceil(viewport.width)
