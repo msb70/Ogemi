@@ -45,6 +45,8 @@ interface Cuota {
   fecha: string
   monto: number
   notas: string | null
+  pagada: boolean
+  fecha_pago: string | null
 }
 
 type Pestana = 'obligaciones' | 'calendario'
@@ -166,13 +168,17 @@ function ObligacionesPage() {
     if (editId) {
       const prev = obligaciones.find(o => o.id === editId)
       const cambiaPlan = !!prev && (prev.monto_total !== payload.monto_total || prev.num_periodos !== n || prev.frecuencia !== form.frecuencia || prev.fecha_inicio !== form.fecha_inicio)
-      if (cambiaPlan && !confirm('Cambiaste monto, períodos, frecuencia o fecha: las cuotas se regenerarán y se perderán las ediciones manuales. ¿Continuar?')) { setSaving(false); return }
+      if (cambiaPlan && !confirm('Cambiaste monto, períodos, frecuencia o fecha: las cuotas se regenerarán y se perderán las ediciones manuales de fecha y monto (la marca de pagada se conserva por número de cuota). ¿Continuar?')) { setSaving(false); return }
       const { error } = await supabase.from('obligaciones').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editId)
       if (error) { setSaving(false); showToast(`Error al guardar: ${error.message}`, 'error'); return }
       if (cambiaPlan) {
         const { error: eDel } = await supabase.from('obligaciones_cuotas').delete().eq('obligacion_id', editId)
         if (eDel) { setSaving(false); showToast(`Error al regenerar cuotas: ${eDel.message}`, 'error'); return }
-        const nuevas = generarCuotas(payload.monto_total, n, form.fecha_inicio, form.frecuencia).map(c => ({ ...c, obligacion_id: editId }))
+        // Conserva la marca de pagada por número de cuota
+        const pagadasPrev = new Map((cuotasPor.get(editId) || []).filter(c => c.pagada).map(c => [c.numero, c.fecha_pago]))
+        const nuevas = generarCuotas(payload.monto_total, n, form.fecha_inicio, form.frecuencia).map(c => ({
+          ...c, obligacion_id: editId, pagada: pagadasPrev.has(c.numero), fecha_pago: pagadasPrev.get(c.numero) ?? null,
+        }))
         const { error: eIns } = await supabase.from('obligaciones_cuotas').insert(nuevas)
         if (eIns) { setSaving(false); showToast(`Error al crear cuotas: ${eIns.message}`, 'error'); return }
       }
@@ -231,6 +237,28 @@ function ObligacionesPage() {
     load()
   }
 
+  const [togglingId, setTogglingId] = useState<string | null>(null)
+  const togglePagada = async (c: Cuota) => {
+    const pagada = !c.pagada
+    setTogglingId(c.id)
+    const { error } = await supabase.from('obligaciones_cuotas')
+      .update({ pagada, fecha_pago: pagada ? iso(new Date()) : null, updated_at: new Date().toISOString() }).eq('id', c.id)
+    setTogglingId(null)
+    if (error) { showToast(`Error en cuota ${c.numero}: ${error.message}`, 'error'); return }
+    setCuotas(prev => prev.map(x => x.id === c.id ? { ...x, pagada, fecha_pago: pagada ? iso(new Date()) : null } : x))
+  }
+
+  /** KPI de cuotas: pagadas / vencidas (sin pagar, fecha pasada) / pendientes (sin pagar, por vencer). */
+  const kpiCuotas = (cs: Cuota[]) => {
+    const k = { pendientes: 0, pendientesMonto: 0, pagadas: 0, pagadasMonto: 0, vencidas: 0, vencidasMonto: 0 }
+    cs.forEach(c => {
+      if (c.pagada) { k.pagadas++; k.pagadasMonto += c.monto || 0 }
+      else if (c.fecha < hoy) { k.vencidas++; k.vencidasMonto += c.monto || 0 }
+      else { k.pendientes++; k.pendientesMonto += c.monto || 0 }
+    })
+    return k
+  }
+
   // ── Calendario (sumatoria) ─────────────────────────────────────────────────
   const ahora = new Date()
   const [vista, setVista] = useState<Vista>('mes')
@@ -276,20 +304,38 @@ function ObligacionesPage() {
     return { filas, totales, gran: totales.reduce((s, t) => s + t, 0) }
   }, [obligacionesVisibles, cuotasPor, tramos])
 
+  const kpiListado = kpiCuotas(obligacionesVisibles.flatMap(o => cuotasPor.get(o.id) || []))
+  const kpiCalendario = kpiCuotas(calendario.filas.flatMap(f => f.porTramo.flat()))
+  const KpiCuotas = ({ k, ambito }: { k: ReturnType<typeof kpiCuotas>; ambito: string }) => (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {[
+        { label: 'Cuotas pendientes', sub: 'sin pagar, por vencer', n: k.pendientes, m: k.pendientesMonto, color: 'text-blue-700' },
+        { label: 'Cuotas pagadas', sub: 'marcadas como pagadas', n: k.pagadas, m: k.pagadasMonto, color: 'text-green-700' },
+        { label: 'Cuotas vencidas', sub: 'sin pagar, fecha pasada', n: k.vencidas, m: k.vencidasMonto, color: k.vencidas > 0 ? 'text-red-600' : 'text-gray-400' },
+      ].map(x => (
+        <div key={x.label} className="card p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{x.label}</p>
+          <p className="text-[11px] text-gray-400">{x.sub} · {ambito}</p>
+          <p className={`text-2xl font-bold mt-1 ${x.color}`}>{x.n}</p>
+          <p className="text-xs text-gray-500">{formatMonto(x.m)}</p>
+        </div>
+      ))}
+    </div>
+  )
+
   const tituloVista = vista === 'mes' ? `${MESES[mes - 1]} ${anio}` : vista === 'trimestre' ? `Trimestre ${trimestre} · ${anio}` : vista === 'semestre' ? `Semestre ${semestre} · ${anio}` : `Año ${anio}`
   const anios = Array.from({ length: 7 }, (_, i) => ahora.getFullYear() - 2 + i)
 
   // Resumen para el listado
   const resumen = (o: Obligacion) => {
     const cs = cuotasPor.get(o.id) || []
-    const vencidas = cs.filter(c => c.fecha < hoy)
-    const proxima = cs.find(c => c.fecha >= hoy)
+    const sinPagar = cs.filter(c => !c.pagada)
     return {
-      pagadoTeorico: vencidas.reduce((s, c) => s + c.monto, 0),
-      pendiente: cs.filter(c => c.fecha >= hoy).reduce((s, c) => s + c.monto, 0),
-      proxima,
+      pendiente: sinPagar.reduce((s, c) => s + c.monto, 0),
+      proxima: sinPagar[0],
       ultima: cs[cs.length - 1],
-      cuotasVencidas: vencidas.length,
+      cuotasPagadas: cs.length - sinPagar.length,
+      cuotasVencidas: sinPagar.filter(c => c.fecha < hoy).length,
     }
   }
 
@@ -354,6 +400,8 @@ function ObligacionesPage() {
             <span className="text-xs text-gray-400">{obligacionesVisibles.length} obligaciones</span>
           </div>
 
+          <KpiCuotas k={kpiListado} ambito="obligaciones listadas" />
+
           <div className="card overflow-auto">
             <table className="w-full min-w-max">
               <thead>
@@ -391,14 +439,15 @@ function ObligacionesPage() {
                       <td className="table-cell text-sm text-gray-600">{FREC_LABEL[o.frecuencia]}</td>
                       <td className="table-cell text-center text-sm text-gray-600">
                         {o.num_periodos}
-                        {r.cuotasVencidas > 0 && <span className="block text-[10px] text-gray-400">{r.cuotasVencidas} vencida{r.cuotasVencidas === 1 ? '' : 's'}</span>}
+                        <span className="block text-[10px] text-green-700">{r.cuotasPagadas} pagada{r.cuotasPagadas === 1 ? '' : 's'}</span>
+                        {r.cuotasVencidas > 0 && <span className="block text-[10px] text-red-600">{r.cuotasVencidas} vencida{r.cuotasVencidas === 1 ? '' : 's'}</span>}
                       </td>
                       <td className="table-cell text-sm text-gray-500">{formatDate(o.fecha_inicio)}</td>
                       <td className="table-cell text-sm text-gray-500">{r.ultima ? formatDate(r.ultima.fecha) : '—'}</td>
                       <td className="table-cell text-right font-semibold text-brand-700">{formatMonto(o.monto_total)}</td>
                       <td className="table-cell text-right text-sm text-gray-600">{formatMonto(cuotaBase)}</td>
                       <td className="table-cell text-sm">
-                        {r.proxima ? <><span className="text-gray-700">{formatDate(r.proxima.fecha)}</span><span className="block text-[10px] text-gray-400">{formatMonto(r.proxima.monto)}</span></> : <span className="text-gray-400">—</span>}
+                        {r.proxima ? <><span className={r.proxima.fecha < hoy ? 'text-red-600 font-medium' : 'text-gray-700'}>{formatDate(r.proxima.fecha)}</span><span className="block text-[10px] text-gray-400">{formatMonto(r.proxima.monto)}</span></> : <span className="text-gray-400">—</span>}
                       </td>
                       <td className="table-cell text-right font-semibold text-orange-600">{formatMonto(r.pendiente)}</td>
                       <td className="table-cell">
@@ -470,6 +519,8 @@ function ObligacionesPage() {
             <span className="text-2xl font-bold text-brand-900">{formatMonto(calendario.gran)}</span>
           </div>
 
+          <KpiCuotas k={kpiCalendario} ambito={tituloVista} />
+
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {tramos.map((t, i) => (
               <div key={i} className="card p-3">
@@ -510,7 +561,11 @@ function ObligacionesPage() {
                             <span className="font-medium text-gray-700">
                               {formatMonto(s)}
                               <span className="block text-[10px] font-normal text-gray-400">
-                                {cs.map(c => `#${c.numero} ${formatDate(c.fecha).slice(0, 5)}`).join(' · ')}
+                                {cs.map((c, j) => (
+                                  <span key={c.id} className={c.pagada ? 'text-green-700' : c.fecha < hoy ? 'text-red-600' : ''}>
+                                    {j > 0 ? ' · ' : ''}#{c.numero} {formatDate(c.fecha).slice(0, 5)}{c.pagada ? ' ✓' : ''}
+                                  </span>
+                                ))}
                               </span>
                             </span>
                           ) : <span className="text-gray-200">—</span>}
@@ -624,9 +679,9 @@ function ObligacionesPage() {
                 <tbody className="divide-y divide-gray-100">
                   {(cuotasPor.get(detalle.id) || []).map(c => {
                     const d = cuotaDraft[c.id] || { fecha: c.fecha, monto: String(c.monto) }
-                    const vencida = d.fecha < hoy
+                    const vencida = !c.pagada && d.fecha < hoy
                     return (
-                      <tr key={c.id} className={vencida ? 'bg-gray-50' : ''}>
+                      <tr key={c.id} className={c.pagada ? 'bg-green-50' : vencida ? 'bg-red-50' : ''}>
                         <td className="table-cell text-center text-sm text-gray-500">{c.numero}</td>
                         <td className="table-cell">
                           <input type="date" className="input py-1 text-sm" value={d.fecha} disabled={!canEdit}
@@ -637,7 +692,18 @@ function ObligacionesPage() {
                             onChange={e => setCuotaDraft(p => ({ ...p, [c.id]: { ...d, monto: e.target.value } }))} />
                         </td>
                         <td className="table-cell text-xs">
-                          <span className={`badge ${vencida ? 'bg-gray-200 text-gray-600' : 'bg-blue-100 text-blue-700'}`}>{vencida ? 'Vencida' : 'Por vencer'}</span>
+                          <div className="flex items-center gap-2 whitespace-nowrap">
+                            <span className={`badge ${c.pagada ? 'bg-green-100 text-green-700' : vencida ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                              {c.pagada ? 'Pagada' : vencida ? 'Vencida' : 'Pendiente'}
+                            </span>
+                            {canEdit && (
+                              <button onClick={() => togglePagada(c)} disabled={togglingId === c.id}
+                                className={`text-xs font-medium ${c.pagada ? 'text-gray-400 hover:text-gray-700' : 'text-green-700 hover:text-green-900'}`}>
+                                {togglingId === c.id ? '...' : c.pagada ? 'Desmarcar' : 'Marcar pagada'}
+                              </button>
+                            )}
+                          </div>
+                          {c.pagada && c.fecha_pago && <span className="block text-[10px] text-gray-400 mt-0.5">el {formatDate(c.fecha_pago)}</span>}
                         </td>
                       </tr>
                     )

@@ -680,7 +680,6 @@ function GastosFijosPage() {
     const ini = saldoInicialSemana[i]
     return ini == null ? null : ini + flujoNetoSemana[i]
   })
-  const saldoFinalPeriodo = saldoBancos + sum(flujoNetoSemana.slice(semanaCorteIdx))
 
   // KPIs del flujo de pago
   const cobrosVentasTotal = sum(flujo.cobrosVentas)
@@ -1257,7 +1256,7 @@ function GastosFijosPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[980px] table-fixed">
-                <ColsSemana />
+                <ColsSemana total={false} />
                 <thead>
                   <tr className="border-b border-gray-200">
                     <th className="table-header">Concepto</th>
@@ -1269,7 +1268,6 @@ function GastosFijosPage() {
                         </span>
                       </th>
                     ))}
-                    <th className="table-header text-right">Total</th>
                     <th className="table-header"></th>
                   </tr>
                 </thead>
@@ -1283,7 +1281,6 @@ function GastosFijosPage() {
                         {v == null ? '—' : formatCurrency(v)}
                       </td>
                     ))}
-                    <td className="table-cell text-right font-semibold text-brand-700">{formatCurrency(saldoBancos)}</td>
                     <td className="table-cell"></td>
                   </tr>
                   {[
@@ -1299,9 +1296,6 @@ function GastosFijosPage() {
                           {v !== 0 ? `${r.neg ? '−' : ''}${formatCurrency(v)}` : '—'}
                         </td>
                       ))}
-                      <td className={`table-cell text-right font-semibold ${r.neg ? 'text-red-600' : 'text-green-700'}`}>
-                        {r.neg ? '−' : ''}{formatCurrency(sum(r.vals))}
-                      </td>
                       <td className="table-cell"></td>
                     </tr>
                   ))}
@@ -1314,9 +1308,6 @@ function GastosFijosPage() {
                         {formatCurrency(v)}
                       </td>
                     ))}
-                    <td className={`table-cell text-right ${sum(flujoNetoSemana) >= 0 ? 'text-green-800' : 'text-red-700'}`}>
-                      {formatCurrency(sum(flujoNetoSemana))}
-                    </td>
                     <td className="table-cell"></td>
                   </tr>
                   <tr className="border-t border-gray-200 bg-brand-50 font-bold">
@@ -1328,9 +1319,6 @@ function GastosFijosPage() {
                         {v == null ? '—' : formatCurrency(v)}
                       </td>
                     ))}
-                    <td className={`table-cell text-right ${saldoFinalPeriodo >= 0 ? 'text-brand-700' : 'text-red-600'}`}>
-                      {formatCurrency(saldoFinalPeriodo)}
-                    </td>
                     <td className="table-cell"></td>
                   </tr>
                 </tfoot>
