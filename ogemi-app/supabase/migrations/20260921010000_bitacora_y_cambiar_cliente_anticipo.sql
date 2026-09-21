@@ -20,3 +20,10 @@ drop policy if exists pagos_auditoria_select_admin on public.pagos_auditoria;
 create policy pagos_auditoria_select_admin on public.pagos_auditoria
   for select to authenticated
   using (public._es_admin() or app_private.has_module_permission('usuarios','ver'));
+
+-- 5. (migración `bitacora_borrado_documentos`) accion 'borrar_documento': helper
+--    _auditar_borrado_documento(tipo, id) guarda snapshot del documento + sus pagos (_pagos) +
+--    nº de movimientos de banco; lo llaman eliminar_factura/compra/presupuesto/venta_ogemi ANTES de
+--    borrar los cobros, y un trigger BEFORE DELETE (trg_auditar_borrado) en las 4 tablas cubre
+--    borrados directos (GUC app.doc_auditado evita duplicar). bitacora_pagos() toma la etiqueta
+--    de antes->>'_documento' / '_tercero' cuando el documento ya no existe.

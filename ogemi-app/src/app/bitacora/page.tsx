@@ -13,7 +13,7 @@ import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 interface Evento {
   id: string
   created_at: string
-  accion: 'editar' | 'borrar' | 'anticipo_cliente'
+  accion: 'editar' | 'borrar' | 'anticipo_cliente' | 'borrar_documento'
   documento_tipo: string
   documento: string | null
   tercero: string | null
@@ -29,6 +29,7 @@ const ACCION: Record<Evento['accion'], { label: string; cls: string }> = {
   editar: { label: 'Editó cobro/pago', cls: 'bg-blue-100 text-blue-700' },
   borrar: { label: 'Borró cobro/pago', cls: 'bg-red-100 text-red-700' },
   anticipo_cliente: { label: 'Cambió cliente de anticipo', cls: 'bg-amber-100 text-amber-700' },
+  borrar_documento: { label: 'Borró documento completo', cls: 'bg-red-600 text-white' },
 }
 const MODULO: Record<string, string> = {
   facturas: 'Facturas', compras: 'Compras', presupuestos: 'Presupuestos', ventas_ogemi: 'Ventas Ogemi', anticipos: 'Anticipos',
@@ -40,6 +41,17 @@ const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart
 function cambios(e: Evento): [string, string, string][] {
   const a = e.antes || {}, d = e.despues || {}
   if (e.accion === 'anticipo_cliente') return [['Cliente', a.cliente || '—', d.cliente || '—']]
+  if (e.accion === 'borrar_documento') {
+    const pagos: any[] = Array.isArray(a._pagos) ? a._pagos : []
+    return [
+      ['Total', formatMonto(Number(a.total) || 0), '—'],
+      ['Fecha', a.fecha ? formatDate(a.fecha) : '—', '—'],
+      ['Estado', String(a.estado || '—'), '—'],
+      ...(pagos.length === 0
+        ? [['Cobros/pagos', 'ninguno', '—'] as [string, string, string]]
+        : pagos.map((p, i) => [`Cobro/pago ${i + 1}`, `${formatMonto(Number(p.monto) || 0)} · ${p.fecha ? formatDate(p.fecha) : ''} · ${p.cuenta || (p.anticipo_id ? 'Anticipo' : 'Nota de crédito')}`, '—'] as [string, string, string])),
+    ]
+  }
   if (e.accion === 'borrar') {
     return [
       ['Monto', formatMonto(Number(a.monto) || 0), '—'],
@@ -91,14 +103,17 @@ function BitacoraPage() {
   const kpi = useMemo(() => ({
     editar: visibles.filter(e => e.accion === 'editar').length,
     borrar: visibles.filter(e => e.accion === 'borrar').length,
+    docs: visibles.filter(e => e.accion === 'borrar_documento').length,
     anticipo: visibles.filter(e => e.accion === 'anticipo_cliente').length,
-    montoBorrado: visibles.filter(e => e.accion === 'borrar').reduce((s, e) => s + (Number(e.antes?.monto) || 0), 0),
+    montoBorrado: visibles.reduce((s, e) => s
+      + (e.accion === 'borrar' ? (Number(e.antes?.monto) || 0) : 0)
+      + (e.accion === 'borrar_documento' && Array.isArray(e.antes?._pagos) ? e.antes._pagos.reduce((x: number, p: any) => x + (Number(p.monto) || 0), 0) : 0), 0),
   }), [visibles])
 
   const exportar = () => {
     exportXLSX(`bitacora_${desde}_${hasta}.xlsx`, [
       kpiSheet('Bitácora', `${visibles.length} eventos · ${desde} a ${hasta}`, [
-        ['Ediciones', kpi.editar], ['Borrados', kpi.borrar], ['Cambios de cliente en anticipos', kpi.anticipo], ['Monto borrado', kpi.montoBorrado],
+        ['Ediciones', kpi.editar], ['Cobros/pagos borrados', kpi.borrar], ['Documentos borrados', kpi.docs], ['Cambios de cliente en anticipos', kpi.anticipo], ['Monto borrado', kpi.montoBorrado],
       ]),
       {
         name: 'Eventos',
@@ -129,7 +144,8 @@ function BitacoraPage() {
           <select value={fAccion} onChange={e => setFAccion(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
             <option value="all">Todas las acciones</option>
             <option value="editar">Ediciones</option>
-            <option value="borrar">Borrados</option>
+            <option value="borrar">Cobros/pagos borrados</option>
+            <option value="borrar_documento">Documentos borrados</option>
             <option value="anticipo_cliente">Cambio de cliente (anticipos)</option>
           </select>
           <select value={fUsuario} onChange={e => setFUsuario(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
@@ -143,11 +159,12 @@ function BitacoraPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {[
             { l: 'Ediciones', v: String(kpi.editar), c: 'text-blue-700' },
-            { l: 'Borrados', v: String(kpi.borrar), c: 'text-red-600' },
-            { l: 'Monto borrado', v: formatMonto(kpi.montoBorrado), c: 'text-red-600' },
+            { l: 'Cobros/pagos borrados', v: String(kpi.borrar), c: 'text-red-600' },
+            { l: 'Documentos borrados', v: String(kpi.docs), c: 'text-red-700' },
+            { l: 'Monto de cobros/pagos borrado', v: formatMonto(kpi.montoBorrado), c: 'text-red-600' },
             { l: 'Cambios de cliente (anticipos)', v: String(kpi.anticipo), c: 'text-amber-700' },
           ].map(x => (
             <div key={x.l} className="card p-3">
@@ -189,7 +206,7 @@ function BitacoraPage() {
                     {cambios(e).map(([campo, a, d], i) => (
                       <div key={i} className="whitespace-nowrap">
                         <span className="text-gray-400">{campo}{a || d ? ': ' : ''}</span>
-                        <span className={e.accion === 'borrar' ? 'text-red-600' : 'text-gray-500'}>{a}</span>
+                        <span className={e.accion === 'borrar' || e.accion === 'borrar_documento' ? 'text-red-600' : 'text-gray-500'}>{a}</span>
                         {d && d !== '—' && <><span className="text-gray-300"> → </span><span className="font-semibold text-gray-800">{d}</span></>}
                       </div>
                     ))}
@@ -200,7 +217,7 @@ function BitacoraPage() {
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-gray-400">Se registran las ediciones y borrados de cobros/pagos y los cambios de cliente en anticipos desde el 21/09/2026. Máximo 2.000 eventos por consulta.</p>
+        <p className="text-xs text-gray-400">Se registran las ediciones y borrados de cobros/pagos, los documentos borrados completos (facturas, compras, presupuestos, ventas Ogemi) y los cambios de cliente en anticipos desde el 21/09/2026. Máximo 2.000 eventos por consulta.</p>
       </div>
     </AppLayout>
   )
