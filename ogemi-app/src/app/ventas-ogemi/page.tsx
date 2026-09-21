@@ -9,6 +9,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { Cliente, BancoCuenta, VentaOgemi } from '@/types'
 import { Plus, Search, X, Pencil, Trash2, Wallet, RefreshCw, Download } from 'lucide-react'
 import { withPagePermission } from '@/components/PermissionGuard'
+import PagoAcciones from '@/components/PagoAcciones'
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
 import { useAuth } from '@/context/AuthContext'
@@ -79,9 +80,6 @@ function VentasOgemiPage() {
   // Historial de cobros / reverso
   const [historial, setHistorial] = useState<VentaOgemi | null>(null)
   const [pagos, setPagos] = useState<any[]>([])
-  const [reversar, setReversar] = useState<any | null>(null)
-  const [motivo, setMotivo] = useState('')
-  const [reversando, setReversando] = useState(false)
 
   const [eliminar, setEliminar] = useState<VentaOgemi | null>(null)
   const [eliminando, setEliminando] = useState(false)
@@ -256,19 +254,13 @@ function VentasOgemiPage() {
     setHistorial(v)
     const { data } = await supabase
       .from('pagos')
-      .select('id, fecha, monto, referencia, numero_recibo, cuenta_id, anticipo_id, banco_cuentas(nombre, banco), pago_reversos(id, fecha, motivo)')
+      .select('id, fecha, monto, referencia, numero_recibo, cuenta_id, lote_id, anticipo_id, banco_cuentas(nombre, banco), pago_reversos(id, fecha, motivo)')
       .eq('venta_ogemi_id', v.id)
       .order('fecha', { ascending: false })
     setPagos(data || [])
   }
-  const confirmarReverso = async () => {
-    if (!reversar || motivo.trim().length < 3) return
-    setReversando(true)
-    const { error } = await supabase.rpc('reversar_pago', { p_pago_id: reversar.id, p_motivo: motivo.trim() })
-    setReversando(false)
-    if (error) { showToast(`No se pudo reversar: ${error.message}`, 'error'); return }
-    showToast('Cobro reversado', 'success')
-    setReversar(null); setMotivo('')
+  const onPagoChanged = (msg: string) => {
+    showToast(msg, 'success')
     if (historial) abrirHistorial(historial)
     load()
   }
@@ -605,13 +597,10 @@ function VentasOgemiPage() {
                         <td className="table-cell text-gray-500">{p.anticipo_id ? <span className="badge bg-amber-100 text-amber-700">Anticipo</span> : p.banco_cuentas?.nombre}</td>
                         <td className="table-cell text-right font-semibold">{formatCurrency(p.monto)}</td>
                         <td className="table-cell">
-                          {rev ? (
-                            <span className="text-xs text-red-500" title={rev.motivo}>Reversado {formatDate(rev.fecha)}</span>
-                          ) : puedeBorrar ? (
-                            <button onClick={() => { setReversar(p); setMotivo('') }} className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700">
-                              <RefreshCw size={12} /> Reversar
-                            </button>
-                          ) : null}
+                          <div className="flex items-center gap-2">
+                            {rev && <span className="text-xs text-red-500" title={rev.motivo}>Reversado {formatDate(rev.fecha)}</span>}
+                            <PagoAcciones pago={p} modulo="ventas_ogemi" cuentas={cuentas} reversado={!!rev} onChanged={onPagoChanged} />
+                          </div>
                         </td>
                       </tr>
                     )
@@ -620,23 +609,6 @@ function VentasOgemiPage() {
               </table>
             )}
             <div className="flex justify-end"><button className="btn-secondary" onClick={() => setHistorial(null)}>Cerrar</button></div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal reverso */}
-      {reversar && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={() => setReversar(null)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 space-y-3" onClick={e => e.stopPropagation()}>
-            <h3 className="font-semibold text-gray-900">Reversar cobro de {formatCurrency(reversar.monto)}</h3>
-            <p className="text-sm text-gray-500">{reversar.anticipo_id
-              ? 'Se devolverá el monto al saldo del anticipo (sin movimiento en banco) y la venta volverá a pendiente.'
-              : 'Se registrará un egreso en banco por el mismo monto y la venta volverá a pendiente.'}</p>
-            <div><label className="label">Motivo</label><input className="input" value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Mínimo 3 caracteres" /></div>
-            <div className="flex gap-2">
-              <button className="btn-primary bg-red-600 hover:bg-red-700" onClick={confirmarReverso} disabled={reversando || motivo.trim().length < 3}>{reversando ? 'Reversando...' : 'Reversar'}</button>
-              <button className="btn-secondary" onClick={() => setReversar(null)}>Cancelar</button>
-            </div>
           </div>
         </div>
       )}

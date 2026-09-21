@@ -21,6 +21,7 @@ import { useAuth } from '@/context/AuthContext'
 import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 import QrScanner from '@/components/QrScanner'
 import { withPagePermission } from '@/components/PermissionGuard'
+import PagoAcciones from '@/components/PagoAcciones'
 
 type Tab = 'listado' | 'vencidas'
 type EstadoFilter = 'todos' | 'pendiente' | 'vencida' | 'pagada'
@@ -75,9 +76,6 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
   const [pagoReversados, setPagoReversados] = useState<Set<string>>(new Set())
 
   // Editar cobro / borrar (solo admin)
-  const [cobroEdit, setCobroEdit] = useState<any | null>(null)
-  const [cobroForm, setCobroForm] = useState({ monto: '', fecha: '', cuenta_id: '', motivo: '' })
-  const [savingCobro, setSavingCobro] = useState(false)
 
   // Modal de detalle (ver compra)
   const [detalle, setDetalle] = useState<Compra | null>(null)
@@ -259,7 +257,7 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
     const [{ data: pagosData }, { data: reversos }] = await Promise.all([
       supabase
         .from('pagos')
-        .select('id, fecha, monto, referencia, credito_compra_id, banco_cuentas(nombre, banco, numero_cuenta)')
+        .select('id, fecha, monto, referencia, cuenta_id, lote_id, credito_compra_id, banco_cuentas(nombre, banco, numero_cuenta)')
         .eq('compra_id', c.id)
         .order('fecha', { ascending: true }),
       supabase.from('pago_reversos').select('pago_id').eq('compra_id', c.id),
@@ -277,28 +275,12 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
     load(); loadVencidas()
   }
 
-  const openEditCobro = (p: any) => {
-    setCobroEdit(p)
-    setCobroForm({ monto: String(p.monto), fecha: p.fecha, cuenta_id: p.cuenta_id || '', motivo: '' })
-  }
-
-  const handleEditCobro = async () => {
-    if (!cobroEdit) return
-    const monto = parseFloat(cobroForm.monto) || 0
-    if (monto <= 0 || !cobroForm.cuenta_id) return
-    if (cobroForm.motivo.trim().length < 3) { showToast('Indica un motivo (mín. 3 caracteres).', 'error'); return }
-    setSavingCobro(true)
-    const { error } = await supabase.rpc('editar_cobro_compra', {
-      p_pago_id: cobroEdit.id, p_monto: monto, p_fecha: cobroForm.fecha,
-      p_cuenta_id: cobroForm.cuenta_id, p_referencia: cobroEdit.referencia || null,
-      p_motivo: cobroForm.motivo.trim(),
-    })
-    setSavingCobro(false)
-    if (error) { showToast(`No se pudo editar el pago: ${error.message}`, 'error'); return }
-    setCobroEdit(null)
+  // Tras editar/borrar un pago (PagoAcciones): cerrar modales y recargar saldos/estado
+  const onPagoChanged = (msg: string) => {
+    showToast(msg, 'success')
     setShowPagoModal(false)
     setSelectedCompra(null)
-    showToast('Pago actualizado', 'success')
+    setDetalle(null)
     load(); loadVencidas()
   }
 
@@ -1017,15 +999,8 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
                         </span>
                         <div className="flex items-center gap-2">
                           <span className={`font-medium ${reversado ? 'text-gray-400 line-through' : esNCPago ? 'text-purple-700' : 'text-green-700'}`}>{formatCurrency(p.monto)}</span>
-                          {reversado ? (
-                            <span className="badge bg-gray-200 text-gray-500 text-xs">Reversado</span>
-                          ) : isAdmin && !esNCPago ? (
-                            <button onClick={() => openEditCobro(p)}
-                              className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-800 font-medium"
-                              title="Editar este pago (admin)">
-                              <Pencil size={13} /> Editar
-                            </button>
-                          ) : null}
+                          {reversado && <span className="badge bg-gray-200 text-gray-500 text-xs">Reversado</span>}
+                          <PagoAcciones pago={p} modulo="compras" etiqueta="pago" cuentas={cuentas} reversado={reversado} onChanged={onPagoChanged} />
                         </div>
                       </div>
                     )
@@ -1376,7 +1351,8 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
               {loadingDetalle ? (
                 <p className="text-sm text-gray-400 py-8 text-center">Cargando...</p>
               ) : (
-                <CompraDetalle compra={detalle} pagos={detallePagos} reversados={detalleReversados} />
+                <CompraDetalle compra={detalle} pagos={detallePagos} reversados={detalleReversados}
+                  acciones={(p, rev) => <PagoAcciones pago={p} modulo="compras" etiqueta="pago" cuentas={cuentas} reversado={rev} onChanged={onPagoChanged} />} />
               )}
             </div>
           </div>
@@ -1392,39 +1368,6 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
         }
       `}</style>
 
-      {/* Modal: Editar pago de compra (admin) */}
-      {cobroEdit && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 print:hidden">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold mb-1">Editar pago</h2>
-            <p className="text-sm text-gray-500 mb-4">Se reversará el pago actual y se registrará uno nuevo.</p>
-            <div className="space-y-3">
-              <div><label className="label">Monto *</label>
-                <input type="number" step="0.01" className="input" value={cobroForm.monto}
-                  onChange={e => setCobroForm(f => ({ ...f, monto: e.target.value }))} /></div>
-              <div><label className="label">Fecha *</label>
-                <input type="date" className="input" value={cobroForm.fecha}
-                  onChange={e => setCobroForm(f => ({ ...f, fecha: e.target.value }))} /></div>
-              <div><label className="label">Cuenta de banco *</label>
-                <select className="input" value={cobroForm.cuenta_id}
-                  onChange={e => setCobroForm(f => ({ ...f, cuenta_id: e.target.value }))}>
-                  <option value="">Seleccionar cuenta...</option>
-                  {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.banco}</option>)}
-                </select></div>
-              <div><label className="label">Motivo de la edición *</label>
-                <input className="input" placeholder="Ej: monto corregido" value={cobroForm.motivo}
-                  onChange={e => setCobroForm(f => ({ ...f, motivo: e.target.value }))} /></div>
-            </div>
-            <div className="flex gap-3 mt-5">
-              <button className="btn-secondary flex-1" onClick={() => setCobroEdit(null)}>Cancelar</button>
-              <button className="btn-primary flex-1" onClick={handleEditCobro}
-                disabled={savingCobro || !(parseFloat(cobroForm.monto) > 0) || !cobroForm.cuenta_id || cobroForm.motivo.trim().length < 3}>
-                {savingCobro ? 'Guardando...' : 'Guardar cambios'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </AppLayout>
   )
 }
@@ -1448,8 +1391,8 @@ function CmpFila({ label, valor, bold = false, className = '' }: { label: string
 }
 
 function CompraDetalle({
-  compra, pagos, reversados, fullPage = false,
-}: { compra: Compra; pagos: any[]; reversados: Set<string>; fullPage?: boolean }) {
+  compra, pagos, reversados, fullPage = false, acciones,
+}: { compra: Compra; pagos: any[]; reversados: Set<string>; fullPage?: boolean; acciones?: (p: any, reversado: boolean) => React.ReactNode }) {
   const exact = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as CSSProperties
   const montoPagado = compra.monto_pagado || 0
   const saldo = compra.total - montoPagado
@@ -1512,6 +1455,7 @@ function CompraDetalle({
                   <th className="px-3 py-2">Banco / Cuenta</th>
                   <th className="px-3 py-2">Referencia</th>
                   <th className="px-3 py-2 text-right">Monto</th>
+                  {acciones && <th className="px-3 py-2 print:hidden"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -1527,6 +1471,7 @@ function CompraDetalle({
                       </td>
                       <td className="px-3 py-2">{p.referencia || '—'}</td>
                       <td className="px-3 py-2 text-right font-medium">{formatCurrency(p.monto)}</td>
+                      {acciones && <td className="px-3 py-2 text-right print:hidden" style={{ textDecoration: 'none' }}>{acciones(p, rev)}</td>}
                     </tr>
                   )
                 })}

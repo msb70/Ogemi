@@ -17,6 +17,7 @@ import { useAuth } from '@/context/AuthContext'
 import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
 import { TIPOS_VENTA } from '@/lib/tiposVenta'
+import PagoAcciones from '@/components/PagoAcciones'
 
 type EstadoFilter = 'todos' | 'pendiente' | 'pagada' | 'falta_retencion'
 
@@ -121,17 +122,11 @@ function FacturasPage() {
   const [loadingDetalle, setLoadingDetalle] = useState(false)
 
   // Reverso de pago
-  const [pagoAReversar, setPagoAReversar] = useState<any | null>(null)
-  const [motivoReverso, setMotivoReverso] = useState('')
-  const [reversando, setReversando] = useState(false)
 
   // Editar monto / borrar / editar cobro (solo admin)
   const [editFactura, setEditFactura] = useState<Factura | null>(null)
   const [editForm, setEditForm] = useState({ monto: '', itbms: '', fecha: '' })
   const [savingEdit, setSavingEdit] = useState(false)
-  const [cobroEdit, setCobroEdit] = useState<any | null>(null)
-  const [cobroForm, setCobroForm] = useState({ monto: '', fecha: '', cuenta_id: '', motivo: '' })
-  const [savingCobro, setSavingCobro] = useState(false)
 
   // Modal de retención
   const [retFactura, setRetFactura] = useState<Factura | null>(null)
@@ -349,7 +344,7 @@ function FacturasPage() {
     const [{ data: pagosData }, { data: reversos }] = await Promise.all([
       supabase
         .from('pagos')
-        .select('id, fecha, monto, referencia, numero_recibo, anticipo_id, nota_credito_id, credito_factura_id, banco_cuentas(nombre, banco, numero_cuenta), anticipos(numero_deposito)')
+        .select('id, fecha, monto, referencia, numero_recibo, cuenta_id, lote_id, anticipo_id, nota_credito_id, credito_factura_id, banco_cuentas(nombre, banco, numero_cuenta), anticipos(numero_deposito)')
         .eq('factura_id', f.id)
         .order('fecha', { ascending: true }),
       supabase.from('pago_reversos').select('pago_id').eq('factura_id', f.id),
@@ -359,28 +354,12 @@ function FacturasPage() {
     setLoadingDetalle(false)
   }
 
-  const handleReversarPago = async () => {
-    if (!pagoAReversar) return
-    if (motivoReverso.trim().length < 3) {
-      showToast('El motivo debe tener al menos 3 caracteres', 'error')
-      return
-    }
-    setReversando(true)
-    const { error } = await supabase.rpc('reversar_pago', {
-      p_pago_id: pagoAReversar.id,
-      p_motivo: motivoReverso.trim(),
-    })
-    setReversando(false)
-    if (error) {
-      showToast(`No se pudo reversar el pago: ${error.message}`, 'error')
-      return
-    }
-    showToast('Pago reversado correctamente', 'success')
-    // Cerrar todo y recargar: la lista refleja el saldo/estado recalculado por la función
-    setPagoAReversar(null)
-    setMotivoReverso('')
+  // Tras editar/borrar un cobro (PagoAcciones): cerrar modales y recargar saldos/estado
+  const onPagoChanged = (msg: string) => {
+    showToast(msg, 'success')
     setShowModal(false)
     setSelectedFactura(null)
+    setDetalle(null)
     loadData()
     loadResumen()
   }
@@ -423,31 +402,6 @@ function FacturasPage() {
     const { error } = await supabase.rpc('eliminar_factura', { p_id: f.id })
     if (error) { showToast(`No se pudo borrar: ${error.message}`, 'error'); return }
     showToast('Factura borrada', 'success')
-    loadData(); loadResumen()
-  }
-
-  const openEditCobro = (p: any) => {
-    setCobroEdit(p)
-    setCobroForm({ monto: String(p.monto), fecha: p.fecha, cuenta_id: p.cuenta_id || '', motivo: '' })
-  }
-
-  const handleEditCobro = async () => {
-    if (!cobroEdit) return
-    const monto = parseFloat(cobroForm.monto) || 0
-    if (monto <= 0 || !cobroForm.cuenta_id) return
-    if (cobroForm.motivo.trim().length < 3) { showToast('Indica un motivo (mín. 3 caracteres).', 'error'); return }
-    setSavingCobro(true)
-    const { error } = await supabase.rpc('editar_cobro_factura', {
-      p_pago_id: cobroEdit.id, p_monto: monto, p_fecha: cobroForm.fecha,
-      p_cuenta_id: cobroForm.cuenta_id, p_referencia: cobroEdit.referencia || null,
-      p_motivo: cobroForm.motivo.trim(),
-    })
-    setSavingCobro(false)
-    if (error) { showToast(`No se pudo editar el cobro: ${error.message}`, 'error'); return }
-    setCobroEdit(null)
-    setShowModal(false)
-    setSelectedFactura(null)
-    showToast('Cobro actualizado', 'success')
     loadData(); loadResumen()
   }
 
@@ -949,30 +903,8 @@ function FacturasPage() {
                           <span className={`font-medium ${reversado ? 'text-gray-400 line-through' : 'text-green-700'}`}>
                             {formatCurrency(p.monto)}
                           </span>
-                          {reversado ? (
-                            <span className="badge bg-gray-200 text-gray-500 text-xs">Reversado</span>
-                          ) : (
-                            <>
-                              {isAdmin && !p.anticipo_id && !p.nota_credito_id && !p.credito_factura_id && (
-                                <button
-                                  onClick={() => openEditCobro(p)}
-                                  className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-800 font-medium"
-                                  title="Editar este cobro (admin)"
-                                >
-                                  <Pencil size={13} /> Editar
-                                </button>
-                              )}
-                              <PermissionGuard modulo="facturas" accion="borrar" silent>
-                                <button
-                                  onClick={() => { setPagoAReversar(p); setMotivoReverso('') }}
-                                  className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium"
-                                  title="Reversar este pago"
-                                >
-                                  <RefreshCw size={13} /> Reversar
-                                </button>
-                              </PermissionGuard>
-                            </>
-                          )}
+                          {reversado && <span className="badge bg-gray-200 text-gray-500 text-xs">Reversado</span>}
+                          <PagoAcciones pago={p} modulo="facturas" cuentas={cuentas} reversado={reversado} onChanged={onPagoChanged} />
                         </div>
                       </div>
                     )
@@ -1146,55 +1078,6 @@ function FacturasPage() {
         </div>
       )}
 
-      {/* Modal: Reversar pago */}
-      {pagoAReversar && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold mb-1 flex items-center gap-2">
-              <RefreshCw size={18} className="text-red-500" /> Reversar pago
-            </h2>
-            <p className="text-sm text-gray-500 mb-4">
-              {formatDate(pagoAReversar.fecha)} · {pagoAReversar.banco_cuentas?.nombre} ·{' '}
-              <span className="font-semibold text-gray-700">{formatCurrency(pagoAReversar.monto)}</span>
-            </p>
-
-            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4 text-xs text-amber-700">
-              El pago no se borra: se registra un reverso contable y se genera el contra-movimiento en banco.
-              El saldo de la factura se recalcula automáticamente.
-            </div>
-
-            <div className="mb-4">
-              <label className="label">Motivo del reverso <span className="text-red-500">*</span></label>
-              <textarea
-                className="input"
-                rows={3}
-                placeholder="Ej: cheque devuelto, pago mal aplicado..."
-                value={motivoReverso}
-                onChange={e => setMotivoReverso(e.target.value)}
-              />
-              <p className="text-xs text-gray-400 mt-1">Mínimo 3 caracteres.</p>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                className="btn-secondary flex-1"
-                onClick={() => { setPagoAReversar(null); setMotivoReverso('') }}
-                disabled={reversando}
-              >
-                Cancelar
-              </button>
-              <button
-                className="btn-primary flex-1 !bg-red-600 hover:!bg-red-700"
-                onClick={handleReversarPago}
-                disabled={reversando || motivoReverso.trim().length < 3}
-              >
-                {reversando ? 'Reversando...' : 'Confirmar reverso'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Contenedor de impresión del detalle (solo visible al imprimir).
           Portal directo a <body>: permite ocultar el resto de la app con
           display:none al imprimir (visibility:hidden dejaba el espacio de la
@@ -1225,7 +1108,8 @@ function FacturasPage() {
               {loadingDetalle ? (
                 <p className="text-sm text-gray-400 py-8 text-center">Cargando...</p>
               ) : (
-                <FacturaDetalle factura={detalle} pagos={detallePagos} reversados={detalleReversados} />
+                <FacturaDetalle factura={detalle} pagos={detallePagos} reversados={detalleReversados}
+                  acciones={(p, rev) => <PagoAcciones pago={p} modulo="facturas" cuentas={cuentas} reversado={rev} onChanged={onPagoChanged} />} />
               )}
             </div>
           </div>
@@ -1262,40 +1146,6 @@ function FacturasPage() {
               <button className="btn-primary flex-1" onClick={handleEditFactura}
                 disabled={savingEdit || !(parseFloat(editForm.monto) > 0)}>
                 {savingEdit ? 'Guardando...' : 'Guardar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Editar cobro (admin) */}
-      {cobroEdit && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 print:hidden">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold mb-1">Editar cobro</h2>
-            <p className="text-sm text-gray-500 mb-4">Se reversará el cobro actual y se registrará uno nuevo.</p>
-            <div className="space-y-3">
-              <div><label className="label">Monto *</label>
-                <input type="number" step="0.01" className="input" value={cobroForm.monto}
-                  onChange={e => setCobroForm(f => ({ ...f, monto: e.target.value }))} /></div>
-              <div><label className="label">Fecha *</label>
-                <input type="date" className="input" value={cobroForm.fecha}
-                  onChange={e => setCobroForm(f => ({ ...f, fecha: e.target.value }))} /></div>
-              <div><label className="label">Cuenta de banco *</label>
-                <select className="input" value={cobroForm.cuenta_id}
-                  onChange={e => setCobroForm(f => ({ ...f, cuenta_id: e.target.value }))}>
-                  <option value="">Seleccionar cuenta...</option>
-                  {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                </select></div>
-              <div><label className="label">Motivo de la edición *</label>
-                <input className="input" placeholder="Ej: monto corregido" value={cobroForm.motivo}
-                  onChange={e => setCobroForm(f => ({ ...f, motivo: e.target.value }))} /></div>
-            </div>
-            <div className="flex gap-3 mt-5">
-              <button className="btn-secondary flex-1" onClick={() => setCobroEdit(null)}>Cancelar</button>
-              <button className="btn-primary flex-1" onClick={handleEditCobro}
-                disabled={savingCobro || !(parseFloat(cobroForm.monto) > 0) || !cobroForm.cuenta_id || cobroForm.motivo.trim().length < 3}>
-                {savingCobro ? 'Guardando...' : 'Guardar cambios'}
               </button>
             </div>
           </div>
@@ -1377,8 +1227,8 @@ function FacturasPage() {
 }
 
 function FacturaDetalle({
-  factura, pagos, reversados, fullPage = false,
-}: { factura: Factura; pagos: any[]; reversados: Set<string>; fullPage?: boolean }) {
+  factura, pagos, reversados, fullPage = false, acciones,
+}: { factura: Factura; pagos: any[]; reversados: Set<string>; fullPage?: boolean; acciones?: (p: any, reversado: boolean) => React.ReactNode }) {
   const exact = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as CSSProperties
   const montoPagado = factura.monto_pagado || 0
   const retMonto = factura.retencion_monto || 0
@@ -1450,6 +1300,7 @@ function FacturaDetalle({
                   <th className="px-3 py-2">Banco / Cuenta</th>
                   <th className="px-3 py-2">Referencia</th>
                   <th className="px-3 py-2 text-right">Monto</th>
+                  {acciones && <th className="px-3 py-2 print:hidden"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -1469,6 +1320,7 @@ function FacturaDetalle({
                       </td>
                       <td className="px-3 py-2">{p.referencia || '—'}</td>
                       <td className="px-3 py-2 text-right font-medium">{formatCurrency(p.monto)}</td>
+                      {acciones && <td className="px-3 py-2 text-right print:hidden" style={{ textDecoration: 'none' }}>{acciones(p, rev)}</td>}
                     </tr>
                   )
                 })}
