@@ -91,6 +91,11 @@ export default function VencimientoSemanalPresupuestos({
       .map(([nombre, rows]) => ({
         nombre,
         rows,
+        selCount: rows.filter((r: any) => presPagaraSet.has(r.id)).length,
+        selTotal: rows.filter((r: any) => presPagaraSet.has(r.id)).reduce((s: number, r: any) => s + (r.saldo ?? r.total ?? 0), 0),
+        selWeekTotals: presWeekDateObjs.map((_: any, i: number) =>
+          rows.filter((r: any) => r.fridayIdx === i && presPagaraSet.has(r.id)).reduce((s: number, r: any) => s + (r.saldo ?? r.total ?? 0), 0)
+        ),
         weekTotals: presWeekDateObjs.map((_, i) =>
           rows.filter((r: any) => r.fridayIdx === i).reduce((s: number, r: any) => s + (r.saldo ?? r.total ?? 0), 0)
         ),
@@ -127,7 +132,7 @@ export default function VencimientoSemanalPresupuestos({
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-sm font-semibold text-gray-700">Vencimientos — próximas 4 semanas</p>
-          <p className="text-xs text-gray-400 mt-0.5">{vencPresupuestos.rows.length} presupuestos pendientes</p>
+          <p className="text-xs text-gray-400 mt-0.5"><span className="vs-pantalla">{vencPresupuestos.rows.length} presupuestos pendientes</span><span className="hidden vs-print">{presRows.filter((r: any) => presPagaraSet.has(r.id)).length} presupuestos seleccionados ({'Pagarán'})</span></p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
@@ -150,6 +155,7 @@ export default function VencimientoSemanalPresupuestos({
         {presWeekDateObjs.map((_, i) => {
           const c = WEEK_COLORS[i]
           const cnt = vencPresupuestos.rows.filter((r: any) => r.fridayIdx === i).length
+          const cntSel = vencPresupuestos.rows.filter((r: any) => r.fridayIdx === i && presPagaraSet.has(r.id)).length
           const noPaga = presTotNoPaga[i]
           return (
             <div key={i} className={`card p-4 border-t-4 ${c.bg} ${c.border}`}>
@@ -163,18 +169,19 @@ export default function VencimientoSemanalPresupuestos({
               )}
               <p className={`text-lg font-bold ${c.text}`}>{formatMonto(presTotProbable[i])}</p>
               {noPaga > 0 && (
-                <p className="text-[11px] text-red-500 mt-0.5">
+                <p className="text-[11px] text-red-500 mt-0.5 vs-nosel">
                   Sin marcar: −{formatMonto(noPaga)} · bruto {formatMonto(vencPresupuestos.totals[i])}
                 </p>
               )}
-              <p className="text-xs text-gray-400 mt-1">{cnt} {cnt === 1 ? 'presupuesto' : 'presupuestos'}</p>
+              <p className="text-xs text-gray-400 mt-1 vs-pantalla">{cnt} {cnt === 1 ? 'presupuesto' : 'presupuestos'}</p>
+              <p className="hidden vs-print text-xs text-gray-400 mt-1">{cntSel} {cntSel === 1 ? 'presupuesto' : 'presupuestos'}</p>
             </div>
           )
         })}
       </div>
 
       <div className="card p-4 bg-brand-50 border border-brand-200 space-y-1.5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between vs-nosel">
           <span className="text-sm font-semibold text-brand-700">Total general vencido</span>
           <span className="text-2xl font-bold text-brand-900">{formatMonto(vencPresupuestos.grandTotal)}</span>
         </div>
@@ -182,7 +189,7 @@ export default function VencimientoSemanalPresupuestos({
           <span className="text-xs text-green-600 font-medium">↳ Pagarán (marcadas)</span>
           <span className="text-sm font-bold text-green-700">{formatMonto(presGrandProbable)}</span>
         </div>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between vs-nosel">
           <span className="text-xs text-red-500 font-medium">↳ Sin marcar (no pagarán)</span>
           <span className="text-sm font-bold text-red-600">{formatMonto(presGrandNoPaga)}</span>
         </div>
@@ -219,16 +226,17 @@ export default function VencimientoSemanalPresupuestos({
             </thead>
             <tbody className="divide-y divide-gray-100">
               {presGroups.flatMap((g) => [
-                <tr key={`h-${g.nombre}`} className="bg-gray-100 border-t-2 border-gray-300">
+                <tr key={`h-${g.nombre}`} className={`bg-gray-100 border-t-2 border-gray-300 ${g.selCount === 0 ? 'vs-nosel' : ''}`}>
                   <td colSpan={5 + presWeekDateObjs.length + 1} className="table-cell sticky left-0 print:static bg-gray-100 z-10 font-bold text-gray-800 text-sm">
                     {g.nombre}
-                    <span className="text-xs font-normal text-gray-400"> · {g.rows.length} {g.rows.length === 1 ? 'presupuesto' : 'presupuestos'} · {formatMonto(g.total)}</span>
+                    <span className="text-xs font-normal text-gray-400 vs-pantalla"> · {g.rows.length} {g.rows.length === 1 ? 'presupuesto' : 'presupuestos'} · {formatMonto(g.total)}</span>
+                    <span className="hidden vs-print text-xs font-normal text-gray-400"> · {g.selCount} {g.selCount === 1 ? 'presupuesto' : 'presupuestos'} · {formatMonto(g.selTotal)}</span>
                   </td>
                 </tr>,
                 ...g.rows.map((p: any) => {
                   const isPagara = presPagaraSet.has(p.id)
                   return (
-                    <tr key={p.id} className={`hover:bg-gray-50 transition-colors ${isPagara ? 'bg-green-50/50' : ''}`}>
+                    <tr key={p.id} className={`hover:bg-gray-50 transition-colors ${isPagara ? 'bg-green-50/50' : 'vs-nosel'}`}>
                       <td className={`table-cell sticky left-0 z-10 max-w-[220px] print:static vsc-prov ${isPagara ? 'bg-green-50' : 'bg-white'}`}>
                         <span className="truncate block text-sm print:hidden">{p.clientes?.nombre || '—'}</span>
                       </td>
@@ -264,17 +272,25 @@ export default function VencimientoSemanalPresupuestos({
                     </tr>
                   )
                 }),
-                <tr key={`s-${g.nombre}`} className="border-t border-gray-200 bg-gray-50 text-sm font-semibold">
+                <tr key={`s-${g.nombre}`} className={`border-t border-gray-200 bg-gray-50 text-sm font-semibold ${g.selCount === 0 ? 'vs-nosel' : ''}`}>
                   <td colSpan={5} className="table-cell text-right sticky left-0 bg-gray-50 z-10 text-gray-500">Subtotal {g.nombre}</td>
                   {g.weekTotals.map((t, i) => (
-                    <td key={i} className="table-cell text-right text-gray-700">{t > 0 ? formatMonto(t) : '—'}</td>
+                    <td key={i} className="table-cell text-right text-gray-700">
+                      <span className="vs-pantalla">{t > 0 ? formatMonto(t) : '—'}</span>
+                      <span className="hidden vs-print">{g.selWeekTotals[i] > 0 ? formatMonto(g.selWeekTotals[i]) : '—'}</span>
+                    </td>
                   ))}
                   <td className="table-cell" />
                 </tr>,
               ])}
             </tbody>
+            {!presRows.some((r: any) => presPagaraSet.has(r.id)) && (
+              <tbody className="hidden vs-print">
+                <tr><td colSpan={5 + presWeekDateObjs.length + 1} className="table-cell text-center text-gray-400">Sin presupuestos seleccionados</td></tr>
+              </tbody>
+            )}
             <tfoot>
-              <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">
+              <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold vs-nosel">
                 <td colSpan={5} className="table-cell text-right sticky left-0 bg-gray-100 z-10 text-sm text-gray-600">TOTAL VENCIDO</td>
                 {vencPresupuestos.totals.map((t, i) => (
                   <td key={i} className="table-cell text-right text-brand-800">{t > 0 ? formatMonto(t) : '—'}</td>
@@ -282,13 +298,13 @@ export default function VencimientoSemanalPresupuestos({
                 <td className="table-cell" />
               </tr>
               <tr className="bg-green-50 text-xs font-semibold">
-                <td colSpan={5} className="table-cell text-right sticky left-0 bg-green-50 z-10 text-green-700">↳ Pagarán (marcadas)</td>
+                <td colSpan={5} className="table-cell text-right sticky left-0 bg-green-50 z-10 text-green-700"><span className="vs-pantalla">↳ Pagarán (marcadas)</span><span className="hidden vs-print">TOTAL SELECCIONADO</span></td>
                 {presTotProbable.map((t, i) => (
                   <td key={i} className="table-cell text-right text-green-700">{t > 0 ? formatMonto(t) : '—'}</td>
                 ))}
                 <td className="table-cell" />
               </tr>
-              <tr className="bg-red-50 text-xs font-semibold">
+              <tr className="bg-red-50 text-xs font-semibold vs-nosel">
                 <td colSpan={5} className="table-cell text-right sticky left-0 bg-red-50 z-10 text-red-600">↳ Sin marcar</td>
                 {presTotNoPaga.map((t, i) => (
                   <td key={i} className="table-cell text-right text-red-600">{t > 0 ? formatMonto(t) : '—'}</td>
@@ -303,6 +319,12 @@ export default function VencimientoSemanalPresupuestos({
       {/* PDF: la columna del nombre se colapsa (ya va en la fila de agrupamiento) */}
       <style>{`
         @media print {
+          /* PDF del Flujo de Pago: solo lo seleccionado (Pagará/Pagarán). En pantalla no cambia nada. */
+          #flujo-print .vs-nosel, #flujo-print .vs-pantalla { display: none !important; }
+          #flujo-print tr.vs-print { display: table-row !important; }
+          #flujo-print tbody.vs-print { display: table-row-group !important; }
+          #flujo-print span.vs-print { display: inline !important; }
+          #flujo-print p.vs-print { display: block !important; }
           #flujo-print .vsc-prov, #reporte-print .vsc-prov { padding: 0 !important; width: 0 !important; max-width: 0 !important; }
         }
       `}</style>

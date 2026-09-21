@@ -132,6 +132,13 @@ export default function VencimientoSemanalCompras({
     return matchSearch && matchSem
   })
 
+  // Monto proyectado a pagar de una fila marcada: el parcial si existe, si no el saldo.
+  const montoPagara = (r: any) => {
+    const saldo = r.saldo ?? r.total ?? 0
+    const m = pagaraMontos?.[r.id]
+    return m != null ? Math.min(m, saldo) : saldo
+  }
+
   // Agrupado por proveedor para el vencimiento semanal (con subtotales por semana)
   const compGroups = (() => {
     const m = new Map<string, any[]>()
@@ -145,6 +152,11 @@ export default function VencimientoSemanalCompras({
       .map(([nombre, rows]) => ({
         nombre,
         rows,
+        selCount: rows.filter((r: any) => pagaraSet.has(r.id)).length,
+        selTotal: rows.filter((r: any) => pagaraSet.has(r.id)).reduce((s: number, r: any) => s + montoPagara(r), 0),
+        selWeekTotals: compWeekDateObjs.map((_: any, i: number) =>
+          rows.filter((r: any) => r.fridayIdx === i && pagaraSet.has(r.id)).reduce((s: number, r: any) => s + montoPagara(r), 0)
+        ),
         weekTotals: compWeekDateObjs.map((_, i) =>
           rows.filter((r: any) => r.fridayIdx === i).reduce((s: number, r: any) => s + (r.saldo ?? r.total ?? 0), 0)
         ),
@@ -165,13 +177,6 @@ export default function VencimientoSemanalCompras({
     })
   }
 
-  // Monto proyectado a pagar de una fila marcada: el parcial si existe, si no el saldo.
-  const montoPagara = (r: any) => {
-    const saldo = r.saldo ?? r.total ?? 0
-    const m = pagaraMontos?.[r.id]
-    return m != null ? Math.min(m, saldo) : saldo
-  }
-
   // Check invertido: marcada = Pagará. Lo no marcado se considera "No pagará".
   // Los totales "Pagará" usan el monto proyectado (parcial si se editó).
   const compTotPagara = compWeekDateObjs.map((_, i) =>
@@ -187,7 +192,7 @@ export default function VencimientoSemanalCompras({
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-sm font-semibold text-gray-700">Vencimientos — próximas 4 semanas</p>
-          <p className="text-xs text-gray-400 mt-0.5">{vencCompras.rows.length} compras pendientes</p>
+          <p className="text-xs text-gray-400 mt-0.5"><span className="vs-pantalla">{vencCompras.rows.length} compras pendientes</span><span className="hidden vs-print">{compRows.filter((r: any) => pagaraSet.has(r.id)).length} compras seleccionadas ({'Pagará'})</span></p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
@@ -210,6 +215,7 @@ export default function VencimientoSemanalCompras({
         {compWeekDateObjs.map((_, i) => {
           const c = WEEK_COLORS[i]
           const cnt = vencCompras.rows.filter((r: any) => r.fridayIdx === i).length
+          const cntSel = vencCompras.rows.filter((r: any) => r.fridayIdx === i && pagaraSet.has(r.id)).length
           const pagara = compTotPagara[i]
           return (
             <div key={i} className={`card p-4 border-t-4 ${c.bg} ${c.border}`}>
@@ -221,20 +227,22 @@ export default function VencimientoSemanalCompras({
                   onChange={e => { const nd = [...compWeekDates]; nd[i] = e.target.value; setCompWeekDates(nd) }}
                   className="text-xs text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 mt-0.5 mb-2 w-full bg-white focus:outline-none focus:border-gray-400" />
               )}
-              <p className={`text-lg font-bold ${c.text}`}>{formatMonto(vencCompras.totals[i])}</p>
+              <p className={`text-lg font-bold vs-pantalla ${c.text}`}>{formatMonto(vencCompras.totals[i])}</p>
+              <p className={`hidden vs-print text-lg font-bold ${c.text}`}>{formatMonto(pagara)}</p>
               {pagara > 0 && (
-                <p className="text-[11px] text-green-600 mt-0.5">
+                <p className="text-[11px] text-green-600 mt-0.5 vs-pantalla">
                   Pagará: {formatMonto(pagara)}
                 </p>
               )}
-              <p className="text-xs text-gray-400 mt-1">{cnt} {cnt === 1 ? 'compra' : 'compras'}</p>
+              <p className="text-xs text-gray-400 mt-1 vs-pantalla">{cnt} {cnt === 1 ? 'compra' : 'compras'}</p>
+              <p className="hidden vs-print text-xs text-gray-400 mt-1">{cntSel} {cntSel === 1 ? 'compra' : 'compras'}</p>
             </div>
           )
         })}
       </div>
 
       <div className="card p-4 bg-brand-50 border border-brand-200 space-y-1.5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between vs-nosel">
           <span className="text-sm font-semibold text-brand-700">Total general vencido</span>
           <span className="text-2xl font-bold text-brand-900">{formatMonto(vencCompras.grandTotal)}</span>
         </div>
@@ -242,7 +250,7 @@ export default function VencimientoSemanalCompras({
           <span className="text-xs text-green-600 font-medium">↳ Pagará (marcadas)</span>
           <span className="text-sm font-bold text-green-700">{formatMonto(compGrandPagara)}</span>
         </div>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between vs-nosel">
           <span className="text-xs text-red-500 font-medium">↳ No pagará (sin marcar)</span>
           <span className="text-sm font-bold text-red-600">{formatMonto(compGrandNoPaga)}</span>
         </div>
@@ -280,16 +288,17 @@ export default function VencimientoSemanalCompras({
             </thead>
             <tbody className="divide-y divide-gray-100">
               {compGroups.flatMap((g) => [
-                <tr key={`h-${g.nombre}`} className="bg-gray-100 border-t-2 border-gray-300">
+                <tr key={`h-${g.nombre}`} className={`bg-gray-100 border-t-2 border-gray-300 ${g.selCount === 0 ? 'vs-nosel' : ''}`}>
                   <td colSpan={4 + compWeekDateObjs.length + 2} className="table-cell sticky left-0 print:static bg-gray-100 z-10 font-bold text-gray-800 text-sm">
                     {g.nombre}
-                    <span className="text-xs font-normal text-gray-400"> · {g.rows.length} {g.rows.length === 1 ? 'compra' : 'compras'} · {formatMonto(g.total)}</span>
+                    <span className="text-xs font-normal text-gray-400 vs-pantalla"> · {g.rows.length} {g.rows.length === 1 ? 'compra' : 'compras'} · {formatMonto(g.total)}</span>
+                    <span className="hidden vs-print text-xs font-normal text-gray-400"> · {g.selCount} {g.selCount === 1 ? 'compra' : 'compras'} · {formatMonto(g.selTotal)}</span>
                   </td>
                 </tr>,
                 ...g.rows.map((c: any) => {
                   const isPagara = pagaraSet.has(c.id)
                   return (
-                    <tr key={c.id} className={`hover:bg-gray-50 transition-colors ${isPagara ? 'bg-green-50/50' : ''}`}>
+                    <tr key={c.id} className={`hover:bg-gray-50 transition-colors ${isPagara ? 'bg-green-50/50' : 'vs-nosel'}`}>
                       <td className={`table-cell sticky left-0 z-10 max-w-[180px] print:static vsc-prov ${isPagara ? 'bg-green-50' : 'bg-white'}`}>
                         <span className="truncate block text-sm font-medium print:hidden">{c.proveedores?.nombre || '—'}</span>
                       </td>
@@ -358,17 +367,25 @@ export default function VencimientoSemanalCompras({
                     </tr>
                   )
                 }),
-                <tr key={`s-${g.nombre}`} className="border-t border-gray-200 bg-gray-50 text-sm font-semibold">
+                <tr key={`s-${g.nombre}`} className={`border-t border-gray-200 bg-gray-50 text-sm font-semibold ${g.selCount === 0 ? 'vs-nosel' : ''}`}>
                   <td colSpan={4} className="table-cell text-right sticky left-0 bg-gray-50 z-10 text-gray-500">Subtotal {g.nombre}</td>
                   {g.weekTotals.map((t, i) => (
-                    <td key={i} className="table-cell text-right text-gray-700">{t > 0 ? formatMonto(t) : '—'}</td>
+                    <td key={i} className="table-cell text-right text-gray-700">
+                      <span className="vs-pantalla">{t > 0 ? formatMonto(t) : '—'}</span>
+                      <span className="hidden vs-print">{g.selWeekTotals[i] > 0 ? formatMonto(g.selWeekTotals[i]) : '—'}</span>
+                    </td>
                   ))}
                   <td className="table-cell" colSpan={2} />
                 </tr>,
               ])}
             </tbody>
+            {!compRows.some((r: any) => pagaraSet.has(r.id)) && (
+              <tbody className="hidden vs-print">
+                <tr><td colSpan={4 + compWeekDateObjs.length + 2} className="table-cell text-center text-gray-400">Sin compras seleccionadas</td></tr>
+              </tbody>
+            )}
             <tfoot>
-              <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">
+              <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold vs-nosel">
                 <td colSpan={4} className="table-cell text-right sticky left-0 bg-gray-100 z-10 text-sm text-gray-600">TOTAL VENCIDO</td>
                 {vencCompras.totals.map((t, i) => (
                   <td key={i} className="table-cell text-right text-brand-800">{t > 0 ? formatMonto(t) : '—'}</td>
@@ -376,13 +393,13 @@ export default function VencimientoSemanalCompras({
                 <td className="table-cell" colSpan={2} />
               </tr>
               <tr className="bg-green-50 text-xs font-semibold">
-                <td colSpan={4} className="table-cell text-right sticky left-0 bg-green-50 z-10 text-green-700">↳ Pagará</td>
+                <td colSpan={4} className="table-cell text-right sticky left-0 bg-green-50 z-10 text-green-700"><span className="vs-pantalla">↳ Pagará</span><span className="hidden vs-print">TOTAL SELECCIONADO</span></td>
                 {compTotPagara.map((t, i) => (
                   <td key={i} className="table-cell text-right text-green-700">{t > 0 ? formatMonto(t) : '—'}</td>
                 ))}
                 <td className="table-cell" colSpan={2} />
               </tr>
-              <tr className="bg-red-50 text-xs font-semibold">
+              <tr className="bg-red-50 text-xs font-semibold vs-nosel">
                 <td colSpan={4} className="table-cell text-right sticky left-0 bg-red-50 z-10 text-red-600">↳ No pagará</td>
                 {compTotNoPaga.map((t, i) => (
                   <td key={i} className="table-cell text-right text-red-600">{t > 0 ? formatMonto(t) : '—'}</td>
@@ -397,6 +414,12 @@ export default function VencimientoSemanalCompras({
       {/* PDF: la columna Proveedor se colapsa (el nombre ya va en la fila de agrupamiento) */}
       <style>{`
         @media print {
+          /* PDF del Flujo de Pago: solo lo seleccionado (Pagará/Pagarán). En pantalla no cambia nada. */
+          #flujo-print .vs-nosel, #flujo-print .vs-pantalla { display: none !important; }
+          #flujo-print tr.vs-print { display: table-row !important; }
+          #flujo-print tbody.vs-print { display: table-row-group !important; }
+          #flujo-print span.vs-print { display: inline !important; }
+          #flujo-print p.vs-print { display: block !important; }
           #flujo-print .vsc-prov, #reporte-print .vsc-prov { padding: 0 !important; width: 0 !important; max-width: 0 !important; }
         }
       `}</style>
