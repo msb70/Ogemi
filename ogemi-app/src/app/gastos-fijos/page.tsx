@@ -694,19 +694,25 @@ function GastosFijosPage() {
     const nombre = nuevoGastoNombre.trim()
     if (!nombre) return
 
-    const { error } = await supabase.from('gastos_fijos').insert({
+    const { data, error } = await supabase.from('gastos_fijos').insert({
       nombre,
       orden: gastos.reduce((m, g) => Math.max(m, g.orden || 0), 0) + 1,
-    })
+    }).select('*').single()
 
-    if (error) {
-      showToast(`Error al crear gasto fijo: ${error.message}`, 'error')
+    if (error || !data) {
+      showToast(`Error al crear gasto fijo: ${error?.message || 'sin datos'}`, 'error')
       return
     }
 
     setNuevoGastoNombre('')
     showToast('Gasto fijo creado.')
-    loadGastos()
+    // El nuevo entra en su posición alfabética dentro de los activos (antes del primero "mayor")
+    const nuevo = data as GastoFijo
+    const lista = [...gastos]
+    let pos = lista.findIndex(g => !g.activo || g.nombre.localeCompare(nuevo.nombre, 'es', { sensitivity: 'base' }) > 0)
+    if (pos < 0) pos = lista.length
+    lista.splice(pos, 0, nuevo)
+    await persistOrden(lista)
   }
 
   const guardarMontos = async () => {

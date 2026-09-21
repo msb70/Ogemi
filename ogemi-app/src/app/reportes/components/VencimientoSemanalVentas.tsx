@@ -213,21 +213,21 @@ export default function VencimientoSemanalVentas({
       {vencViernes.rows.length === 0 ? (
         <div className="card p-12 text-center text-gray-400">No hay facturas pendientes en las próximas 4 semanas</div>
       ) : (
-        <div className="card overflow-auto">
-          <table className="w-full min-w-max">
+        <div className="card overflow-auto print:overflow-visible">
+          <table className="w-full min-w-max print:min-w-0">
             <thead>
               <tr className="border-b-2 border-gray-300 bg-gray-50">
-                <th className="table-header text-left sticky left-0 bg-gray-50 z-10 min-w-[200px]">Cliente</th>
-                <th className="table-header text-center min-w-[90px]">Nº Factura</th>
-                <th className="table-header text-center min-w-[100px]">F. Factura</th>
-                <th className="table-header text-center min-w-[100px]">F. Vencimiento</th>
+                <th className="table-header text-left sticky left-0 bg-gray-50 z-10 min-w-[200px] print:static print:min-w-0 vsc-prov"><span className="print:hidden">Cliente</span></th>
+                <th className="table-header text-center min-w-[90px] print:min-w-0">Nº Factura</th>
+                <th className="table-header text-center min-w-[100px] print:min-w-0">F. Factura</th>
+                <th className="table-header text-center min-w-[100px] print:min-w-0">F. Vencimiento</th>
                 {weekDateObjs.map((fri, i) => (
-                  <th key={i} className="table-header text-right min-w-[120px]">
+                  <th key={i} className="table-header text-right min-w-[120px] print:min-w-0">
                     Sem {i + 1}<br />
                     <span className="font-normal text-[10px] opacity-80">{formatDateObj(fri).slice(0, 5)}</span>
                   </th>
                 ))}
-                <th className="table-header text-center min-w-[60px] text-[11px]">
+                <th className="table-header text-center min-w-[60px] print:min-w-0 text-[11px]">
                   <div className="flex flex-col items-center gap-1">
                     <span>Pagarán</span>
                     <input type="checkbox" checked={allMarked}
@@ -241,7 +241,7 @@ export default function VencimientoSemanalVentas({
             <tbody className="divide-y divide-gray-100">
               {ventasGroups.flatMap((g) => [
                 <tr key={`h-${g.nombre}`} className="bg-gray-100 border-t-2 border-gray-300">
-                  <td colSpan={4 + weekDateObjs.length + 1} className="table-cell sticky left-0 bg-gray-100 z-10 font-bold text-gray-800 text-sm">
+                  <td colSpan={4 + weekDateObjs.length + 1} className="table-cell sticky left-0 print:static bg-gray-100 z-10 font-bold text-gray-800 text-sm">
                     {g.nombre}
                     <span className="text-xs font-normal text-gray-400"> · {g.rows.length} {g.rows.length === 1 ? 'factura' : 'facturas'} · {formatMonto(g.total)}</span>
                   </td>
@@ -250,8 +250,8 @@ export default function VencimientoSemanalVentas({
                   const isPagara = pagaraSet.has(f.id)
                   return (
                     <tr key={f.id} className={`hover:bg-gray-50 transition-colors ${isPagara ? 'bg-green-50/50' : ''}`}>
-                      <td className={`table-cell sticky left-0 z-10 max-w-[220px] ${isPagara ? 'bg-green-50' : 'bg-white'}`}>
-                        <span className="truncate block text-sm">{f.clientes?.nombre || '—'}</span>
+                      <td className={`table-cell sticky left-0 z-10 max-w-[220px] print:static vsc-prov ${isPagara ? 'bg-green-50' : 'bg-white'}`}>
+                        <span className="truncate block text-sm print:hidden">{f.clientes?.nombre || '—'}</span>
                       </td>
                       <td className="table-cell text-center font-mono text-sm text-gray-500">#{f.numero_factura}</td>
                       <td className="table-cell text-center text-sm text-gray-400">{formatDate(f.fecha)}</td>
@@ -333,6 +333,13 @@ export default function VencimientoSemanalVentas({
           </table>
         </div>
       )}
+
+      {/* PDF: la columna del nombre se colapsa (ya va en la fila de agrupamiento) */}
+      <style>{`
+        @media print {
+          #flujo-print .vsc-prov, #reporte-print .vsc-prov { padding: 0 !important; width: 0 !important; max-width: 0 !important; }
+        }
+      `}</style>
 
       {viernesSearch && viernesRows.length === 0 && (
         <p className="text-center text-gray-400 text-sm">Sin resultados para &quot;{viernesSearch}&quot;</p>
