@@ -11,6 +11,7 @@ import { Anticipo, Cliente, BancoCuenta } from '@/types'
 import { Plus, Printer, Search, X, CheckCircle, AlertCircle, Download } from 'lucide-react'
 import { withPagePermission } from '@/components/PermissionGuard'
 import CambiarClienteAnticipo from '@/components/CambiarClienteAnticipo'
+import EditarDepositoAnticipo from '@/components/EditarDepositoAnticipo'
 import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 
 function AnticiposPage() {
@@ -252,6 +253,8 @@ function AnticiposPage() {
             Recibo
           </button>
           <CambiarClienteAnticipo anticipo={a} clientes={clientes} modulo="facturas"
+            aplicado={saldos[a.id]?.aplicado ?? 0} onChanged={() => load()} />
+          <EditarDepositoAnticipo anticipo={a} cuentas={cuentas} modulo="facturas"
             aplicado={saldos[a.id]?.aplicado ?? 0} onChanged={() => load()} />
           {a.estado === 'activo' && (
             <button

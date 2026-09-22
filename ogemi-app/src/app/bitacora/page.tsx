@@ -13,7 +13,7 @@ import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 interface Evento {
   id: string
   created_at: string
-  accion: 'editar' | 'borrar' | 'anticipo_cliente' | 'borrar_documento'
+  accion: 'editar' | 'borrar' | 'anticipo_cliente' | 'borrar_documento' | 'anticipo_deposito'
   documento_tipo: string
   documento: string | null
   tercero: string | null
@@ -30,6 +30,7 @@ const ACCION: Record<Evento['accion'], { label: string; cls: string }> = {
   borrar: { label: 'Borró cobro/pago', cls: 'bg-red-100 text-red-700' },
   anticipo_cliente: { label: 'Cambió cliente de anticipo', cls: 'bg-amber-100 text-amber-700' },
   borrar_documento: { label: 'Borró documento completo', cls: 'bg-red-600 text-white' },
+  anticipo_deposito: { label: 'Modificó depósito de anticipo', cls: 'bg-teal-100 text-teal-700' },
 }
 const MODULO: Record<string, string> = {
   facturas: 'Facturas', compras: 'Compras', presupuestos: 'Presupuestos', ventas_ogemi: 'Ventas Ogemi', anticipos: 'Anticipos',
@@ -65,6 +66,10 @@ function cambios(e: Evento): [string, string, string][] {
   if (a.fecha !== d.fecha) out.push(['Fecha', a.fecha ? formatDate(a.fecha) : '—', d.fecha ? formatDate(d.fecha) : '—'])
   if (a.cuenta_id !== d.cuenta_id) out.push(['Cuenta', e.cuenta_antes || '—', e.cuenta_despues || '—'])
   if ((a.referencia || '') !== (d.referencia || '')) out.push(['Referencia', a.referencia || '—', d.referencia || '—'])
+  if (e.accion === 'anticipo_deposito') {
+    if ((a.numero_deposito || '') !== (d.numero_deposito || '')) out.push(['N° depósito', a.numero_deposito || '—', d.numero_deposito || '—'])
+    if ((a.notas || '') !== (d.notas || '')) out.push(['Notas', a.notas || '—', d.notas || '—'])
+  }
   if (out.length === 0) out.push(['Sin cambios de valor', '', ''])
   return out
 }
@@ -104,7 +109,7 @@ function BitacoraPage() {
     editar: visibles.filter(e => e.accion === 'editar').length,
     borrar: visibles.filter(e => e.accion === 'borrar').length,
     docs: visibles.filter(e => e.accion === 'borrar_documento').length,
-    anticipo: visibles.filter(e => e.accion === 'anticipo_cliente').length,
+    anticipo: visibles.filter(e => e.accion === 'anticipo_cliente' || e.accion === 'anticipo_deposito').length,
     montoBorrado: visibles.reduce((s, e) => s
       + (e.accion === 'borrar' ? (Number(e.antes?.monto) || 0) : 0)
       + (e.accion === 'borrar_documento' && Array.isArray(e.antes?._pagos) ? e.antes._pagos.reduce((x: number, p: any) => x + (Number(p.monto) || 0), 0) : 0), 0),
@@ -113,7 +118,7 @@ function BitacoraPage() {
   const exportar = () => {
     exportXLSX(`bitacora_${desde}_${hasta}.xlsx`, [
       kpiSheet('Bitácora', `${visibles.length} eventos · ${desde} a ${hasta}`, [
-        ['Ediciones', kpi.editar], ['Cobros/pagos borrados', kpi.borrar], ['Documentos borrados', kpi.docs], ['Cambios de cliente en anticipos', kpi.anticipo], ['Monto borrado', kpi.montoBorrado],
+        ['Ediciones', kpi.editar], ['Cobros/pagos borrados', kpi.borrar], ['Documentos borrados', kpi.docs], ['Cambios en anticipos', kpi.anticipo], ['Monto borrado', kpi.montoBorrado],
       ]),
       {
         name: 'Eventos',
@@ -147,6 +152,7 @@ function BitacoraPage() {
             <option value="borrar">Cobros/pagos borrados</option>
             <option value="borrar_documento">Documentos borrados</option>
             <option value="anticipo_cliente">Cambio de cliente (anticipos)</option>
+            <option value="anticipo_deposito">Cambio de depósito (anticipos)</option>
           </select>
           <select value={fUsuario} onChange={e => setFUsuario(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
             <option value="all">Todos los usuarios</option>
@@ -165,7 +171,7 @@ function BitacoraPage() {
             { l: 'Cobros/pagos borrados', v: String(kpi.borrar), c: 'text-red-600' },
             { l: 'Documentos borrados', v: String(kpi.docs), c: 'text-red-700' },
             { l: 'Monto de cobros/pagos borrado', v: formatMonto(kpi.montoBorrado), c: 'text-red-600' },
-            { l: 'Cambios de cliente (anticipos)', v: String(kpi.anticipo), c: 'text-amber-700' },
+            { l: 'Cambios en anticipos', v: String(kpi.anticipo), c: 'text-amber-700' },
           ].map(x => (
             <div key={x.l} className="card p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{x.l}</p>
