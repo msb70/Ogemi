@@ -1,19 +1,21 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import AppLayout from '@/components/AppLayout'
 import Header from '@/components/Header'
 import { createClient } from '@/lib/supabase'
 import { fetchAll } from '@/lib/fetchAll'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Cliente, BancoCuenta, VentaOgemi } from '@/types'
-import { Plus, Search, X, Pencil, Trash2, Wallet, RefreshCw, Download } from 'lucide-react'
+import { Plus, Search, X, Pencil, Trash2, Wallet, RefreshCw, Download, Printer } from 'lucide-react'
 import { withPagePermission } from '@/components/PermissionGuard'
 import PagoAcciones from '@/components/PagoAcciones'
 import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
 import { useAuth } from '@/context/AuthContext'
 import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
+import FacturaOgemiPrint from '@/components/FacturaOgemiPrint'
 
 type Filtro = 'todas' | 'pendiente' | 'pagada'
 
@@ -69,6 +71,18 @@ function VentasOgemiPage() {
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm())
   const [saving, setSaving] = useState(false)
+
+  // Impresión / PDF de una factura
+  const [printVenta, setPrintVenta] = useState<VentaOgemi | null>(null)
+  const imprimir = (v: VentaOgemi) => {
+    setPrintVenta(v)
+    // El título del documento es el nombre sugerido al "Guardar como PDF"
+    const titulo = document.title
+    document.title = `Factura-Ogemi-${v.numero}`
+    const restaurar = () => { document.title = titulo; setPrintVenta(null); window.removeEventListener('afterprint', restaurar) }
+    window.addEventListener('afterprint', restaurar)
+    setTimeout(() => window.print(), 300)
+  }
 
   // Cobro
   const [cobrar, setCobrar] = useState<VentaOgemi | null>(null)
@@ -311,6 +325,20 @@ function VentasOgemiPage() {
 
   return (
     <AppLayout>
+      {/* Área de impresión: portal a body + display:none del resto (visibility deja páginas en blanco) */}
+      {printVenta && typeof document !== 'undefined' && createPortal(
+        <div id="factura-ogemi-print" className="hidden print:block">
+          <FacturaOgemiPrint venta={printVenta} />
+        </div>,
+        document.body,
+      )}
+      {printVenta && <style>{`
+        @media print {
+          body > :not(#factura-ogemi-print) { display: none !important; }
+          #factura-ogemi-print { display: block !important; width: 100%; }
+          @page { margin: 14mm; }
+        }
+      `}</style>}
       <Header
         title="Ventas Impresora OGEMI"
         subtitle="Registro de ventas y cuentas por cobrar de Impresora Ogemi"
@@ -424,6 +452,9 @@ function VentasOgemiPage() {
                     </td>
                     <td className="table-cell">
                       <div className="flex items-center gap-2">
+                        <button onClick={() => imprimir(v)} className="flex items-center gap-1 text-xs text-gray-500 hover:text-brand-600" title="Imprimir / guardar en PDF">
+                          <Printer size={14} /> PDF
+                        </button>
                         {puedeEditar && v.estado === 'pendiente' && (
                           <button onClick={() => abrirCobro(v)} className="flex items-center gap-1 text-xs text-green-700 hover:text-green-900" title="Registrar cobro en banco">
                             <Wallet size={14} /> Cobrar
