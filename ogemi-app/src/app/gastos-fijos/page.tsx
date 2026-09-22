@@ -209,7 +209,7 @@ function GastosFijosPage() {
   // Ventas: Impresos = facturas; Ogemi = ventas_ogemi (mapeada al shape de facturas). Presupuestos solo Impresos.
   const facturasAll = useMemo(() => [
     ...(empresaFiltro !== 'ogemi' ? facturasRaw : []),
-    ...(empresaFiltro !== 'impresos' ? ventasOgemiRaw.map((v: any) => ({ ...v, numero_factura: v.numero, tipo_documento: 'FACTURA', retencion_monto: 0, empresa: 'ogemi' })) : []),
+    ...(empresaFiltro !== 'impresos' ? ventasOgemiRaw.map((v: any) => ({ ...v, numero_factura: v.numero, tipo_documento: 'FACTURA', retencion_monto: v.retencion_monto || 0, empresa: 'ogemi' })) : []),
   ], [facturasRaw, ventasOgemiRaw, empresaFiltro])
   const presupuestosAll = useMemo(() => empresaFiltro !== 'ogemi' ? presupuestosRaw : [], [presupuestosRaw, empresaFiltro])
 

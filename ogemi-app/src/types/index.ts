@@ -193,11 +193,16 @@ export interface VentaOgemi {
   total: number;
   dias_credito: number;
   fecha_pago: string | null;
-  estado: 'pendiente' | 'pagada';
+  estado: 'pendiente' | 'pagada' | 'falta_retencion';
   monto_pagado: number;
   fecha_cobro: string | null;
   banco_cuenta_id: string | null;
   notas: string | null;
+  // Retención de ITBMS (igual que facturas): a cobrar = total − retencion_monto
+  retencion_pct: number;
+  retencion_monto: number;
+  retencion_comprobante_entregado: boolean;
+  retencion_comprobante_fecha: string | null;
   created_at: string;
   clientes?: { nombre: string; dias_credito?: number };
 }

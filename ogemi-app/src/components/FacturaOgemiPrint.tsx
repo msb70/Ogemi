@@ -12,8 +12,9 @@ import type { VentaOgemi } from '@/types'
 export default function FacturaOgemiPrint({ venta }: { venta: VentaOgemi }) {
   const exact = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as CSSProperties
   const pagado = Number(venta.monto_pagado) || 0
-  const saldo = Math.max(0, Math.round((Number(venta.total) - pagado) * 100) / 100)
-  const estado = venta.estado === 'pagada' ? 'PAGADA' : pagado > 0 ? 'ABONO PARCIAL' : 'PENDIENTE'
+  const ret = Number(venta.retencion_monto) || 0
+  const saldo = Math.max(0, Math.round((Number(venta.total) - ret - pagado) * 100) / 100)
+  const estado = venta.estado === 'pagada' ? 'PAGADA' : venta.estado === 'falta_retencion' ? 'FALTA COMPROBANTE DE RETENCIÓN' : pagado > 0 ? 'ABONO PARCIAL' : 'PENDIENTE'
   const fila = 'flex justify-between px-5 py-3'
 
   return (
@@ -75,6 +76,12 @@ export default function FacturaOgemiPrint({ venta }: { venta: VentaOgemi }) {
             <div className="flex justify-between py-2 mt-1 border-t-2 border-gray-300 text-lg font-bold" style={{ color: '#b45309' }}>
               <span>Total</span><span>{formatCurrency(venta.total)}</span>
             </div>
+            {ret > 0 && (
+              <div className="flex justify-between py-1.5 text-amber-700"><span>Retención ITBMS ({venta.retencion_pct}%)</span><span>− {formatCurrency(ret)}</span></div>
+            )}
+            {ret > 0 && (
+              <div className="flex justify-between py-1.5 font-medium"><span>A cobrar</span><span>{formatCurrency(Math.round((Number(venta.total) - ret) * 100) / 100)}</span></div>
+            )}
             {pagado > 0 && (
               <div className="flex justify-between py-1.5 text-gray-500"><span>Cobrado</span><span>{formatCurrency(pagado)}</span></div>
             )}

@@ -69,7 +69,7 @@ export default function InformeDiarioTab() {
     ] = await Promise.all([
       fetchAll<Cuenta>(() => supabase.from('banco_cuentas').select('id,nombre,banco,tipo,orden').eq('activo', true).order('orden').order('nombre')),
       fetchAll<Doc>(() => supabase.from('facturas').select('id,fecha,total,monto,itbms,retencion_pct,tipo_documento,tipo_venta').lte('fecha', fecha)),
-      fetchAll<Doc>(() => supabase.from('ventas_ogemi').select('id,fecha,total,monto,itbms').lte('fecha', fecha)),
+      fetchAll<Doc>(() => supabase.from('ventas_ogemi').select('id,fecha,total,monto,itbms,retencion_pct').lte('fecha', fecha)),
       fetchAll<Doc>(() => supabase.from('compras').select('id,fecha,total,monto,itbms,tipo_documento,empresa').lte('fecha', fecha)),
       fetchAll<Pago>(() => supabase.from('pagos').select('factura_id,compra_id,venta_ogemi_id,monto,fecha').lte('fecha', fecha)),
       fetchAll<Pago>(() => supabase.from('pago_reversos').select('factura_id,compra_id,venta_ogemi_id,monto,fecha').lte('fecha', fecha)),
@@ -123,7 +123,10 @@ export default function InformeDiarioTab() {
         return s + Math.max(0, cobrable - (pagFact[f.id] || 0))
       }, 0)
     // CxC Impresora Ogemi
-    const cxcOgemi = ventasOgemi.reduce((s, v) => s + Math.max(0, Number(v.total) - (pagVo[v.id] || 0)), 0)
+    const cxcOgemi = ventasOgemi.reduce((s, v) => {
+      const ret = Number(v.retencion_pct || 0) > 0 ? Math.round(Number(v.retencion_pct) / 100 * Number(v.itbms || 0) * 100) / 100 : 0
+      return s + Math.max(0, Number(v.total) - ret - (pagVo[v.id] || 0))
+    }, 0)
     const totalCxC = cxcImpresos + cxcOgemi
 
     // CxP proveedores

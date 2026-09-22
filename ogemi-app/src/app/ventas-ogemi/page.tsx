@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase'
 import { fetchAll } from '@/lib/fetchAll'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Cliente, BancoCuenta, VentaOgemi } from '@/types'
-import { Plus, Search, X, Pencil, Trash2, Wallet, RefreshCw, Download, Printer } from 'lucide-react'
+import { Plus, Search, X, Pencil, Trash2, Wallet, RefreshCw, Download, Printer, Eye, Percent } from 'lucide-react'
 import { withPagePermission } from '@/components/PermissionGuard'
 import PagoAcciones from '@/components/PagoAcciones'
 import { Toast } from '@/components/Toast'
@@ -17,7 +17,7 @@ import { useAuth } from '@/context/AuthContext'
 import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 import FacturaOgemiPrint from '@/components/FacturaOgemiPrint'
 
-type Filtro = 'todas' | 'pendiente' | 'pagada'
+type Filtro = 'todas' | 'pendiente' | 'pagada' | 'falta_retencion'
 
 // Cobro por líneas, igual que en Facturas (Impresos): cuenta bancaria o anticipo
 interface LineaCobro {
@@ -57,7 +57,8 @@ const emptyForm = () => ({
 function VentasOgemiPage() {
   const supabase = useMemo(() => createClient(), [])
   const { toast, showToast, hideToast } = useToast()
-  const { puedeHacer } = useAuth()
+  const { puedeHacer, profile } = useAuth()
+  const isAdmin = profile?.rol_id === 'admin'
 
   const [ventas, setVentas] = useState<VentaOgemi[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
@@ -94,6 +95,11 @@ function VentasOgemiPage() {
   // Historial de cobros / reverso
   const [historial, setHistorial] = useState<VentaOgemi | null>(null)
   const [pagos, setPagos] = useState<any[]>([])
+
+  // Retención de ITBMS
+  const [retVenta, setRetVenta] = useState<VentaOgemi | null>(null)
+  const [retForm, setRetForm] = useState({ pct: '', comprobante: false, fecha: hoy() })
+  const [savingRet, setSavingRet] = useState(false)
 
   const [eliminar, setEliminar] = useState<VentaOgemi | null>(null)
   const [eliminando, setEliminando] = useState(false)
@@ -176,7 +182,9 @@ function VentasOgemiPage() {
   }
 
   // ── Cobro ─────────────────────────────────────────────────────────────────
-  const saldoDe = (v: VentaOgemi) => Math.max(0, (v.total || 0) - (v.monto_pagado || 0))
+  // A cobrar = total − retención de ITBMS − cobrado (la retención no entra al banco)
+  const retDe = (v: VentaOgemi) => Number(v.retencion_monto) || 0
+  const saldoDe = (v: VentaOgemi) => Math.max(0, Math.round(((v.total || 0) - retDe(v) - (v.monto_pagado || 0)) * 100) / 100)
   const abrirCobro = async (v: VentaOgemi) => {
     setCobrar(v)
     setFechaCobro(hoy())
@@ -279,6 +287,31 @@ function VentasOgemiPage() {
     load()
   }
 
+  const abrirRetencion = (v: VentaOgemi) => {
+    setRetVenta(v)
+    setRetForm({
+      pct: v.retencion_pct ? String(v.retencion_pct) : '',
+      comprobante: !!v.retencion_comprobante_entregado,
+      fecha: v.retencion_comprobante_fecha || hoy(),
+    })
+  }
+  const guardarRetencion = async () => {
+    if (!retVenta) return
+    const p = parseFloat(retForm.pct) || 0
+    if (p < 0 || p > 100) { showToast('El % de retención debe estar entre 0 y 100.', 'error'); return }
+    setSavingRet(true)
+    const { error } = await supabase.from('ventas_ogemi').update({
+      retencion_pct: p,
+      retencion_comprobante_entregado: retForm.comprobante,
+      retencion_comprobante_fecha: retForm.comprobante ? (retForm.fecha || null) : null,
+    }).eq('id', retVenta.id)
+    setSavingRet(false)
+    if (error) { showToast(`No se pudo guardar la retención: ${error.message}`, 'error'); return }
+    setRetVenta(null)
+    showToast('Retención actualizada', 'success')
+    load()
+  }
+
   const confirmarEliminar = async () => {
     if (!eliminar) return
     setEliminando(true)
@@ -311,9 +344,10 @@ function VentasOgemiPage() {
         ['# vencidas', vencidas],
       ]),
       { name: 'Ventas', rows: [
-        ['N°', 'Fecha', 'Cliente', 'Concepto', 'Monto', '% ITBMS', 'ITBMS', 'Total', 'Días crédito', 'Vence', 'Cobrado', 'Saldo', 'Estado'],
+        ['N°', 'Fecha', 'Cliente', 'Concepto', 'Monto', '% ITBMS', 'ITBMS', 'Total', 'Retención %', 'Retención', 'A cobrar', 'Días crédito', 'Vence', 'Cobrado', 'Saldo', 'Estado'],
         ...filtradas.map(v => [
           v.numero, v.fecha, v.clientes?.nombre || '', v.concepto || '', v.monto, v.itbms_pct, v.itbms, v.total,
+          v.retencion_pct || 0, retDe(v), Math.round(((v.total || 0) - retDe(v)) * 100) / 100,
           v.dias_credito, v.fecha_pago || '', v.monto_pagado || 0, saldoDe(v), v.estado,
         ]),
       ] },
@@ -368,7 +402,9 @@ function VentasOgemiPage() {
             <div className="col-span-full text-sm font-semibold text-gray-700">{editId ? 'Editar venta' : 'Nueva venta'}</div>
             <div className="lg:col-span-2">
               <label className="label">Cliente</label>
-              <select className="input" value={form.cliente_id} onChange={e => onClienteChange(e.target.value)}>
+              <select className="input" value={form.cliente_id} onChange={e => onClienteChange(e.target.value)}
+                disabled={!!editId && (ventas.find(x => x.id === editId)?.monto_pagado || 0) > 0}
+                title={editId && (ventas.find(x => x.id === editId)?.monto_pagado || 0) > 0 ? 'La venta tiene cobros: no se puede cambiar el cliente' : undefined}>
                 <option value="">Seleccionar cliente...</option>
                 {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
               </select>
@@ -405,6 +441,7 @@ function VentasOgemiPage() {
             <option value="todas">Todas</option>
             <option value="pendiente">Pendientes</option>
             <option value="pagada">Pagadas</option>
+            <option value="falta_retencion">Falta comprobante de retención</option>
           </select>
         </div>
 
@@ -446,28 +483,40 @@ function VentasOgemiPage() {
                     <td className={`table-cell text-sm ${vencida ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>{formatDate(v.fecha_pago)}</td>
                     <td className={`table-cell text-right font-semibold ${saldo > 0 ? 'text-orange-600' : 'text-gray-300'}`}>{saldo > 0 ? formatCurrency(saldo) : '—'}</td>
                     <td className="table-cell">
-                      <span className={`badge ${v.estado === 'pagada' ? 'bg-green-100 text-green-700' : abono ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'}`}>
-                        {v.estado === 'pagada' ? 'Pagada' : abono ? 'Abono parcial' : 'Pendiente'}
+                      <span className={`badge ${v.estado === 'pagada' ? 'bg-green-100 text-green-700' : v.estado === 'falta_retencion' ? 'bg-amber-100 text-amber-700' : abono ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'}`}>
+                        {v.estado === 'pagada' ? 'Pagada' : v.estado === 'falta_retencion' ? 'Falta comprobante' : abono ? 'Abono parcial' : 'Pendiente'}
                       </span>
                     </td>
                     <td className="table-cell">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => abrirHistorial(v)} className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-800 font-medium" title="Ver detalle y cobros">
+                          <Eye size={14} /> Ver
+                        </button>
+                        {puedeEditar && v.estado === 'pendiente' && (v.total || 0) > 0 && (
+                          <button onClick={() => abrirCobro(v)} className="flex items-center gap-1 text-xs text-green-700 hover:text-green-900 font-medium" title="Registrar cobro en banco">
+                            <Wallet size={14} /> {(v.monto_pagado || 0) > 0 ? 'Abonar' : 'Cobrar'}
+                          </button>
+                        )}
+                        {puedeEditar && (
+                          <button onClick={() => abrirRetencion(v)}
+                            className={`flex items-center gap-1 text-xs font-medium ${v.estado === 'falta_retencion' ? 'text-amber-600 hover:text-amber-800' : 'text-gray-400 hover:text-brand-600'}`}
+                            title="Retención de ITBMS">
+                            <Percent size={14} /> {v.estado === 'falta_retencion' ? 'Comprobante' : 'Retención'}
+                          </button>
+                        )}
                         <button onClick={() => imprimir(v)} className="flex items-center gap-1 text-xs text-gray-500 hover:text-brand-600" title="Imprimir / guardar en PDF">
                           <Printer size={14} /> PDF
                         </button>
-                        {puedeEditar && v.estado === 'pendiente' && (
-                          <button onClick={() => abrirCobro(v)} className="flex items-center gap-1 text-xs text-green-700 hover:text-green-900" title="Registrar cobro en banco">
-                            <Wallet size={14} /> Cobrar
+                        {puedeEditar && ((v.monto_pagado || 0) === 0 || isAdmin) && (
+                          <button onClick={() => abrirEditar(v)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-brand-600"
+                            title={(v.monto_pagado || 0) > 0 ? 'Editar (admin): tiene cobros, el cliente no se puede cambiar' : 'Editar'}>
+                            <Pencil size={14} /> Editar
                           </button>
                         )}
-                        {(v.monto_pagado || 0) > 0 || v.estado === 'pagada' ? (
-                          <button onClick={() => abrirHistorial(v)} className="text-xs text-brand-600 hover:text-brand-800" title="Ver cobros">Cobros</button>
-                        ) : null}
-                        {puedeEditar && (v.monto_pagado || 0) === 0 && (
-                          <button onClick={() => abrirEditar(v)} className="text-gray-400 hover:text-brand-600" title="Editar"><Pencil size={14} /></button>
-                        )}
-                        {puedeBorrar && (v.monto_pagado || 0) === 0 && (
-                          <button onClick={() => setEliminar(v)} className="text-gray-300 hover:text-red-600" title="Eliminar"><Trash2 size={14} /></button>
+                        {((puedeBorrar && (v.monto_pagado || 0) === 0) || isAdmin) && (
+                          <button onClick={() => setEliminar(v)} className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700" title="Borrar venta">
+                            <Trash2 size={14} /> Borrar
+                          </button>
                         )}
                       </div>
                     </td>
@@ -605,44 +654,121 @@ function VentasOgemiPage() {
         </div>
       )}
 
-      {/* Modal historial de cobros */}
-      {historial && (
+      {/* Modal Ver: detalle de la venta + cobros (editar/borrar cobro) */}
+      {historial && (() => {
+        const h = ventas.find(x => x.id === historial.id) || historial
+        const fila = (l: string, val: string, cls = '') => (
+          <div className="flex justify-between py-1"><span className="text-gray-500">{l}</span><span className={`text-right ${cls}`}>{val}</span></div>
+        )
+        return (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setHistorial(null)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-5 space-y-3" onClick={e => e.stopPropagation()}>
-            <h3 className="font-semibold text-gray-900">Cobros de la venta #{historial.numero}</h3>
-            {pagos.length === 0 ? (
-              <p className="text-sm text-gray-400">Sin cobros.</p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead><tr className="border-b border-gray-200">
-                  <th className="table-header">Recibo</th><th className="table-header">Fecha</th><th className="table-header">Cuenta</th>
-                  <th className="table-header text-right">Monto</th><th className="table-header"></th>
-                </tr></thead>
-                <tbody className="divide-y divide-gray-100">
-                  {pagos.map(p => {
-                    const rev = Array.isArray(p.pago_reversos) ? p.pago_reversos[0] : p.pago_reversos
-                    return (
-                      <tr key={p.id} className={rev ? 'opacity-50' : ''}>
-                        <td className="table-cell font-mono text-xs">{p.numero_recibo ? `REC-${String(p.numero_recibo).padStart(5, '0')}` : '—'}</td>
-                        <td className="table-cell">{formatDate(p.fecha)}</td>
-                        <td className="table-cell text-gray-500">{p.anticipo_id ? <span className="badge bg-amber-100 text-amber-700">Anticipo</span> : p.banco_cuentas?.nombre}</td>
-                        <td className="table-cell text-right font-semibold">{formatCurrency(p.monto)}</td>
-                        <td className="table-cell">
-                          <div className="flex items-center gap-2">
-                            {rev && <span className="text-xs text-red-500" title={rev.motivo}>Reversado {formatDate(rev.fecha)}</span>}
-                            <PagoAcciones pago={p} modulo="ventas_ogemi" cuentas={cuentas} reversado={!!rev} onChanged={onPagoChanged} />
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            )}
-            <div className="flex justify-end"><button className="btn-secondary" onClick={() => setHistorial(null)}>Cerrar</button></div>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-gray-900">Factura Ogemi #{h.numero}</h3>
+                <p className="text-sm text-gray-500">{h.clientes?.nombre}</p>
+              </div>
+              <span className={`badge ${h.estado === 'pagada' ? 'bg-green-100 text-green-700' : h.estado === 'falta_retencion' ? 'bg-amber-100 text-amber-700' : 'bg-orange-100 text-orange-700'}`}>
+                {h.estado === 'pagada' ? 'Pagada' : h.estado === 'falta_retencion' ? 'Falta comprobante' : (h.monto_pagado || 0) > 0 ? 'Abono parcial' : 'Pendiente'}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 text-sm">
+              <div>
+                {fila('Fecha', formatDate(h.fecha))}
+                {fila('Días de crédito', String(h.dias_credito ?? '—'))}
+                {fila('Vence', formatDate(h.fecha_pago))}
+                {fila('Concepto', h.concepto || '—')}
+                {h.notas ? fila('Notas', h.notas) : null}
+              </div>
+              <div>
+                {fila('Monto', formatCurrency(h.monto))}
+                {fila(`ITBMS (${h.itbms_pct}%)`, formatCurrency(h.itbms))}
+                {fila('Total', formatCurrency(h.total), 'font-semibold')}
+                {retDe(h) > 0 && fila(`Retención (${h.retencion_pct}% ITBMS)`, `− ${formatCurrency(retDe(h))}`, 'text-amber-600')}
+                {retDe(h) > 0 && fila('Comprobante', h.retencion_comprobante_entregado ? `Entregado ${formatDate(h.retencion_comprobante_fecha)}` : 'Pendiente', h.retencion_comprobante_entregado ? 'text-green-600' : 'text-amber-600')}
+                {fila('Cobrado', formatCurrency(h.monto_pagado || 0))}
+                {fila('Saldo a cobrar', formatCurrency(saldoDe(h)), 'font-bold text-orange-600')}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-1">Cobros</p>
+              {pagos.length === 0 ? (
+                <p className="text-sm text-gray-400">Sin cobros.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-gray-200">
+                    <th className="table-header">Recibo</th><th className="table-header">Fecha</th><th className="table-header">Cuenta</th>
+                    <th className="table-header text-right">Monto</th><th className="table-header"></th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {pagos.map(p => {
+                      const rev = Array.isArray(p.pago_reversos) ? p.pago_reversos[0] : p.pago_reversos
+                      return (
+                        <tr key={p.id} className={rev ? 'opacity-50' : ''}>
+                          <td className="table-cell font-mono text-xs">{p.numero_recibo ? `REC-${String(p.numero_recibo).padStart(5, '0')}` : '—'}</td>
+                          <td className="table-cell">{formatDate(p.fecha)}</td>
+                          <td className="table-cell text-gray-500">{p.anticipo_id ? <span className="badge bg-amber-100 text-amber-700">Anticipo</span> : p.banco_cuentas?.nombre}</td>
+                          <td className="table-cell text-right font-semibold">{formatCurrency(p.monto)}</td>
+                          <td className="table-cell">
+                            <div className="flex items-center gap-2">
+                              {rev && <span className="text-xs text-red-500" title={rev.motivo}>Reversado {formatDate(rev.fecha)}</span>}
+                              <PagoAcciones pago={p} modulo="ventas_ogemi" cuentas={cuentas} reversado={!!rev} onChanged={onPagoChanged} />
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button className="btn-secondary flex items-center gap-2" onClick={() => imprimir(h)}><Printer size={15} /> PDF</button>
+              <button className="btn-secondary" onClick={() => setHistorial(null)}>Cerrar</button>
+            </div>
           </div>
         </div>
-      )}
+        )
+      })()}
+
+      {/* Modal Retención de ITBMS */}
+      {retVenta && (() => {
+        const p = Math.min(100, Math.max(0, parseFloat(retForm.pct) || 0))
+        const rm = Math.round(p / 100 * (retVenta.itbms || 0) * 100) / 100
+        return (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => !savingRet && setRetVenta(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 space-y-3" onClick={e => e.stopPropagation()}>
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2"><Percent size={18} className="text-amber-600" /> Retención de ITBMS</h3>
+            <p className="text-sm text-gray-500">Venta #{retVenta.numero} · {retVenta.clientes?.nombre}</p>
+            <div>
+              <label className="label">% de retención sobre el ITBMS</label>
+              <input type="number" min={0} max={100} step="0.01" className="input" placeholder="0" value={retForm.pct} onChange={e => setRetForm(f => ({ ...f, pct: e.target.value }))} />
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
+              <div className="flex justify-between"><span className="text-gray-500">Total</span><span>{formatCurrency(retVenta.total)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">ITBMS</span><span>{formatCurrency(retVenta.itbms)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Retención</span><span className="font-medium text-amber-600">− {formatCurrency(rm)}</span></div>
+              <div className="flex justify-between border-t border-gray-200 pt-1"><span className="font-medium">A cobrar (entra al banco)</span><span className="font-semibold">{formatCurrency(Math.round(((retVenta.total || 0) - rm) * 100) / 100)}</span></div>
+            </div>
+            {rm > 0 && (
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={retForm.comprobante} onChange={e => setRetForm(f => ({ ...f, comprobante: e.target.checked }))} />
+                Comprobante de retención entregado
+              </label>
+            )}
+            {rm > 0 && retForm.comprobante && (
+              <div><label className="label">Fecha del comprobante</label><input type="date" className="input" value={retForm.fecha} onChange={e => setRetForm(f => ({ ...f, fecha: e.target.value }))} /></div>
+            )}
+            <p className="text-[11px] text-gray-400">Cobrado el neto sin comprobante, la venta queda en &quot;Falta comprobante&quot;; con comprobante pasa a Pagada.</p>
+            <div className="flex gap-2">
+              <button className="btn-secondary flex-1" onClick={() => setRetVenta(null)} disabled={savingRet}>Cancelar</button>
+              <button className="btn-primary flex-1" onClick={guardarRetencion} disabled={savingRet}>{savingRet ? 'Guardando...' : 'Guardar'}</button>
+            </div>
+          </div>
+        </div>
+        )
+      })()}
 
       {/* Modal eliminar */}
       {eliminar && (
@@ -650,6 +776,11 @@ function VentasOgemiPage() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 space-y-3" onClick={e => e.stopPropagation()}>
             <h3 className="font-semibold text-gray-900">Eliminar venta #{eliminar.numero}</h3>
             <p className="text-sm text-gray-500">{eliminar.clientes?.nombre} · {formatCurrency(eliminar.total)}. Esta acción no se puede deshacer.</p>
+            {(eliminar.monto_pagado || 0) > 0 && (
+              <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                Tiene {formatCurrency(eliminar.monto_pagado)} cobrado: se borrarán también sus cobros y movimientos de banco (los anticipos aplicados quedan libres).
+              </p>
+            )}
             <div className="flex gap-2">
               <button className="btn-primary bg-red-600 hover:bg-red-700" onClick={confirmarEliminar} disabled={eliminando}>{eliminando ? 'Eliminando...' : 'Eliminar'}</button>
               <button className="btn-secondary" onClick={() => setEliminar(null)}>Cancelar</button>

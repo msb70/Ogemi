@@ -188,11 +188,11 @@ function ReportesPage({ scope }: { scope: ReporteScope }) {
     numero_factura: v.numero,
     tipo_documento: 'FACTURA',
     documento_afectado: null,
-    retencion_pct: 0,
-    retencion_monto: 0,
+    retencion_pct: v.retencion_pct || 0,
+    retencion_monto: v.retencion_monto || 0,
   }))
   const carteraOgemi: CarteraVencida[] = ventasOgemiMap
-    .filter((v: any) => v.estado === 'pendiente' && ((v.total || 0) - (v.monto_pagado || 0)) > 0)
+    .filter((v: any) => v.estado === 'pendiente' && ((v.total || 0) - (v.retencion_monto || 0) - (v.monto_pagado || 0)) > 0)
     .map((v: any) => {
       const venc = v.fecha_pago || v.fecha
       const dias = Math.floor((new Date(hoyISO + 'T00:00:00').getTime() - new Date(venc + 'T00:00:00').getTime()) / 86400000)
@@ -200,7 +200,7 @@ function ReportesPage({ scope }: { scope: ReporteScope }) {
       return {
         id: v.id, numero_factura: v.numero, fecha: v.fecha, fecha_pago: venc, cliente: v.clientes?.nombre || '—',
         monto: v.monto || 0, itbms: v.itbms || 0, total: v.total || 0, monto_pagado: v.monto_pagado || 0,
-        saldo_pendiente: (v.total || 0) - (v.monto_pagado || 0), dias_vencida: dias, tramo: tramo as CarteraVencida['tramo'],
+        saldo_pendiente: (v.total || 0) - (v.retencion_monto || 0) - (v.monto_pagado || 0), dias_vencida: dias, tramo: tramo as CarteraVencida['tramo'],
       }
     })
     .sort((a, b) => b.dias_vencida - a.dias_vencida)
