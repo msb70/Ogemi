@@ -15,7 +15,7 @@ import { Toast } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
 import { useAuth } from '@/context/AuthContext'
 import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
-import FacturaOgemiPrint from '@/components/FacturaOgemiPrint'
+import FacturaOgemiPrint, { LOGO_OGEMI, type CobroImpreso } from '@/components/FacturaOgemiPrint'
 
 type Filtro = 'todas' | 'pendiente' | 'pagada' | 'falta_retencion'
 
@@ -75,7 +75,20 @@ function VentasOgemiPage() {
 
   // Impresión / PDF de una factura
   const [printVenta, setPrintVenta] = useState<VentaOgemi | null>(null)
-  const imprimir = (v: VentaOgemi) => {
+  const [printCobros, setPrintCobros] = useState<CobroImpreso[]>([])
+  const imprimir = async (v: VentaOgemi) => {
+    // Cobros vigentes (sin reverso) para listarlos en la factura
+    const { data, error } = await supabase
+      .from('pagos')
+      .select('id, numero_recibo, fecha, monto, referencia, anticipo_id, banco_cuentas(nombre), pago_reversos(id)')
+      .eq('venta_ogemi_id', v.id)
+      .order('fecha').order('created_at')
+    if (error) { showToast(`No se pudieron cargar los cobros: ${error.message}`, 'error'); return }
+    const vigentes = (data || []).filter((p: any) => !(Array.isArray(p.pago_reversos) ? p.pago_reversos.length : p.pago_reversos))
+      .map((p: any) => ({ ...p, banco_cuentas: Array.isArray(p.banco_cuentas) ? p.banco_cuentas[0] : p.banco_cuentas })) as CobroImpreso[]
+    // Asegura el logo cargado antes de abrir el diálogo de impresión
+    try { const img = new Image(); img.src = LOGO_OGEMI; await img.decode() } catch { /* se imprime sin esperar */ }
+    setPrintCobros(vigentes)
     setPrintVenta(v)
     // El título del documento es el nombre sugerido al "Guardar como PDF"
     const titulo = document.title
@@ -362,7 +375,7 @@ function VentasOgemiPage() {
       {/* Área de impresión: portal a body + display:none del resto (visibility deja páginas en blanco) */}
       {printVenta && typeof document !== 'undefined' && createPortal(
         <div id="factura-ogemi-print" className="hidden print:block">
-          <FacturaOgemiPrint venta={printVenta} />
+          <FacturaOgemiPrint venta={printVenta} cobros={printCobros} />
         </div>,
         document.body,
       )}

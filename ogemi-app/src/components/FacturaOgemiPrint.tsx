@@ -9,7 +9,19 @@ import type { VentaOgemi } from '@/types'
  * Impresora Ogemi. Mismo estilo ámbar que el recibo de anticipo de Ogemi.
  * Ogemi no emite factura electrónica: el pie lo aclara.
  */
-export default function FacturaOgemiPrint({ venta }: { venta: VentaOgemi }) {
+export interface CobroImpreso {
+  id: string
+  numero_recibo: number | null
+  fecha: string
+  monto: number
+  referencia: string | null
+  anticipo_id: string | null
+  banco_cuentas?: { nombre: string } | null
+}
+
+export const LOGO_OGEMI = '/logo-ogemi.png'
+
+export default function FacturaOgemiPrint({ venta, cobros = [] }: { venta: VentaOgemi; cobros?: CobroImpreso[] }) {
   const exact = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as CSSProperties
   const pagado = Number(venta.monto_pagado) || 0
   const ret = Number(venta.retencion_monto) || 0
@@ -22,8 +34,11 @@ export default function FacturaOgemiPrint({ venta }: { venta: VentaOgemi }) {
       <div className="overflow-hidden border-2 border-gray-200 rounded-2xl flex-1 flex flex-col">
         <div className="flex items-center text-white gap-6 px-10 py-8"
           style={{ ...exact, background: 'linear-gradient(135deg, #b45309 0%, #92400e 100%)' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={LOGO_OGEMI} alt="Impresora Ogemi" className="shrink-0" style={{ width: 96, height: 96 }} />
           <div className="flex-1 min-w-0">
             <h1 className="font-bold leading-tight text-2xl">IMPRESORA OGEMI</h1>
+            <p className="text-white/80 text-sm mt-1">Más que una impresión desde 1995</p>
           </div>
           <div className="text-right shrink-0">
             <p className="uppercase tracking-widest text-white/70 text-xs">Documento</p>
@@ -91,6 +106,40 @@ export default function FacturaOgemiPrint({ venta }: { venta: VentaOgemi }) {
                 style={{ ...exact, borderColor: '#b45309', color: '#b45309', background: '#fffbeb' }}>{estado}</span>
             </div>
           </div>
+
+          {cobros.length > 0 && (
+            <div className="mt-8">
+              <p className="text-sm font-semibold text-gray-700 mb-2">Cobros recibidos</p>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b-2 border-gray-300 text-left text-gray-500">
+                    <th className="py-1.5 font-medium">Recibo</th>
+                    <th className="py-1.5 font-medium">Fecha</th>
+                    <th className="py-1.5 font-medium">Forma de pago</th>
+                    <th className="py-1.5 font-medium">Referencia</th>
+                    <th className="py-1.5 font-medium text-right">Monto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cobros.map(c => (
+                    <tr key={c.id} className="border-b border-gray-100">
+                      <td className="py-1.5 font-mono text-xs">{c.numero_recibo ? `REC-${String(c.numero_recibo).padStart(5, '0')}` : '—'}</td>
+                      <td className="py-1.5">{formatDate(c.fecha)}</td>
+                      <td className="py-1.5">{c.anticipo_id ? 'Anticipo' : (c.banco_cuentas?.nombre || 'Banco')}</td>
+                      <td className="py-1.5 text-gray-500">{c.referencia || '—'}</td>
+                      <td className="py-1.5 text-right">{formatCurrency(c.monto)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="font-semibold">
+                    <td className="pt-2" colSpan={4}>Total cobrado</td>
+                    <td className="pt-2 text-right">{formatCurrency(cobros.reduce((t, c) => t + Number(c.monto || 0), 0))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
 
           {venta.notas && (
             <div className="mt-6 text-sm">
