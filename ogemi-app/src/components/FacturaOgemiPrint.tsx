@@ -33,7 +33,7 @@ export default function FacturaOgemiPrint({ venta, cobros = [] }: { venta: Venta
     <div className="font-sans text-gray-900 w-full" style={{ minHeight: 'calc(100vh - 28mm)', display: 'flex', flexDirection: 'column' }}>
       <div className="overflow-hidden border-2 border-gray-200 rounded-2xl flex-1 flex flex-col">
         <div className="flex items-center text-white gap-6 px-10 py-8"
-          style={{ ...exact, background: 'linear-gradient(135deg, #b45309 0%, #92400e 100%)' }}>
+          style={{ ...exact, background: 'linear-gradient(135deg, #1f1f1f 0%, #000000 100%)' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={LOGO_OGEMI} alt="Impresora Ogemi" className="shrink-0" style={{ width: 96, height: 96 }} />
           <div className="flex-1 min-w-0">

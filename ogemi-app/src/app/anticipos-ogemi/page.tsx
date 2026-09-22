@@ -12,6 +12,7 @@ import { Plus, Printer, Search, X, CheckCircle, AlertCircle, Download } from 'lu
 import { withPagePermission } from '@/components/PermissionGuard'
 import CambiarClienteAnticipo from '@/components/CambiarClienteAnticipo'
 import EditarDepositoAnticipo from '@/components/EditarDepositoAnticipo'
+import { LOGO_OGEMI } from '@/components/FacturaOgemiPrint'
 import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 
 // Anticipos de Impresora Ogemi: mismo formato y funcionalidad que /anticipos
@@ -111,7 +112,9 @@ function AnticiposOgemiPage() {
     })
   }
 
-  const handlePrint = (anticipo: Anticipo) => {
+  const handlePrint = async (anticipo: Anticipo) => {
+    // Asegura el logo cargado antes de abrir el diálogo de impresión
+    try { const img = new Image(); img.src = LOGO_OGEMI; await img.decode() } catch { /* se imprime sin esperar */ }
     setPrintData(anticipo)
     setTimeout(() => window.print(), 400)
   }
@@ -631,8 +634,12 @@ function ReciboAnticipo({ anticipo, preview = false, fullPage = false }: { antic
           className={`flex items-center text-white ${fullPage ? 'gap-6 px-10 py-8' : 'gap-4 px-6 py-5'}`}
           style={{ ...exact, background: 'linear-gradient(135deg, #b45309 0%, #92400e 100%)' }}
         >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={LOGO_OGEMI} alt="Impresora Ogemi" className="shrink-0"
+            style={{ width: fullPage ? 96 : 56, height: fullPage ? 96 : 56 }} />
           <div className="flex-1 min-w-0">
             <h1 className={`font-bold leading-tight ${fullPage ? 'text-2xl' : 'text-lg'}`}>IMPRESORA OGEMI</h1>
+            <p className={`text-white/80 mt-1 ${fullPage ? 'text-sm' : 'text-xs'}`}>Más que una impresión desde 1995</p>
           </div>
           <div className="text-right shrink-0">
             <p className={`uppercase tracking-widest text-white/70 ${fullPage ? 'text-xs' : 'text-[10px]'}`}>Recibo de</p>
