@@ -24,7 +24,7 @@ import { fetchAll } from '@/lib/fetchAll'
 type Cuenta = { id: string; nombre: string; banco: string; tipo: string | null; orden: number }
 type Doc = { id: string; fecha: string; total: number; monto: number; itbms: number; retencion_pct?: number | null; tipo_documento?: string | null; tipo_venta?: string | null; empresa?: string | null; numero_factura?: number | null }
 type Pago = { factura_id: string | null; compra_id: string | null; venta_ogemi_id: string | null; presupuesto_id: string | null; monto: number; fecha: string }
-type NotaCredito = { fecha: string; monto: number; factura_aplicada_id: string | null; documento_afectado: number | null }
+type NotaCredito = { fecha: string; monto: number; factura_aplicada_id: string | null; documento_afectado: number | null; empresa: 'impresos' | 'ogemi' | null }
 
 const hoy = () => new Date().toISOString().split('T')[0]
 
@@ -77,7 +77,7 @@ export default function InformeDiarioTab() {
       fetchAll<Doc>(() => supabase.from('compras').select('id,fecha,total,monto,itbms,tipo_documento,empresa').lte('fecha', fecha)),
       fetchAll<Pago>(() => supabase.from('pagos').select('factura_id,compra_id,venta_ogemi_id,presupuesto_id,monto,fecha').lte('fecha', fecha)),
       fetchAll<Pago>(() => supabase.from('pago_reversos').select('factura_id,compra_id,venta_ogemi_id,presupuesto_id,monto,fecha').lte('fecha', fecha)),
-      fetchAll<NotaCredito>(() => supabase.from('notas_credito').select('fecha,monto,factura_aplicada_id,documento_afectado').lte('fecha', fecha)),
+      fetchAll<NotaCredito>(() => supabase.from('notas_credito').select('fecha,monto,factura_aplicada_id,documento_afectado,empresa').lte('fecha', fecha)),
       fetchAll<Doc>(() => supabase.from('presupuestos').select('id,fecha,total,monto,itbms,tipo_documento').lte('fecha', fecha)),
     ])
     const err = e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8
@@ -169,7 +169,10 @@ export default function InformeDiarioTab() {
         || (n.documento_afectado != null ? facturaPorNumero.get(Number(n.documento_afectado)) : undefined)
       return f?.tipo_venta || null
     }
-    const ncsImp = incImpresos ? notasCredito : []
+    const ncsImp = incImpresos ? notasCredito.filter(n => (n.empresa || 'impresos') === 'impresos') : []
+    const ncsOgemi = incOgemi ? notasCredito.filter(n => n.empresa === 'ogemi') : []
+    const sumNC = (rows: NotaCredito[], enPeriodo: (f: string) => boolean) =>
+      rows.filter(n => enPeriodo(n.fecha)).reduce((s, n) => s + Number(n.monto || 0), 0)
     const ncDe = (tipo: string | null, enPeriodo: (f: string) => boolean) => ncsImp
       .filter(n => tipoDeNC(n) === tipo && enPeriodo(n.fecha))
       .reduce((s, n) => s + Number(n.monto || 0), 0)
@@ -190,10 +193,10 @@ export default function InformeDiarioTab() {
       mes: sumMonto(presupuestosValidos, p => enMes(p.fecha)),
       anio: sumMonto(presupuestosValidos, p => enAnio(p.fecha)),
     }
-    // Impresora Ogemi: las ventas con monto negativo (devoluciones/ajustes) ya restan en la suma
+    // Impresora Ogemi: ventas netas menos sus notas de crédito (monto neto, sin ITBMS)
     const ogemiIng = {
-      mes: sumMonto(ventasOgemi, v => enMes(v.fecha)),
-      anio: sumMonto(ventasOgemi, v => enAnio(v.fecha)),
+      mes: sumMonto(ventasOgemi, v => enMes(v.fecha)) - sumNC(ncsOgemi, enMes),
+      anio: sumMonto(ventasOgemi, v => enAnio(v.fecha)) - sumNC(ncsOgemi, enAnio),
     }
     const totalIng = {
       mes: porTipo.reduce((s, t) => s + t.mes, 0) + sinClasificar.mes + presupuestosIng.mes + ogemiIng.mes,
@@ -201,7 +204,7 @@ export default function InformeDiarioTab() {
     }
 
     return { bancos, tarjetas, totalBancos, totalTarjetas, cxcImpresos, cxcOgemi, cxcPresupuestos, totalCxC, cxpOgemi, cxpImpresos, cxpProveedores, totalCxP, saldoEfectivo, porTipo, sinClasificar, presupuestosIng, ogemiIng, totalIng }
-  }, [cuentas, saldos, facturas, ventasOgemi, presupuestos, compras, pagos, reversos, notasCredito, fecha, incImpresos])
+  }, [cuentas, saldos, facturas, ventasOgemi, presupuestos, compras, pagos, reversos, notasCredito, fecha, incImpresos, incOgemi])
 
   const Fila = ({ label, valor, indent = false, muted = false }: { label: string; valor: number; indent?: boolean; muted?: boolean }) => (
     <div className={`flex items-center justify-between py-0.5 ${indent ? 'pl-4' : ''} ${muted ? 'text-gray-400' : 'text-gray-700'}`}>

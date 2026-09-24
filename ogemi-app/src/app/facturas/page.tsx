@@ -325,6 +325,7 @@ function FacturasPage() {
         .from('notas_credito')
         .select('id, numero, total')
         .eq('cliente_id', f.cliente_id)
+        .eq('empresa', 'impresos')
         .eq('estado', 'disponible')
         .order('fecha'),
     ])

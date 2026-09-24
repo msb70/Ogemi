@@ -286,8 +286,8 @@ function DashboardPage() {
         supabase.from('ventas_ogemi').select('fecha,total').gte('fecha', prevStart).lte('fecha', prevEnd),
         supabase.from('ventas_ogemi').select('total,monto_pagado').eq('estado', 'pendiente'),
         // Las notas de crédito viven en notas_credito (no en facturas.tipo_documento)
-        supabase.from('notas_credito').select('fecha,total').gte('fecha', start).lte('fecha', end),
-        supabase.from('notas_credito').select('fecha,total').gte('fecha', prevStart).lte('fecha', prevEnd),
+        supabase.from('notas_credito').select('fecha,total,empresa').gte('fecha', start).lte('fecha', end),
+        supabase.from('notas_credito').select('fecha,total,empresa').gte('fecha', prevStart).lte('fecha', prevEnd),
       ])
 
       // Empresa: Impresos = facturas/NC/presupuestos; Ogemi = ventas_ogemi. Compras por columna empresa.
@@ -303,7 +303,8 @@ function DashboardPage() {
       const ventas = facturasCurE.filter(f => !isNotaCreditо(f.tipo_documento))
       const nc: any[] = [
         ...facturasCurE.filter(f => isNotaCreditо(f.tipo_documento)),
-        ...(incImpresos ? (ncCur || []) : []),
+        // NC de cada empresa según el filtro (Impresos → facturas; Ogemi → ventas Ogemi)
+        ...(ncCur || []).filter((n: any) => (n.empresa === 'ogemi' ? incOgemi : incImpresos)),
       ]
       const comprasArr = filtrarEmpresa(comprasCur || [], empresaFiltro)
 
@@ -320,7 +321,7 @@ function DashboardPage() {
       const ventasPrev = facturasPrevE.filter(f => !isNotaCreditо(f.tipo_documento))
       const ncPrev: any[] = [
         ...facturasPrevE.filter(f => isNotaCreditо(f.tipo_documento)),
-        ...(incImpresos ? (ncPrevData || []) : []),
+        ...(ncPrevData || []).filter((n: any) => (n.empresa === 'ogemi' ? incOgemi : incImpresos)),
       ]
       const comprasPrevArr = filtrarEmpresa(comprasPrev || [], empresaFiltro)
       setPrevKpi({

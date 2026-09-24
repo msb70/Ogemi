@@ -160,7 +160,7 @@ export async function importarLibroVentas(
   const [{ data: clientesDB }, { data: facturasDB }, { data: ncDB }] = await Promise.all([
     fetchAll<{ id: string; nombre: string }>(() => supabase.from('clientes').select('id, nombre')),
     fetchAll<{ numero_factura: number; tipo_documento: string }>(() => supabase.from('facturas').select('numero_factura, tipo_documento')),
-    fetchAll<{ cliente_id: string; fecha: string; total: number }>(() => supabase.from('notas_credito').select('cliente_id, fecha, total')),
+    fetchAll<{ cliente_id: string; fecha: string; total: number }>(() => supabase.from('notas_credito').select('cliente_id, fecha, total').eq('empresa', 'impresos')),
   ])
 
   const clientesMap: Record<string, string> = {}

@@ -118,6 +118,7 @@ function CobrosPage() {
         .from('notas_credito')
         .select('*')
         .eq('cliente_id', c.id)
+        .eq('empresa', 'impresos')
         .eq('estado', 'disponible')
         .order('fecha', { ascending: true }),
       supabase

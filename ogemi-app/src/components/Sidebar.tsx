@@ -50,6 +50,7 @@ const navItems: NavEntry[] = [
     children: [
       link('/ventas-ogemi',  'Facturas',       Printer,      'ventas_ogemi'),
       link('/anticipos-ogemi', 'Anticipos',    Wallet,       'ventas_ogemi'),
+      link('/notas-credito-ogemi', 'Notas de Crédito', FileText, 'notas_credito'),
       link('/compras',       'Compras',        ShoppingCart, 'compras'),
       link('/pagos-compras', 'Pago Compras',   WalletCards,  'compras'),
       link('/proveedores',   'Proveedores',    Truck,        'proveedores'),

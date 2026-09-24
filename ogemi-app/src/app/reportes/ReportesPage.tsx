@@ -88,7 +88,7 @@ function ReportesPage({ scope }: { scope: ReporteScope }) {
       scope === 'general' ? supabase.from('banco_cuentas').select('*').eq('activo', true).order('orden').order('nombre') : Promise.resolve({ data: [] as any[] }),
       esImpresos ? fetchAll(() => supabase.from('presupuestos').select('*, clientes(nombre)').order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
       esImpresos ? fetchAll(() => supabase.from('cartera_presupuestos').select('*').order('dias_vencida', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
-      esImpresos ? fetchAll(() => supabase.from('notas_credito').select('*, clientes(nombre), factura_aplicada:facturas!factura_aplicada_id(numero_factura)').order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
+      esImpresos ? fetchAll(() => supabase.from('notas_credito').select('*, clientes(nombre), factura_aplicada:facturas!factura_aplicada_id(numero_factura)').eq('empresa', 'impresos').order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
       esOgemi ? fetchAll(() => supabase.from('ventas_ogemi').select('*, clientes(nombre)').order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
     ])
     setFacturas(facturasData || [])

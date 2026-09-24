@@ -87,6 +87,9 @@ export interface NotaCredito {
   /** Número de la factura afectada (para auto-aplicación al importar) */
   documento_afectado?: number | null;
   factura_aplicada_id: string | null;
+  /** 'impresos' (aplica a facturas) | 'ogemi' (aplica a ventas_ogemi) */
+  empresa?: 'impresos' | 'ogemi';
+  venta_ogemi_aplicada_id?: string | null;
   pago_id: string | null;
   notas: string | null;
   created_at: string;
@@ -94,6 +97,7 @@ export interface NotaCredito {
   // Joins
   clientes?: Cliente;
   factura_aplicada?: { numero_factura: number } | null;
+  venta_aplicada?: { numero: number } | null;
 }
 
 export interface Presupuesto {

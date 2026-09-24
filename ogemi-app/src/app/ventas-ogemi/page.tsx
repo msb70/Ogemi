@@ -19,14 +19,17 @@ import FacturaOgemiPrint, { LOGO_OGEMI, type CobroImpreso } from '@/components/F
 
 type Filtro = 'todas' | 'pendiente' | 'pagada' | 'falta_retencion'
 
-// Cobro por líneas, igual que en Facturas (Impresos): cuenta bancaria o anticipo
+// Cobro por líneas, igual que en Facturas (Impresos): cuenta bancaria, anticipo o nota de crédito
 interface LineaCobro {
-  origen: 'cuenta' | 'anticipo'
+  origen: 'cuenta' | 'anticipo' | 'nota_credito'
   cuenta_id: string
   anticipo_id: string
+  nota_credito_id: string
   monto: string
   referencia: string
 }
+
+type NcDisp = { id: string; numero: string | null; fecha: string; total: number }
 
 type AnticipoDisp = {
   id: string
@@ -39,8 +42,12 @@ type AnticipoDisp = {
 }
 
 const emptyLinea = (cuentaId = ''): LineaCobro => ({
-  origen: 'cuenta', cuenta_id: cuentaId, anticipo_id: '', monto: '', referencia: '',
+  origen: 'cuenta', cuenta_id: cuentaId, anticipo_id: '', nota_credito_id: '', monto: '', referencia: '',
 })
+
+/** Una línea está completa cuando tiene monto y el origen elegido */
+const lineaLista = (l: LineaCobro) => parseFloat(l.monto) > 0 &&
+  (l.origen === 'cuenta' ? !!l.cuenta_id : l.origen === 'anticipo' ? !!l.anticipo_id : !!l.nota_credito_id)
 
 const hoy = () => new Date().toISOString().split('T')[0]
 
@@ -103,6 +110,7 @@ function VentasOgemiPage() {
   const [fechaCobro, setFechaCobro] = useState(hoy())
   const [lineas, setLineas] = useState<LineaCobro[]>([emptyLinea()])
   const [anticipos, setAnticipos] = useState<AnticipoDisp[]>([])
+  const [ncsDisp, setNcsDisp] = useState<NcDisp[]>([])
   const [cobrando, setCobrando] = useState(false)
 
   // Historial de cobros / reverso
@@ -205,29 +213,49 @@ function VentasOgemiPage() {
     l0.monto = saldoDe(v).toFixed(2)
     setLineas([l0])
     setAnticipos([])
-    // Anticipos de Ogemi del cliente con saldo disponible
-    const { data } = await supabase
-      .from('anticipos_saldos')
-      .select('id, fecha, monto, saldo, numero_deposito, numero_recibo, cuenta_id')
-      .eq('cliente_id', v.cliente_id)
-      .eq('empresa', 'ogemi')
-      .eq('estado', 'activo')
-      .gt('saldo', 0)
-      .order('fecha')
+    setNcsDisp([])
+    // Anticipos y notas de crédito de Ogemi del cliente, disponibles
+    const [{ data }, { data: ncs }] = await Promise.all([
+      supabase
+        .from('anticipos_saldos')
+        .select('id, fecha, monto, saldo, numero_deposito, numero_recibo, cuenta_id')
+        .eq('cliente_id', v.cliente_id)
+        .eq('empresa', 'ogemi')
+        .eq('estado', 'activo')
+        .gt('saldo', 0)
+        .order('fecha'),
+      supabase
+        .from('notas_credito')
+        .select('id, numero, fecha, total')
+        .eq('cliente_id', v.cliente_id)
+        .eq('empresa', 'ogemi')
+        .eq('estado', 'disponible')
+        .order('fecha'),
+    ])
     setAnticipos((data || []) as AnticipoDisp[])
+    setNcsDisp((ncs || []) as NcDisp[])
   }
 
   const addLinea = () => setLineas(prev => [...prev, emptyLinea(cuentas[0]?.id || '')])
   const removeLinea = (idx: number) => setLineas(prev => prev.filter((_, i) => i !== idx))
   const updateLinea = (idx: number, field: keyof LineaCobro, value: string) =>
-    setLineas(prev => prev.map((l, i) => i === idx ? ({ ...l, [field]: value } as LineaCobro) : l))
+    setLineas(prev => prev.map((l, i) => {
+      if (i !== idx) return l
+      // Al pasar a nota de crédito el monto sale de la NC elegida (uso único, por su total)
+      if (field === 'origen' && value === 'nota_credito') return { ...l, origen: 'nota_credito', nota_credito_id: '', monto: '', referencia: '' }
+      return { ...l, [field]: value } as LineaCobro
+    }))
   const totalLineas = lineas.reduce((t, l) => t + (parseFloat(l.monto) || 0), 0)
 
   const registrarCobro = async () => {
     if (!cobrar) return
-    const validas = lineas.filter(l => parseFloat(l.monto) > 0 && (l.origen === 'cuenta' ? l.cuenta_id : l.anticipo_id))
+    const validas = lineas.filter(lineaLista)
     if (validas.length === 0) { showToast('Agrega al menos un pago con monto y origen', 'error'); return }
     if (totalLineas > saldoDe(cobrar) + 0.005) { showToast('El monto supera el saldo pendiente', 'error'); return }
+
+    // Cada nota de crédito se usa una sola vez
+    const ncIds = validas.filter(l => l.origen === 'nota_credito').map(l => l.nota_credito_id)
+    if (new Set(ncIds).size !== ncIds.length) { showToast('La misma nota de crédito está en dos líneas', 'error'); return }
 
     // Un anticipo puede usarse en varias líneas: validar el acumulado contra su saldo
     const usoAnt = new Map<string, number>()
@@ -241,6 +269,21 @@ function VentasOgemiPage() {
     }
 
     setCobrando(true)
+
+    // 0) Notas de crédito: vía RPC (valida empresa, cliente, disponible y saldo; no mueve banco)
+    let ncAplicadas = 0
+    for (const id of ncIds) {
+      const { error: eNc } = await supabase.rpc('aplicar_nota_credito_ogemi', {
+        p_nota_id: id, p_venta_id: cobrar.id, p_fecha: fechaCobro,
+      })
+      if (eNc) {
+        setCobrando(false)
+        showToast(`${ncAplicadas > 0 ? 'Se aplicaron algunas NC, pero no' : 'No'} se pudo aplicar la nota de crédito: ${eNc.message}`, 'error')
+        if (ncAplicadas > 0) { setCobrar(null); load() }
+        return
+      }
+      ncAplicadas++
+    }
 
     // 1) Anticipos: vía RPC (valida empresa, cliente, saldo del anticipo y de la venta; no mueve banco)
     if (usoAnt.size > 0) {
@@ -274,12 +317,13 @@ function VentasOgemiPage() {
       : { error: null }
 
     setCobrando(false)
+    const creditos = usoAnt.size > 0 || ncAplicadas > 0
     if (error) {
-      showToast(`${usoAnt.size > 0 ? 'El anticipo se aplicó, pero no' : 'No'} se pudo registrar el cobro en banco: ${error.message}`, 'error')
-      if (usoAnt.size > 0) { setCobrar(null); load() }
+      showToast(`${creditos ? 'El anticipo/NC se aplicó, pero no' : 'No'} se pudo registrar el cobro en banco: ${error.message}`, 'error')
+      if (creditos) { setCobrar(null); load() }
       return
     }
-    showToast(pagosInsert.length > 0 ? 'Cobro registrado' : 'Anticipo aplicado', 'success')
+    showToast(pagosInsert.length > 0 ? 'Cobro registrado' : ncAplicadas > 0 && usoAnt.size === 0 ? 'Nota de crédito aplicada' : 'Anticipo aplicado', 'success')
     setCobrar(null)
     load()
   }
@@ -289,7 +333,7 @@ function VentasOgemiPage() {
     setHistorial(v)
     const { data } = await supabase
       .from('pagos')
-      .select('id, fecha, monto, referencia, numero_recibo, cuenta_id, lote_id, anticipo_id, banco_cuentas(nombre, banco), pago_reversos(id, fecha, motivo)')
+      .select('id, fecha, monto, referencia, numero_recibo, cuenta_id, lote_id, anticipo_id, nota_credito_id, banco_cuentas(nombre, banco), pago_reversos(id, fecha, motivo)')
       .eq('venta_ogemi_id', v.id)
       .order('fecha', { ascending: false })
     setPagos(data || [])
@@ -553,6 +597,11 @@ function VentasOgemiPage() {
                 El cliente tiene {anticipos.length} anticipo{anticipos.length === 1 ? '' : 's'} disponible{anticipos.length === 1 ? '' : 's'} por {formatCurrency(anticipos.reduce((t, a) => t + a.saldo, 0))}. Elige el origen &quot;Anticipo&quot; para aplicarlo.
               </div>
             )}
+            {ncsDisp.length > 0 && (
+              <div className="text-xs text-purple-800 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 mb-3">
+                El cliente tiene {ncsDisp.length} nota{ncsDisp.length === 1 ? '' : 's'} de crédito disponible{ncsDisp.length === 1 ? '' : 's'} por {formatCurrency(ncsDisp.reduce((t, n) => t + Number(n.total || 0), 0))}. Elige el origen &quot;Nota de crédito&quot; para aplicarla.
+              </div>
+            )}
 
             <div className="mb-4">
               <label className="label">Fecha de cobro</label>
@@ -583,10 +632,37 @@ function VentasOgemiPage() {
                         <option value="anticipo" disabled={anticipos.length === 0}>
                           {anticipos.length === 0 ? 'Anticipo (sin saldo)' : 'Anticipo'}
                         </option>
+                        <option value="nota_credito" disabled={ncsDisp.length === 0}>
+                          {ncsDisp.length === 0 ? 'Nota de crédito (sin disponibles)' : 'Nota de crédito'}
+                        </option>
                       </select>
                     </div>
                     <div>
-                      {linea.origen === 'cuenta' ? (
+                      {linea.origen === 'nota_credito' ? (
+                        <>
+                          <label className="label text-xs">Nota de crédito</label>
+                          <select
+                            className="input text-sm"
+                            value={linea.nota_credito_id}
+                            onChange={e => {
+                              const n = ncsDisp.find(x => x.id === e.target.value)
+                              // La NC se aplica por su total (uso único)
+                              setLineas(prev => prev.map((l, i) => i === idx ? ({
+                                ...l, nota_credito_id: e.target.value,
+                                monto: n ? Number(n.total).toFixed(2) : '',
+                              }) : l))
+                            }}
+                          >
+                            <option value="">Seleccionar nota de crédito...</option>
+                            {ncsDisp.map(n => (
+                              <option key={n.id} value={n.id}
+                                disabled={lineas.some((l, i) => i !== idx && l.origen === 'nota_credito' && l.nota_credito_id === n.id)}>
+                                NC {n.numero || '—'} · {formatDate(n.fecha)} · {formatCurrency(n.total)}
+                              </option>
+                            ))}
+                          </select>
+                        </>
+                      ) : linea.origen === 'cuenta' ? (
                         <>
                           <label className="label text-xs">Cuenta bancaria</label>
                           <select className="input text-sm" value={linea.cuenta_id} onChange={e => updateLinea(idx, 'cuenta_id', e.target.value)}>
@@ -626,13 +702,15 @@ function VentasOgemiPage() {
                     <div>
                       <label className="label text-xs">Monto</label>
                       <input type="number" step="0.01" min="0.01" className="input text-sm" placeholder="0.00"
-                        value={linea.monto} onChange={e => updateLinea(idx, 'monto', e.target.value)} />
+                        value={linea.monto} onChange={e => updateLinea(idx, 'monto', e.target.value)}
+                        readOnly={linea.origen === 'nota_credito'}
+                        title={linea.origen === 'nota_credito' ? 'La nota de crédito se aplica por su monto total' : undefined} />
                     </div>
                     <div>
                       <label className="label text-xs">Referencia</label>
                       <input className="input text-sm" placeholder="Cheque, transferencia..." value={linea.referencia}
-                        disabled={linea.origen === 'anticipo'}
-                        title={linea.origen === 'anticipo' ? 'La referencia se genera con el N° de recibo del anticipo' : undefined}
+                        disabled={linea.origen !== 'cuenta'}
+                        title={linea.origen === 'anticipo' ? 'La referencia se genera con el N° de recibo del anticipo' : linea.origen === 'nota_credito' ? 'La referencia se genera con el N° de la nota de crédito' : undefined}
                         onChange={e => updateLinea(idx, 'referencia', e.target.value)} />
                     </div>
                   </div>
@@ -658,7 +736,7 @@ function VentasOgemiPage() {
               <button
                 className="btn-primary flex-1"
                 onClick={registrarCobro}
-                disabled={cobrando || lineas.every(l => !l.monto || (l.origen === 'cuenta' ? !l.cuenta_id : !l.anticipo_id))}
+                disabled={cobrando || !lineas.some(lineaLista)}
               >
                 {cobrando ? 'Registrando...' : 'Registrar cobro'}
               </button>
@@ -721,7 +799,7 @@ function VentasOgemiPage() {
                         <tr key={p.id} className={rev ? 'opacity-50' : ''}>
                           <td className="table-cell font-mono text-xs">{p.numero_recibo ? `REC-${String(p.numero_recibo).padStart(5, '0')}` : '—'}</td>
                           <td className="table-cell">{formatDate(p.fecha)}</td>
-                          <td className="table-cell text-gray-500">{p.anticipo_id ? <span className="badge bg-amber-100 text-amber-700">Anticipo</span> : p.banco_cuentas?.nombre}</td>
+                          <td className="table-cell text-gray-500">{p.nota_credito_id ? <span className="badge bg-purple-100 text-purple-700">Nota de crédito</span> : p.anticipo_id ? <span className="badge bg-amber-100 text-amber-700">Anticipo</span> : p.banco_cuentas?.nombre}</td>
                           <td className="table-cell text-right font-semibold">{formatCurrency(p.monto)}</td>
                           <td className="table-cell">
                             <div className="flex items-center gap-2">
