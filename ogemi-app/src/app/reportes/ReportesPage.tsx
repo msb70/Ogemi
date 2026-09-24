@@ -88,7 +88,10 @@ function ReportesPage({ scope }: { scope: ReporteScope }) {
       scope === 'general' ? supabase.from('banco_cuentas').select('*').eq('activo', true).order('orden').order('nombre') : Promise.resolve({ data: [] as any[] }),
       esImpresos ? fetchAll(() => supabase.from('presupuestos').select('*, clientes(nombre)').order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
       esImpresos ? fetchAll(() => supabase.from('cartera_presupuestos').select('*').order('dias_vencida', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
-      esImpresos ? fetchAll(() => supabase.from('notas_credito').select('*, clientes(nombre), factura_aplicada:facturas!factura_aplicada_id(numero_factura)').eq('empresa', 'impresos').order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
+      // NC de la empresa del reporte (Impresos → aplicadas a facturas; Ogemi → aplicadas a ventas Ogemi)
+      (esImpresos || esOgemi) ? fetchAll(() => supabase.from('notas_credito')
+        .select('*, clientes(nombre), factura_aplicada:facturas!factura_aplicada_id(numero_factura), venta_aplicada:ventas_ogemi!venta_ogemi_aplicada_id(numero)')
+        .eq('empresa', esOgemi ? 'ogemi' : 'impresos').order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
       esOgemi ? fetchAll(() => supabase.from('ventas_ogemi').select('*, clientes(nombre)').order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
     ])
     setFacturas(facturasData || [])
@@ -213,7 +216,7 @@ function ReportesPage({ scope }: { scope: ReporteScope }) {
     fecha: n.fecha,
     clientes: n.clientes,
     tipo_documento: 'NOTA DE CREDITO',
-    documento_afectado: n.factura_aplicada?.numero_factura ?? null,
+    documento_afectado: n.factura_aplicada?.numero_factura ?? n.venta_aplicada?.numero ?? n.documento_afectado ?? null,
     monto: -Math.abs(n.monto || 0),
     itbms: -Math.abs(n.itbms || 0),
     total: -Math.abs(n.total || 0),
@@ -383,7 +386,7 @@ function ReportesPage({ scope }: { scope: ReporteScope }) {
             ventasFiltradas={ventasFiltradas}
             facturas={ventasBase}
             cartera={carteraScope}
-            ocultarSubTabs={esOgemi ? ['estado_cuenta', 'movimiento', 'nc'] : []}
+            ocultarSubTabs={esOgemi ? ['estado_cuenta', 'movimiento'] : []}
             topClientesVentas={topClientesVentas}
             ventasPorMes={ventasPorMes}
             ncFiltradas={ncFiltradas}
