@@ -22,8 +22,9 @@ import { fetchAll } from '@/lib/fetchAll'
  */
 
 type Cuenta = { id: string; nombre: string; banco: string; tipo: string | null; orden: number }
-type Doc = { id: string; fecha: string; total: number; monto: number; itbms: number; retencion_pct?: number | null; tipo_documento?: string | null; tipo_venta?: string | null; empresa?: string | null }
-type Pago = { factura_id: string | null; compra_id: string | null; venta_ogemi_id: string | null; monto: number; fecha: string }
+type Doc = { id: string; fecha: string; total: number; monto: number; itbms: number; retencion_pct?: number | null; tipo_documento?: string | null; tipo_venta?: string | null; empresa?: string | null; numero_factura?: number | null }
+type Pago = { factura_id: string | null; compra_id: string | null; venta_ogemi_id: string | null; presupuesto_id: string | null; monto: number; fecha: string }
+type NotaCredito = { fecha: string; monto: number; factura_aplicada_id: string | null; documento_afectado: number | null }
 
 const hoy = () => new Date().toISOString().split('T')[0]
 
@@ -52,7 +53,9 @@ export default function InformeDiarioTab() {
   const facturas = useMemo(() => incImpresos ? facturasRaw : [], [facturasRaw, incImpresos])
   const ventasOgemi = useMemo(() => incOgemi ? ventasOgemiRaw : [], [ventasOgemiRaw, incOgemi])
   const compras = useMemo(() => filtrarEmpresa(comprasRaw, empresaFiltro), [comprasRaw, empresaFiltro])
-  const [notasCredito, setNotasCredito] = useState<{ fecha: string; monto: number }[]>([])
+  const [presupuestosRaw, setPresupuestos] = useState<Doc[]>([])
+  const presupuestos = useMemo(() => incImpresos ? presupuestosRaw : [], [presupuestosRaw, incImpresos])
+  const [notasCredito, setNotasCredito] = useState<NotaCredito[]>([])
   const [pagos, setPagos] = useState<Pago[]>([])
   const [reversos, setReversos] = useState<Pago[]>([])
 
@@ -66,16 +69,18 @@ export default function InformeDiarioTab() {
       { data: pg, error: e5 },
       { data: rv, error: e6 },
       { data: nc, error: e7 },
+      { data: pre, error: e8 },
     ] = await Promise.all([
       fetchAll<Cuenta>(() => supabase.from('banco_cuentas').select('id,nombre,banco,tipo,orden').eq('activo', true).order('orden').order('nombre')),
-      fetchAll<Doc>(() => supabase.from('facturas').select('id,fecha,total,monto,itbms,retencion_pct,tipo_documento,tipo_venta').lte('fecha', fecha)),
+      fetchAll<Doc>(() => supabase.from('facturas').select('id,fecha,total,monto,itbms,retencion_pct,tipo_documento,tipo_venta,numero_factura').lte('fecha', fecha)),
       fetchAll<Doc>(() => supabase.from('ventas_ogemi').select('id,fecha,total,monto,itbms,retencion_pct').lte('fecha', fecha)),
       fetchAll<Doc>(() => supabase.from('compras').select('id,fecha,total,monto,itbms,tipo_documento,empresa').lte('fecha', fecha)),
-      fetchAll<Pago>(() => supabase.from('pagos').select('factura_id,compra_id,venta_ogemi_id,monto,fecha').lte('fecha', fecha)),
-      fetchAll<Pago>(() => supabase.from('pago_reversos').select('factura_id,compra_id,venta_ogemi_id,monto,fecha').lte('fecha', fecha)),
-      fetchAll<{ fecha: string; monto: number }>(() => supabase.from('notas_credito').select('fecha,monto').lte('fecha', fecha)),
+      fetchAll<Pago>(() => supabase.from('pagos').select('factura_id,compra_id,venta_ogemi_id,presupuesto_id,monto,fecha').lte('fecha', fecha)),
+      fetchAll<Pago>(() => supabase.from('pago_reversos').select('factura_id,compra_id,venta_ogemi_id,presupuesto_id,monto,fecha').lte('fecha', fecha)),
+      fetchAll<NotaCredito>(() => supabase.from('notas_credito').select('fecha,monto,factura_aplicada_id,documento_afectado').lte('fecha', fecha)),
+      fetchAll<Doc>(() => supabase.from('presupuestos').select('id,fecha,total,monto,itbms,tipo_documento').lte('fecha', fecha)),
     ])
-    const err = e1 || e2 || e3 || e4 || e5 || e6 || e7
+    const err = e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8
     if (err) setError(err.message)
     const cts = ctas
     setCuentas(cts)
@@ -85,6 +90,7 @@ export default function InformeDiarioTab() {
     setPagos(pg)
     setReversos(rv)
     setNotasCredito(nc)
+    setPresupuestos(pre)
 
     // Saldo de cada cuenta a la fecha (misma función que usa Banco)
     const res = await Promise.all(cts.map(c => supabase.rpc('saldo_cuenta', { p_cuenta_id: c.id, p_hasta: fecha })))
@@ -98,7 +104,7 @@ export default function InformeDiarioTab() {
 
   // ── Cálculo ────────────────────────────────────────────────────────────────
   const inf = useMemo(() => {
-    const pagadoPor = (key: 'factura_id' | 'compra_id' | 'venta_ogemi_id') => {
+    const pagadoPor = (key: 'factura_id' | 'compra_id' | 'venta_ogemi_id' | 'presupuesto_id') => {
       const m: Record<string, number> = {}
       pagos.forEach(p => { const k = p[key]; if (k) m[k] = (m[k] || 0) + Number(p.monto || 0) })
       reversos.forEach(r => { const k = r[key]; if (k) m[k] = (m[k] || 0) - Number(r.monto || 0) })
@@ -107,6 +113,7 @@ export default function InformeDiarioTab() {
     const pagFact = pagadoPor('factura_id')
     const pagComp = pagadoPor('compra_id')
     const pagVo = pagadoPor('venta_ogemi_id')
+    const pagPre = pagadoPor('presupuesto_id')
 
     // Bancos (cuentas tipo banco) y tarjetas (deuda = saldo negativo)
     const bancos = cuentas.filter(c => c.tipo !== 'tarjeta_credito').map(c => ({ ...c, saldo: saldos[c.id] || 0 }))
@@ -127,7 +134,11 @@ export default function InformeDiarioTab() {
       const ret = Number(v.retencion_pct || 0) > 0 ? Math.round(Number(v.retencion_pct) / 100 * Number(v.itbms || 0) * 100) / 100 : 0
       return s + Math.max(0, Number(v.total) - ret - (pagVo[v.id] || 0))
     }, 0)
-    const totalCxC = cxcImpresos + cxcOgemi
+    // CxC Presupuestos (Impresos Comerciales, sin retención): total − cobrado hasta la fecha
+    const presupuestosValidos = presupuestos.filter(p => !isNC(p.tipo_documento || '') && Number(p.total) > 0)
+    const cxcPresupuestos = presupuestosValidos
+      .reduce((s, p) => s + Math.max(0, Number(p.total) - (pagPre[p.id] || 0)), 0)
+    const totalCxC = cxcImpresos + cxcOgemi + cxcPresupuestos
 
     // CxP proveedores
     const cxpDe = (rows: Doc[]) => rows
@@ -146,31 +157,51 @@ export default function InformeDiarioTab() {
     const enMes = (f: string) => f.slice(0, 7) === mes
     const enAnio = (f: string) => f.slice(0, 4) === anio
     const ventasImp = facturas.filter(f => !isNC(f.tipo_documento || '') && Number(f.total) > 0)
+
+    // Notas de crédito: se restan dentro del rubro de la factura que afectan
+    // (factura_aplicada_id o, si no, documento_afectado = número de factura).
+    // Las que afectan a una factura sin tipo de venta se restan de "Sin clasificar".
+    const facturaPorId = new Map(ventasImp.map(f => [f.id, f]))
+    const facturaPorNumero = new Map<number, Doc>()
+    ventasImp.forEach(f => { if (f.numero_factura != null && !facturaPorNumero.has(Number(f.numero_factura))) facturaPorNumero.set(Number(f.numero_factura), f) })
+    const tipoDeNC = (n: NotaCredito): string | null => {
+      const f = (n.factura_aplicada_id && facturaPorId.get(n.factura_aplicada_id))
+        || (n.documento_afectado != null ? facturaPorNumero.get(Number(n.documento_afectado)) : undefined)
+      return f?.tipo_venta || null
+    }
+    const ncsImp = incImpresos ? notasCredito : []
+    const ncDe = (tipo: string | null, enPeriodo: (f: string) => boolean) => ncsImp
+      .filter(n => tipoDeNC(n) === tipo && enPeriodo(n.fecha))
+      .reduce((s, n) => s + Number(n.monto || 0), 0)
+    const sumMonto = (rows: Doc[], pred: (d: Doc) => boolean) => rows.filter(pred).reduce((s, d) => s + Number(d.monto || 0), 0)
+
     const porTipo = TIPOS_VENTA.map(t => ({
       cuenta: t.cuenta, nombre: t.nombre,
-      mes: ventasImp.filter(f => f.tipo_venta === t.value && enMes(f.fecha)).reduce((s, f) => s + Number(f.monto || 0), 0),
-      anio: ventasImp.filter(f => f.tipo_venta === t.value && enAnio(f.fecha)).reduce((s, f) => s + Number(f.monto || 0), 0),
+      mes: sumMonto(ventasImp, f => f.tipo_venta === t.value && enMes(f.fecha)) - ncDe(t.value, enMes),
+      anio: sumMonto(ventasImp, f => f.tipo_venta === t.value && enAnio(f.fecha)) - ncDe(t.value, enAnio),
     }))
     const sinClasificar = {
-      mes: ventasImp.filter(f => !f.tipo_venta && enMes(f.fecha)).reduce((s, f) => s + Number(f.monto || 0), 0),
-      anio: ventasImp.filter(f => !f.tipo_venta && enAnio(f.fecha)).reduce((s, f) => s + Number(f.monto || 0), 0),
+      mes: sumMonto(ventasImp, f => !f.tipo_venta && enMes(f.fecha)) - ncDe(null, enMes),
+      anio: sumMonto(ventasImp, f => !f.tipo_venta && enAnio(f.fecha)) - ncDe(null, enAnio),
       n: ventasImp.filter(f => !f.tipo_venta && enAnio(f.fecha)).length,
     }
-    const ncs = {
-      mes: (incImpresos ? notasCredito : []).filter(n => enMes(n.fecha)).reduce((s, n) => s + Number(n.monto || 0), 0),
-      anio: (incImpresos ? notasCredito : []).filter(n => enAnio(n.fecha)).reduce((s, n) => s + Number(n.monto || 0), 0),
+    // Ventas de presupuestos (Impresos Comerciales), monto neto sin ITBMS
+    const presupuestosIng = {
+      mes: sumMonto(presupuestosValidos, p => enMes(p.fecha)),
+      anio: sumMonto(presupuestosValidos, p => enAnio(p.fecha)),
     }
+    // Impresora Ogemi: las ventas con monto negativo (devoluciones/ajustes) ya restan en la suma
     const ogemiIng = {
-      mes: ventasOgemi.filter(v => enMes(v.fecha)).reduce((s, v) => s + Number(v.monto || 0), 0),
-      anio: ventasOgemi.filter(v => enAnio(v.fecha)).reduce((s, v) => s + Number(v.monto || 0), 0),
+      mes: sumMonto(ventasOgemi, v => enMes(v.fecha)),
+      anio: sumMonto(ventasOgemi, v => enAnio(v.fecha)),
     }
     const totalIng = {
-      mes: porTipo.reduce((s, t) => s + t.mes, 0) + sinClasificar.mes - ncs.mes + ogemiIng.mes,
-      anio: porTipo.reduce((s, t) => s + t.anio, 0) + sinClasificar.anio - ncs.anio + ogemiIng.anio,
+      mes: porTipo.reduce((s, t) => s + t.mes, 0) + sinClasificar.mes + presupuestosIng.mes + ogemiIng.mes,
+      anio: porTipo.reduce((s, t) => s + t.anio, 0) + sinClasificar.anio + presupuestosIng.anio + ogemiIng.anio,
     }
 
-    return { bancos, tarjetas, totalBancos, totalTarjetas, cxcImpresos, cxcOgemi, totalCxC, cxpOgemi, cxpImpresos, cxpProveedores, totalCxP, saldoEfectivo, porTipo, sinClasificar, ncs, ogemiIng, totalIng }
-  }, [cuentas, saldos, facturas, ventasOgemi, compras, pagos, reversos, notasCredito, fecha, incImpresos])
+    return { bancos, tarjetas, totalBancos, totalTarjetas, cxcImpresos, cxcOgemi, cxcPresupuestos, totalCxC, cxpOgemi, cxpImpresos, cxpProveedores, totalCxP, saldoEfectivo, porTipo, sinClasificar, presupuestosIng, ogemiIng, totalIng }
+  }, [cuentas, saldos, facturas, ventasOgemi, presupuestos, compras, pagos, reversos, notasCredito, fecha, incImpresos])
 
   const Fila = ({ label, valor, indent = false, muted = false }: { label: string; valor: number; indent?: boolean; muted?: boolean }) => (
     <div className={`flex items-center justify-between py-0.5 ${indent ? 'pl-4' : ''} ${muted ? 'text-gray-400' : 'text-gray-700'}`}>
@@ -225,6 +256,7 @@ export default function InformeDiarioTab() {
         <Seccion titulo="CUENTAS POR COBRAR">
           {incOgemi && <Fila label="CUENTAS X COBRAR - IMPRESORA OGEMI" valor={inf.cxcOgemi} />}
           {incImpresos && <Fila label="CUENTAS X COBRAR - IMP. COMERCIALES" valor={inf.cxcImpresos} />}
+          {incImpresos && <Fila label="CUENTAS X COBRAR - PRESUPUESTOS" valor={inf.cxcPresupuestos} />}
           <Total label="TOTAL CUENTAS POR COBRAR" valor={inf.totalCxC} />
         </Seccion>
 
@@ -268,14 +300,12 @@ export default function InformeDiarioTab() {
                   <td className="py-0.5 text-right tabular-nums">{formatMonto(inf.sinClasificar.anio)}</td>
                 </tr>
               )}
-              {(inf.ncs.mes !== 0 || inf.ncs.anio !== 0) && (
-                <tr className="text-red-600">
-                  <td className="py-0.5 font-mono text-xs">NC</td>
-                  <td className="py-0.5">Notas de crédito</td>
-                  <td className="py-0.5 text-right tabular-nums">−{formatMonto(inf.ncs.mes)}</td>
-                  <td className="py-0.5 text-right tabular-nums">−{formatMonto(inf.ncs.anio)}</td>
-                </tr>
-              )}
+              {incImpresos && <tr>
+                <td className="py-0.5 text-gray-500 font-mono text-xs">PRES</td>
+                <td className="py-0.5 text-gray-700">Ventas de presupuestos</td>
+                <td className="py-0.5 text-right tabular-nums">{formatMonto(inf.presupuestosIng.mes)}</td>
+                <td className="py-0.5 text-right tabular-nums">{formatMonto(inf.presupuestosIng.anio)}</td>
+              </tr>}
               {incOgemi && <tr>
                 <td className="py-0.5 text-gray-500 font-mono text-xs">OGEMI</td>
                 <td className="py-0.5 text-gray-700">Ventas Impresora Ogemi</td>
@@ -291,7 +321,7 @@ export default function InformeDiarioTab() {
               </tr>
             </tfoot>
           </table>
-          <p className="text-[11px] text-gray-400 mt-1 print:hidden">Montos netos (sin ITBMS). Mes = {formatDate(fecha).slice(3)} · Año = {fecha.slice(0, 4)} hasta la fecha.</p>
+          <p className="text-[11px] text-gray-400 mt-1 print:hidden">Montos netos (sin ITBMS), ya descontadas las notas de crédito en el rubro de la factura que afectan. Mes = {formatDate(fecha).slice(3)} · Año = {fecha.slice(0, 4)} hasta la fecha.</p>
         </Seccion>
       </div>
     </div>
