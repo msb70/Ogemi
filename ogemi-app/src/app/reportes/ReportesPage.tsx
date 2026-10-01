@@ -23,13 +23,15 @@ import LibrosTab      from './components/LibrosTab'
 import InformeDiarioTab from './components/InformeDiarioTab'
 
 type ReporteTab = 'informe' | 'ventas' | 'presupuestos' | 'compras' | 'banco' | 'libros'
-/** general = /reportes (Informe diario + Banco); impresos / ogemi = reportes de cada empresa */
-export type ReporteScope = 'general' | Empresa
+/** general = /reportes (Informe diario + Banco); impresos / ogemi = reportes de cada empresa; presupuestos = /reportes-presupuestos */
+export type ReporteScope = 'general' | Empresa | 'presupuestos'
 
 function ReportesPage({ scope }: { scope: ReporteScope }) {
-  const [tab, setTab] = useState<ReporteTab>(scope === 'general' ? 'informe' : 'ventas')
+  const [tab, setTab] = useState<ReporteTab>(scope === 'general' ? 'informe' : scope === 'presupuestos' ? 'presupuestos' : 'ventas')
   const esImpresos = scope === 'impresos'
   const esOgemi = scope === 'ogemi'
+  const esPresupuestos = scope === 'presupuestos'
+  const esEmpresa = esImpresos || esOgemi
   const [loading, setLoading] = useState(false)
 
   // Filtros compartidos
@@ -47,7 +49,7 @@ function ReportesPage({ scope }: { scope: ReporteScope }) {
   const [cartera, setCartera] = useState<CarteraVencida[]>([])
   const [cxpAll, setCxp] = useState<any[]>([])
   const [ventasOgemi, setVentasOgemi] = useState<any[]>([])
-  const empresaFiltro = scope === 'general' ? 'all' : scope
+  const empresaFiltro = esImpresos ? 'impresos' : esOgemi ? 'ogemi' : 'all'
   const compras = filtrarEmpresa(comprasAll, empresaFiltro)
   const cxp = filtrarEmpresa(cxpAll, empresaFiltro)
   const [carteraPresupuestos, setCarteraPresupuestos] = useState<any[]>([])
@@ -82,12 +84,12 @@ function ReportesPage({ scope }: { scope: ReporteScope }) {
       { data: ventasOgemiData },
     ] = await Promise.all([
       esImpresos ? fetchAll(() => supabase.from('facturas').select('*, clientes(nombre)').order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
-      scope !== 'general' ? fetchAll(() => supabase.from('compras').select('*, proveedores(nombre), banco_cuentas(nombre,banco)').eq('empresa', scope).order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
+      esEmpresa ? fetchAll(() => supabase.from('compras').select('*, proveedores(nombre), banco_cuentas(nombre,banco)').eq('empresa', scope as Empresa).order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
       esImpresos ? fetchAll(() => supabase.from('cartera_vencida').select('*').order('dias_vencida', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
-      scope !== 'general' ? fetchAll(() => supabase.from('compras_vencidas').select('*').eq('empresa', scope).order('dias_vencida', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
+      esEmpresa ? fetchAll(() => supabase.from('compras_vencidas').select('*').eq('empresa', scope as Empresa).order('dias_vencida', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
       scope === 'general' ? supabase.from('banco_cuentas').select('*').eq('activo', true).order('orden').order('nombre') : Promise.resolve({ data: [] as any[] }),
-      esImpresos ? fetchAll(() => supabase.from('presupuestos').select('*, clientes(nombre)').order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
-      esImpresos ? fetchAll(() => supabase.from('cartera_presupuestos').select('*').order('dias_vencida', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
+      esPresupuestos ? fetchAll(() => supabase.from('presupuestos').select('*, clientes(nombre)').order('fecha', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
+      esPresupuestos ? fetchAll(() => supabase.from('cartera_presupuestos').select('*').order('dias_vencida', { ascending: false })) : Promise.resolve({ data: [] as any[] }),
       // NC de la empresa del reporte (Impresos → aplicadas a facturas; Ogemi → aplicadas a ventas Ogemi)
       (esImpresos || esOgemi) ? fetchAll(() => supabase.from('notas_credito')
         .select('*, clientes(nombre), factura_aplicada:facturas!factura_aplicada_id(numero_factura), venta_aplicada:ventas_ogemi!venta_ogemi_aplicada_id(numero)')
@@ -311,15 +313,15 @@ function ReportesPage({ scope }: { scope: ReporteScope }) {
   const tabsTodos: { key: ReporteTab; label: string; icon: React.ElementType; scopes: ReporteScope[] }[] = [
     { key: 'informe',      label: 'Informe diario', icon: CalendarDays,   scopes: ['general'] },
     { key: 'ventas',       label: 'Ventas',         icon: FileText,       scopes: ['impresos', 'ogemi'] },
-    { key: 'presupuestos', label: 'Presupuestos',   icon: ClipboardList,  scopes: ['impresos'] },
+    { key: 'presupuestos', label: 'Presupuestos',   icon: ClipboardList,  scopes: ['presupuestos'] },
     { key: 'compras',      label: 'Compras',        icon: ShoppingCart,   scopes: ['impresos', 'ogemi'] },
     { key: 'banco',        label: 'Banco',          icon: Building2,      scopes: ['general'] },
     { key: 'libros',       label: 'Libros',         icon: BookOpen,       scopes: ['impresos', 'ogemi'] },
   ]
   const tabs = tabsTodos.filter(t => t.scopes.includes(scope))
-  const tituloPagina = scope === 'general' ? 'Reportes' : `Reportes ${EMPRESA_LABEL[scope]}`
-  const subtituloPagina = scope === 'general' ? 'Informe diario y bancos' : 'Análisis financiero y contable'
-  const marcaPrint = scope === 'ogemi' ? 'Impresora Ogemi' : scope === 'impresos' ? 'Impresos Comerciales S.A.' : 'Impresos Comerciales S.A. · Sistema Ogemi'
+  const tituloPagina = scope === 'general' ? 'Reportes' : scope === 'presupuestos' ? 'Reportes Presupuestos' : `Reportes ${EMPRESA_LABEL[scope]}`
+  const subtituloPagina = scope === 'general' ? 'Informe diario y bancos' : scope === 'presupuestos' ? 'Presupuestos y cartera de presupuestos' : 'Análisis financiero y contable'
+  const marcaPrint = scope === 'ogemi' ? 'Impresora Ogemi' : (scope === 'impresos' || scope === 'presupuestos') ? 'Impresos Comerciales S.A.' : 'Impresos Comerciales S.A. · Sistema Ogemi'
 
   return (
     <AppLayout>
@@ -575,3 +577,4 @@ export default ReportesPage
 export const ReportesGeneral = withPagePermission(() => <ReportesPage scope="general" />, 'reportes', 'ver')
 export const ReportesImpresos = withPagePermission(() => <ReportesPage scope="impresos" />, 'reportes', 'ver')
 export const ReportesOgemi = withPagePermission(() => <ReportesPage scope="ogemi" />, 'reportes', 'ver')
+export const ReportesPresupuestos = withPagePermission(() => <ReportesPage scope="presupuestos" />, 'reportes', 'ver')

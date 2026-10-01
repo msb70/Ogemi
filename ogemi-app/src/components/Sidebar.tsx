@@ -18,7 +18,7 @@ type NavGroup = {
   id: string
   label: string
   icon: React.ElementType
-  accent: 'sky' | 'amber'
+  accent: 'sky' | 'amber' | 'violet'
   children: NavLeaf[]
 }
 type NavEntry = NavLeaf | NavGroup
@@ -36,8 +36,6 @@ const navItems: NavEntry[] = [
       link('/cobros',              'Cobros',              CreditCard,    'facturas'),
       link('/notas-credito',       'Notas de Crédito',    FileText,      'notas_credito'),
       link('/anticipos',           'Anticipos',           Wallet,        'facturas'),
-      link('/presupuestos',        'Presupuestos',        ClipboardList, 'presupuestos'),
-      link('/cobros-presupuestos', 'Cobro presupuestos',  WalletCards,   'presupuestos'),
       link('/compras-impresos',       'Compras',       ShoppingCart, 'compras'),
       link('/pagos-compras-impresos', 'Pago Compras',  WalletCards,  'compras'),
       link('/clientes',            'Clientes',            Users,         'clientes'),
@@ -55,6 +53,14 @@ const navItems: NavEntry[] = [
       link('/pagos-compras', 'Pago Compras',   WalletCards,  'compras'),
       link('/proveedores',   'Proveedores',    Truck,        'proveedores'),
       link('/reportes-ogemi', 'Reportes',      BarChart3,    'reportes'),
+    ],
+  },
+  {
+    kind: 'group', id: 'presupuestos', label: 'Presupuestos', icon: ClipboardList, accent: 'violet',
+    children: [
+      link('/presupuestos',          'Presupuestos',       ClipboardList, 'presupuestos'),
+      link('/cobros-presupuestos',   'Cobro presupuestos', WalletCards,   'presupuestos'),
+      link('/reportes-presupuestos', 'Reportes',           BarChart3,     'reportes'),
     ],
   },
   link('/banco',        'Banco',         Building2,     'banco'),
@@ -83,6 +89,15 @@ const ACCENT = {
     active: 'bg-amber-500 text-brand-900 shadow-sm shadow-amber-900/40',
     child: 'text-amber-100/80 hover:bg-amber-900/30 hover:text-white',
     dot: 'bg-amber-400',
+  },
+  violet: {
+    header: 'text-violet-200 hover:bg-violet-900/30',
+    headerOpen: 'text-white',
+    iconBg: 'bg-violet-500/20 text-violet-300',
+    rail: 'bg-violet-400',
+    active: 'bg-violet-500 text-white shadow-sm shadow-violet-900/40',
+    child: 'text-violet-100/80 hover:bg-violet-900/30 hover:text-white',
+    dot: 'bg-violet-400',
   },
 } as const
 
