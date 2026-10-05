@@ -371,19 +371,50 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
         return
       }
 
-      // Buscar o crear proveedor por nombre
+      // Buscar o crear proveedor: 1) por RUC, 2) por nombre normalizado
+      // (muchos proveedores tienen el nombre truncado del banco, ej. "DISTRIBUIDORA DE PAPELE",
+      //  o con otra puntuación, ej. "MPMABOX, S.A." vs "MPMABOX, SA").
       let proveedorId = ''
-      const nombreNorm = data.emisor_nombre.trim().toUpperCase()
-      const existente = proveedores.find(
-        p => p.nombre.toUpperCase() === nombreNorm
-      )
+      // RUC sin DV ni espacios: "306246-1-410760 dv 40" -> "306246-1-410760"
+      const rucKey = (r?: string | null) =>
+        (r || '').toUpperCase().split(/\bDV\b/)[0].replace(/[^A-Z0-9-]/g, '')
+      // Nombre sin acentos, puntuación ni sufijo societario: "MPMABOX, S.A." -> "MPMABOX"
+      const nomKey = (n?: string | null) =>
+        (n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
+          .replace(/[^A-Z0-9]/g, '')
+          .replace(/(SA|SDERL|INC|CORP|CORPORATION)$/, '')
+      const rucQr = rucKey(data.emisor_ruc)
+      const nomQr = nomKey(data.emisor_nombre)
+      // Buscar también entre inactivos para no duplicar
+      const { data: todosProv } = await supabase.from('proveedores').select('id, nombre, ruc, activo')
+      const lista: any[] = todosProv || proveedores
+      let existente: any =
+        (rucQr.length >= 5 && lista.find(p => rucKey(p.ruc) === rucQr)) ||
+        lista.find(p => nomKey(p.nombre) === nomQr)
+      if (!existente && nomQr.length >= 12) {
+        // Nombre truncado: uno es prefijo del otro (mín. 12 caracteres)
+        const cands = lista.filter(p => {
+          const k = nomKey(p.nombre)
+          return k.length >= 12 && (nomQr.startsWith(k) || k.startsWith(nomQr))
+        })
+        // Solo si no hay ambigüedad y el RUC no contradice
+        if (cands.length === 1 && (!cands[0].ruc || !rucQr || rucKey(cands[0].ruc) === rucQr)) existente = cands[0]
+      }
       if (existente) {
         proveedorId = existente.id
+        // Completar RUC si la ficha no lo tenía
+        if (!existente.ruc && data.emisor_ruc) {
+          await supabase.from('proveedores').update({ ruc: data.emisor_ruc }).eq('id', existente.id)
+        }
+        if (existente.activo === false) {
+          await supabase.from('proveedores').update({ activo: true }).eq('id', existente.id)
+          await load()
+        }
       } else {
-        // Crear proveedor automáticamente
+        // Crear proveedor automáticamente (con RUC, para que la próxima vez lo encuentre)
         const { data: nuevo, error } = await supabase
           .from('proveedores')
-          .insert({ nombre: data.emisor_nombre.trim(), dias_credito: 30, activo: true })
+          .insert({ nombre: data.emisor_nombre.trim(), ruc: data.emisor_ruc || null, dias_credito: 30, activo: true })
           .select()
           .single()
         if (error || !nuevo) {
