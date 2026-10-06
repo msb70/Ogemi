@@ -13,7 +13,7 @@ import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 interface Evento {
   id: string
   created_at: string
-  accion: 'editar' | 'borrar' | 'anticipo_cliente' | 'borrar_documento' | 'anticipo_deposito'
+  accion: 'editar' | 'borrar' | 'anticipo_cliente' | 'borrar_documento' | 'anticipo_deposito' | 'anticipo_anular'
   documento_tipo: string
   documento: string | null
   tercero: string | null
@@ -31,6 +31,7 @@ const ACCION: Record<Evento['accion'], { label: string; cls: string }> = {
   anticipo_cliente: { label: 'Cambió cliente de anticipo', cls: 'bg-amber-100 text-amber-700' },
   borrar_documento: { label: 'Borró documento completo', cls: 'bg-red-600 text-white' },
   anticipo_deposito: { label: 'Modificó depósito de anticipo', cls: 'bg-teal-100 text-teal-700' },
+  anticipo_anular: { label: 'Anuló anticipo', cls: 'bg-red-100 text-red-700' },
 }
 const MODULO: Record<string, string> = {
   facturas: 'Facturas', compras: 'Compras', presupuestos: 'Presupuestos', ventas_ogemi: 'Ventas Ogemi', anticipos: 'Anticipos',
@@ -42,6 +43,11 @@ const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart
 function cambios(e: Evento): [string, string, string][] {
   const a = e.antes || {}, d = e.despues || {}
   if (e.accion === 'anticipo_cliente') return [['Cliente', a.cliente || '—', d.cliente || '—']]
+  if (e.accion === 'anticipo_anular') return [
+    ['Estado', String(a.estado || '—'), 'anulado'],
+    ['Monto', formatMonto(Number(a.monto) || 0), `egreso ${d.egreso_fecha ? formatDate(d.egreso_fecha) : ''}`],
+    ['Cuenta', e.cuenta_antes || '—', '—'],
+  ]
   if (e.accion === 'borrar_documento') {
     const pagos: any[] = Array.isArray(a._pagos) ? a._pagos : []
     return [
@@ -109,7 +115,7 @@ function BitacoraPage() {
     editar: visibles.filter(e => e.accion === 'editar').length,
     borrar: visibles.filter(e => e.accion === 'borrar').length,
     docs: visibles.filter(e => e.accion === 'borrar_documento').length,
-    anticipo: visibles.filter(e => e.accion === 'anticipo_cliente' || e.accion === 'anticipo_deposito').length,
+    anticipo: visibles.filter(e => e.accion === 'anticipo_cliente' || e.accion === 'anticipo_deposito' || e.accion === 'anticipo_anular').length,
     montoBorrado: visibles.reduce((s, e) => s
       + (e.accion === 'borrar' ? (Number(e.antes?.monto) || 0) : 0)
       + (e.accion === 'borrar_documento' && Array.isArray(e.antes?._pagos) ? e.antes._pagos.reduce((x: number, p: any) => x + (Number(p.monto) || 0), 0) : 0), 0),
@@ -153,6 +159,7 @@ function BitacoraPage() {
             <option value="borrar_documento">Documentos borrados</option>
             <option value="anticipo_cliente">Cambio de cliente (anticipos)</option>
             <option value="anticipo_deposito">Cambio de depósito (anticipos)</option>
+            <option value="anticipo_anular">Anulación (anticipos)</option>
           </select>
           <select value={fUsuario} onChange={e => setFUsuario(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
             <option value="all">Todos los usuarios</option>

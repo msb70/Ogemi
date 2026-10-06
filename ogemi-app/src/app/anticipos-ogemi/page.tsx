@@ -12,6 +12,7 @@ import { Plus, Printer, Search, X, CheckCircle, AlertCircle, Download } from 'lu
 import { withPagePermission } from '@/components/PermissionGuard'
 import CambiarClienteAnticipo from '@/components/CambiarClienteAnticipo'
 import EditarDepositoAnticipo from '@/components/EditarDepositoAnticipo'
+import AnularAnticipo from '@/components/AnularAnticipo'
 import { LOGO_OGEMI } from '@/components/FacturaOgemiPrint'
 import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 
@@ -119,11 +120,6 @@ function AnticiposOgemiPage() {
     setTimeout(() => window.print(), 400)
   }
 
-  const handleAnular = async (id: string) => {
-    if (!confirm('¿Anular este anticipo?')) return
-    await supabase.from('anticipos').update({ estado: 'anulado' }).eq('id', id)
-    load()
-  }
 
   const openAplicaciones = async (a: Anticipo) => {
     setAplicAnticipo(a)
@@ -265,15 +261,7 @@ function AnticiposOgemiPage() {
             aplicado={saldos[a.id]?.aplicado ?? 0} onChanged={() => load()} />
           <EditarDepositoAnticipo anticipo={a} cuentas={cuentas} modulo="ventas_ogemi"
             aplicado={saldos[a.id]?.aplicado ?? 0} onChanged={() => load()} />
-          {a.estado === 'activo' && (
-            <button
-              onClick={() => handleAnular(a.id)}
-              className="flex items-center gap-1 text-xs text-red-400 hover:text-red-600 transition-colors"
-            >
-              <X size={14} />
-              Anular
-            </button>
-          )}
+          <AnularAnticipo anticipo={a} modulo="ventas_ogemi" onChanged={() => load()} />
         </div>
       </td>
     </tr>
