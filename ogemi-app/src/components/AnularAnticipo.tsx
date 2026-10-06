@@ -10,7 +10,7 @@ import type { Modulo } from '@/types/auth'
 
 /**
  * Anula un anticipo (RPC anular_anticipo): registra un egreso en banco por el monto
- * con fecha de hoy y queda en la bitácora. La base de datos lo BLOQUEA si el anticipo
+ * en la fecha elegida (por defecto hoy; valida depósito, futuro y mes cerrado) y queda en la bitácora. La base de datos lo BLOQUEA si el anticipo
  * tiene aplicaciones vigentes: primero hay que reversarlas (botón Borrar en el cobro).
  */
 interface Props {
@@ -22,6 +22,8 @@ interface Props {
 interface Aplicacion { id: string; fecha: string; monto: number; numero_recibo: number | null; documento: string }
 
 const rec = (n?: number | null) => (n ? `REC-${String(n).padStart(5, '0')}` : '')
+// Fecha local (no UTC) en formato yyyy-mm-dd
+const hoyLocal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 export default function AnularAnticipo({ anticipo, modulo, onChanged }: Props) {
   const supabase = createClient()
@@ -30,13 +32,14 @@ export default function AnularAnticipo({ anticipo, modulo, onChanged }: Props) {
   const [loading, setLoading] = useState(false)
   const [aplicaciones, setAplicaciones] = useState<Aplicacion[]>([])
   const [motivo, setMotivo] = useState('')
+  const [fecha, setFecha] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   if (!puedeHacer(modulo, 'editar') || anticipo.estado === 'anulado') return null
 
   const abrir = async () => {
-    setOpen(true); setMotivo(''); setError(''); setAplicaciones([]); setLoading(true)
+    setOpen(true); setMotivo(''); setFecha(hoyLocal()); setError(''); setAplicaciones([]); setLoading(true)
     const { data, error: e } = await supabase
       .from('pagos')
       .select('id, fecha, monto, numero_recibo, facturas(numero_factura), presupuestos(numero_presupuesto), ventas_ogemi(numero), pago_reversos(id)')
@@ -57,8 +60,11 @@ export default function AnularAnticipo({ anticipo, modulo, onChanged }: Props) {
   }
 
   const anular = async () => {
+    if (!fecha) { setError('Indica la fecha de anulación.'); return }
+    if (fecha < anticipo.fecha) { setError(`La fecha no puede ser anterior al depósito (${formatDate(anticipo.fecha)}).`); return }
+    if (fecha > hoyLocal()) { setError('La fecha no puede ser futura.'); return }
     setSaving(true); setError('')
-    const { error: e } = await supabase.rpc('anular_anticipo', { p_anticipo_id: anticipo.id, p_motivo: motivo.trim() || null })
+    const { error: e } = await supabase.rpc('anular_anticipo', { p_anticipo_id: anticipo.id, p_motivo: motivo.trim() || null, p_fecha: fecha })
     setSaving(false)
     if (e) { setError(e.message); return }
     setOpen(false)
@@ -102,10 +108,13 @@ export default function AnularAnticipo({ anticipo, modulo, onChanged }: Props) {
             ) : (
               <>
                 <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3 text-xs text-red-800">
-                  Se registrará un egreso de {formatMonto(anticipo.monto)} con fecha de hoy en {anticipo.banco_cuentas?.nombre || 'la cuenta del depósito'}. El anticipo queda anulado y no se puede reactivar.
+                  Se registrará un egreso de {formatMonto(anticipo.monto)} con la fecha indicada en {anticipo.banco_cuentas?.nombre || 'la cuenta del depósito'}. El anticipo queda anulado y no se puede reactivar.
                 </div>
+                <label className="label">Fecha de anulación *</label>
+                <input type="date" className="input mb-1" value={fecha} min={anticipo.fecha} max={hoyLocal()} onChange={e => setFecha(e.target.value)} />
+                <p className="text-[11px] text-gray-400 mb-3">Fecha del egreso en banco. Entre el depósito ({formatDate(anticipo.fecha)}) y hoy; no puede caer en un mes de banco ya cerrado.</p>
                 <label className="label">Motivo (opcional)</label>
-                <input className="input" placeholder="Ej: depósito duplicado" value={motivo} onChange={e => setMotivo(e.target.value)} autoFocus />
+                <input className="input" placeholder="Ej: depósito duplicado" value={motivo} onChange={e => setMotivo(e.target.value)} />
                 <p className="text-[11px] text-gray-400 mt-2">Queda registrado en la bitácora.</p>
               </>
             )}
