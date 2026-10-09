@@ -82,6 +82,9 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
   const [detallePagos, setDetallePagos] = useState<any[]>([])
   const [detalleReversados, setDetalleReversados] = useState<Set<string>>(new Set())
   const [loadingDetalle, setLoadingDetalle] = useState(false)
+  // Si la compra que se edita ya tiene pagos: estado/banco/fecha de pago salen de los pagos
+  // (se cambian con Editar/Borrar pago), no desde el formulario de la compra.
+  const [editPagos, setEditPagos] = useState<{ monto: number; cuenta: string } | null>(null)
 
   // QR Scanner
   const [showQrModal, setShowQrModal] = useState(false)
@@ -144,6 +147,7 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
       fecha_pago: new Date().toISOString().split('T')[0], notas: '',
     })
     setEditId(null)
+    setEditPagos(null)
   }
 
   const handleOpenForm = (c?: Compra) => {
@@ -153,6 +157,9 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
     }
     if (c) {
       setEditId(c.id)
+      setEditPagos((c.monto_pagado || 0) > 0
+        ? { monto: c.monto_pagado || 0, cuenta: (c as any).banco_cuentas?.nombre || '' }
+        : null)
       setForm({
         proveedor_id: c.proveedor_id,
         fecha: c.fecha,
@@ -194,6 +201,12 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
       banco_cuenta_id: form.estado === 'pagada' && form.banco_cuenta_id ? form.banco_cuenta_id : null,
       fecha_pago: form.estado === 'pagada' ? form.fecha_pago : null,
       notas: form.notas || null,
+    }
+    // Con pagos registrados, estado/banco/fecha de pago los mantiene la BD a partir de los pagos.
+    if (editId && editPagos) {
+      delete payload.estado
+      delete payload.banco_cuenta_id
+      delete payload.fecha_pago
     }
     let error
     if (editId) {
@@ -1209,6 +1222,18 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
                   </span>
                 </div>
               )}
+              {editId && editPagos ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <p className="font-medium">
+                    Esta compra ya tiene pagos por {formatCurrency(editPagos.monto)}
+                    {editPagos.cuenta ? ` (último pago en ${editPagos.cuenta})` : ''}.
+                  </p>
+                  <p className="mt-1">
+                    El estado, el banco y la fecha de pago salen de esos pagos. Para cambiarlos, cierre esta ventana,
+                    abra la compra con <b>Ver</b> y use <b>Editar</b> o <b>Borrar</b> en el pago.
+                  </p>
+                </div>
+              ) : (<>
               <div>
                 <label className="label">Estado</label>
                 <div className="flex gap-2">
@@ -1241,6 +1266,7 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
                   </div>
                 </div>
               )}
+              </>)}
               <div>
                 <label className="label">Notas</label>
                 <textarea className="input resize-none" rows={2} placeholder="Observaciones..." value={form.notas}
