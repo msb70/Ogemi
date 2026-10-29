@@ -132,6 +132,11 @@ export default function ComprobanteFE({ doc, emisor, lineas, pagos, preview = fa
       {esNC && doc.cufe_devol && (
         <p className="mt-1 break-all"><b>Documento afectado (CUFE):</b> {doc.cufe_devol} {doc.fecha_cufe_devol ? `— ${fechaCorta(doc.fecha_cufe_devol)}` : ''}</p>
       )}
+      {doc.notas && (
+        <div className="mt-2 border border-gray-700 px-2 py-1">
+          <b>Notas del documento:</b> <span className="whitespace-pre-wrap">{doc.notas}</span>
+        </div>
+      )}
 
       {/* Detalle */}
       <table className="w-full mt-2 border-collapse">
@@ -228,7 +233,6 @@ export default function ComprobanteFE({ doc, emisor, lineas, pagos, preview = fa
         </div>
       </div>
 
-      {doc.notas && <p className="mt-3"><b>Observaciones:</b> {doc.notas}</p>}
       {doc.ambiente === 'pruebas' && (
         <p className="mt-4 text-center text-red-700 font-bold text-[12px]">DOCUMENTO DE PRUEBA — SIN VALIDEZ FISCAL</p>
       )}

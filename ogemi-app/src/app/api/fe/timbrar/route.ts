@@ -80,6 +80,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Para NC/ND referenciada (tipos 04/05) el CUFE y fecha del documento afectado son obligatorios.' }, { status: 422 })
     }
 
+    // El número fiscal es único por tipo de documento (cada tipo tiene su propia serie).
+    // Bloquear antes de enviar al PAC para no timbrar un número repetido.
+    if (esProduccion) {
+      const { data: repetido } = await admin
+        .from('fe_documentos').select('id')
+        .eq('tipo_doc', doc.tipo_doc).eq('documento', doc.documento)
+        .eq('ambiente', 'produccion').eq('estado', 'aceptado')
+        .neq('id', doc.id).limit(1)
+      if (repetido && repetido.length > 0) {
+        return NextResponse.json({
+          error: `Ya existe un documento tipo ${doc.tipo_doc} con el número ${doc.documento} timbrado en producción. Usa el siguiente número de la serie.`,
+        }, { status: 409 })
+      }
+    }
+
     // Totales deben cuadrar con las líneas (precioneto x cantidad + ITBMS)
     let neto = 0, impuesto = 0
     for (const l of lineas) {

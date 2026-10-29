@@ -62,6 +62,8 @@ function NuevaFEForm() {
   const [retencion, setRetencion] = useState({ codigo: '', pct: '', monto: '' })
   const [referencia, setReferencia] = useState({ fe_id: '', cufe: '', fecha: '' })
   const [notas, setNotas] = useState('')
+  const [siguientes, setSiguientes] = useState<{ factura: number; '04': number; '06': number } | null>(null)
+  const [cargandoRef, setCargandoRef] = useState(false)
 
   const [ambienteActivo, setAmbienteActivo] = useState<'pruebas' | 'produccion' | null>(null)
   const { toast, showToast, hideToast } = useToast()
@@ -71,10 +73,11 @@ function NuevaFEForm() {
   const esNC = ['04', '06'].includes(tipoDoc)
 
   // Venta a crédito: la forma de pago la define Configuración (código del PAC) y
-  // el vencimiento sale de los días de crédito del cliente. No aplica a notas de crédito.
+  // el vencimiento sale de los días de crédito del cliente. También disponible en NC
+  // (se declara la forma de pago "Crédito" igual que en la factura afectada).
   const clienteSel = clientes.find(c => c.id === clienteId)
   const diasCredito = clienteSel?.dias_credito ?? 30
-  const creditoActivo = esCredito && !esNC
+  const creditoActivo = esCredito
   const fechaVence = (() => {
     const d = new Date(`${fecha}T00:00:00`)
     d.setDate(d.getDate() + diasCredito)
@@ -89,12 +92,27 @@ function NuevaFEForm() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [{ data: cli }, { data: art }, { data: fes }, { data: maxFact }] = await Promise.all([
+    const [{ data: cli }, { data: art }, { data: fes }, { data: maxFact }, { data: ncDocs }] = await Promise.all([
       supabase.from('clientes').select('*').eq('activo', true).order('nombre'),
       supabase.from('fe_articulos').select('*').eq('activo', true).order('codigo'),
       supabase.from('fe_documentos').select('*').eq('estado', 'aceptado').in('tipo_doc', ['01', '02', '03', '08', '10']).order('fecha', { ascending: false }).limit(200),
       supabase.from('facturas').select('numero_factura').order('numero_factura', { ascending: false }).limit(1),
+      // Serie propia de cada tipo de NC (04 / 06). No cuentan: docs de pruebas, rechazados
+      // ni los marcados fuera_serie (NC 664 emitida con la numeración de facturas).
+      supabase.from('fe_documentos').select('tipo_doc, documento')
+        .in('tipo_doc', ['04', '06']).eq('fuera_serie', false).neq('estado', 'rechazado')
+        .or('ambiente.is.null,ambiente.neq.pruebas'),
     ])
+    const maxPorTipo: Record<string, number> = { '04': 0, '06': 0 }
+    for (const d of (ncDocs || []) as { tipo_doc: string; documento: string }[]) {
+      const n = parseInt(d.documento, 10)
+      if (!isNaN(n) && n > (maxPorTipo[d.tipo_doc] ?? 0)) maxPorTipo[d.tipo_doc] = n
+    }
+    setSiguientes({
+      factura: (maxFact?.[0]?.numero_factura || 0) + 1,
+      '04': maxPorTipo['04'] + 1,
+      '06': maxPorTipo['06'] + 1,
+    })
     setClientes((cli || []) as Cliente[])
     setArticulos((art || []) as FeArticulo[])
     setFeAceptadas((fes || []) as FeDocumento[])
@@ -127,15 +145,19 @@ function NuevaFEForm() {
         setReferencia({ fe_id: doc.fe_referencia_id || '', cufe: doc.cufe_devol || '', fecha: doc.fecha_cufe_devol || '' })
         setNotas(doc.notas || '')
       }
-    } else {
-      // Continuar la numeración actual del libro de ventas
-      const next = (maxFact?.[0]?.numero_factura || 0) + 1
-      setDocumento(String(next))
     }
     setLoading(false)
   }, [editId])
 
   useEffect(() => { loadData() }, [loadData])
+
+  // Número sugerido según el tipo: facturas siguen el libro de ventas; cada tipo de
+  // NC (04 / 06) lleva su propia serie. Solo para documentos nuevos.
+  useEffect(() => {
+    if (editId || !siguientes) return
+    const n = tipoDoc === '04' || tipoDoc === '06' ? siguientes[tipoDoc] : siguientes.factura
+    setDocumento(String(n))
+  }, [tipoDoc, siguientes, editId])
 
   // Al elegir cliente, precargar datos fiscales y retención
   const onClienteChange = (id: string) => {
@@ -177,14 +199,39 @@ function NuevaFEForm() {
     }
   }
 
-  const onReferenciaChange = (feId: string) => {
+  // NC referenciada: al elegir la factura afectada se copian cliente, TODAS sus líneas
+  // (cantidad, precio, ITBMS, unidad, grupo/subgrupo CPBS), la nota del documento y la
+  // condición de crédito. El operario puede editar o borrar líneas antes de timbrar.
+  const onReferenciaChange = async (feId: string) => {
     const fe = feAceptadas.find(f => f.id === feId)
     setReferencia({
       fe_id: feId,
       cufe: fe?.cufe || '',
       fecha: fe?.fecha_cufe || '',
     })
-    if (fe && !clienteId) onClienteChange(fe.cliente_id)
+    if (!fe) return
+    if (fe.cliente_id !== clienteId) onClienteChange(fe.cliente_id)
+    setCargandoRef(true)
+    const { data: lins, error } = await supabase
+      .from('fe_documento_lineas').select('*').eq('documento_id', fe.id).order('orden')
+    setCargandoRef(false)
+    if (error) { showToast(`No se pudieron cargar los ítems de la factura: ${error.message}`, 'error'); return }
+    if (lins && lins.length > 0) {
+      setLineas(lins.map((l: any) => ({
+        articulo_id: l.articulo_id, codigo_articulo: l.codigo_articulo, nombre_articulo: l.nombre_articulo,
+        precioneto: String(l.precioneto), prc_impuesto: Number(l.prc_impuesto), cantidad: String(l.cantidad),
+        unidad: l.unidad, grupo_inv: l.grupo_inv, subgr_inv: l.subgr_inv,
+      })))
+    }
+    setNotas(fe.notas || '')
+    setEsCredito(!!fe.es_credito)
+    if (fe.codigo_retencion) {
+      setRetencion({ codigo: fe.codigo_retencion, pct: String(fe.prc_retencion || ''), monto: '' })
+    } else {
+      setRetencion({ codigo: '', pct: '', monto: '' })
+    }
+    setPagos([{ codigo: '02', nombre: 'EFECTIVO', monto: '' }])
+    showToast(`Se cargaron ${lins?.length || 0} ítem(s) de la factura #${fe.documento}. Ajusta o borra los que no apliquen.`, 'success')
   }
 
   const validar = (): string | null => {
@@ -360,8 +407,10 @@ function NuevaFEForm() {
             <p className="text-sm font-medium text-purple-800 flex items-center gap-2"><AlertCircle size={15} /> NC referenciada: requiere el CUFE del documento afectado</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className={labelCls}>FE timbrada en este sistema</label>
-                <select value={referencia.fe_id} onChange={e => onReferenciaChange(e.target.value)} className={inputCls}>
+                <label className={`${labelCls} flex items-center gap-1`}>
+                  FE timbrada en este sistema {cargandoRef && <Loader2 size={12} className="animate-spin" />}
+                </label>
+                <select value={referencia.fe_id} onChange={e => onReferenciaChange(e.target.value)} disabled={cargandoRef} className={inputCls}>
                   <option value="">Ingresar CUFE manualmente...</option>
                   {feAceptadas.filter(f => !clienteId || f.cliente_id === clienteId).map(f => (
                     <option key={f.id} value={f.id}>#{f.documento} — {f.nombre_cliente} ({formatCurrency(f.totalfinal)})</option>
@@ -520,20 +569,22 @@ function NuevaFEForm() {
 
             <div className="pt-2 space-y-2">
               <p className="text-sm font-medium text-gray-700">Formas de pago</p>
-              {!esNC && (
-                <label className={`flex items-start gap-2 rounded-lg border p-2.5 cursor-pointer transition-colors ${creditoActivo ? 'border-brand-400 bg-brand-50/60' : 'border-gray-200 hover:bg-gray-50'}`}>
-                  <input type="checkbox" checked={creditoActivo} onChange={e => setEsCredito(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
-                  <span className="text-sm leading-snug">
-                    <span className="font-medium text-gray-800">Venta a crédito</span>
-                    <span className="block text-xs text-gray-500">
-                      {creditoActivo
+              <label className={`flex items-start gap-2 rounded-lg border p-2.5 cursor-pointer transition-colors ${creditoActivo ? 'border-brand-400 bg-brand-50/60' : 'border-gray-200 hover:bg-gray-50'}`}>
+                <input type="checkbox" checked={creditoActivo} onChange={e => setEsCredito(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+                <span className="text-sm leading-snug">
+                  <span className="font-medium text-gray-800">Venta a crédito</span>
+                  <span className="block text-xs text-gray-500">
+                    {esNC
+                      ? (creditoActivo
+                          ? 'La nota de crédito se declara con forma de pago Crédito por el total.'
+                          : 'Marca la casilla si la factura afectada fue a crédito (no hubo cobro).')
+                      : creditoActivo
                         ? `${diasCredito} días de crédito · vence el ${fechaVence}. El sistema declara la forma de pago como crédito.`
                         : `El cliente tiene ${diasCredito} días de crédito. Marca la casilla si la factura no se cobra hoy.`}
-                    </span>
                   </span>
-                </label>
-              )}
+                </span>
+              </label>
             </div>
             {!creditoActivo && (
               <>
@@ -575,7 +626,9 @@ function NuevaFEForm() {
               <div className="flex justify-between text-base border-t border-gray-100 pt-2"><span className="font-semibold text-gray-800">Total final</span><span className="font-bold">{formatCurrency(totalFinal)}</span></div>
               {creditoActivo ? (
                 <div className="flex justify-between text-xs text-brand-700">
-                  <span>A crédito · vence</span><span>{fechaVence}</span>
+                  {esNC
+                    ? <><span>Forma de pago</span><span>Crédito</span></>
+                    : <><span>A crédito · vence</span><span>{fechaVence}</span></>}
                 </div>
               ) : (
                 <div className={`flex justify-between text-xs ${Math.abs(totalPagos - totalFinal) > 0.011 ? 'text-red-600' : 'text-green-600'}`}>
