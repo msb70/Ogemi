@@ -13,12 +13,15 @@ import { withPagePermission } from '@/components/PermissionGuard'
 import CambiarClienteAnticipo from '@/components/CambiarClienteAnticipo'
 import EditarDepositoAnticipo from '@/components/EditarDepositoAnticipo'
 import AnularAnticipo from '@/components/AnularAnticipo'
+import AplicarAnticipoManual from '@/components/AplicarAnticipoManual'
+import { useAuth } from '@/context/AuthContext'
 import { LOGO_OGEMI } from '@/components/FacturaOgemiPrint'
 import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 
 // Anticipos de Impresora Ogemi: mismo formato y funcionalidad que /anticipos
 // (Impresos), pero separados por empresa. Solo se aplican a ventas de Ogemi.
 function AnticiposOgemiPage() {
+  const { puedeHacer } = useAuth()
   const [anticipos, setAnticipos] = useState<Anticipo[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [cuentas, setCuentas] = useState<BancoCuenta[]>([])
@@ -38,6 +41,7 @@ function AnticiposOgemiPage() {
   // Modal de aplicaciones
   const [aplicAnticipo, setAplicAnticipo] = useState<Anticipo | null>(null)
   const [aplicaciones, setAplicaciones] = useState<any[]>([])
+  const [aplicError, setAplicError] = useState('')
   const [loadingAplic, setLoadingAplic] = useState(false)
 
   const [form, setForm] = useState({
@@ -125,17 +129,36 @@ function AnticiposOgemiPage() {
     setAplicAnticipo(a)
     setLoadingAplic(true)
     setAplicaciones([])
-    const { data } = await supabase
+    setAplicError('')
+    const { data, error } = await supabase
       .from('pagos')
-      .select('id, fecha, monto, referencia, ventas_ogemi(numero), pago_reversos(id)')
+      .select('id, fecha, monto, referencia, ventas_ogemi!pagos_venta_ogemi_id_fkey(numero), pago_reversos(id)')
       .eq('anticipo_id', a.id)
       .order('fecha', { ascending: false })
+    if (error) setAplicError('No se pudieron cargar las aplicaciones: ' + error.message)
+    // Aplicaciones manuales (sin documento, con descripción)
+    const { data: manuales, error: errM } = await supabase
+      .from('anticipo_aplicaciones_manuales')
+      .select('id, fecha, monto, descripcion')
+      .eq('anticipo_id', a.id)
+    if (errM) setAplicError('No se pudieron cargar las aplicaciones manuales: ' + errM.message)
     // Las aplicaciones reversadas ya no cuentan contra el saldo del anticipo
-    setAplicaciones((data || []).filter((p: any) => {
+    const docs = (data || []).filter((p: any) => {
       const rev = Array.isArray(p.pago_reversos) ? p.pago_reversos[0] : p.pago_reversos
       return !rev
-    }))
+    })
+    const man = (manuales || []).map((m: any) => ({ ...m, manual: true }))
+    setAplicaciones([...docs, ...man].sort((x: any, y: any) => String(y.fecha).localeCompare(String(x.fecha))))
     setLoadingAplic(false)
+  }
+
+  const borrarAplicacionManual = async (ap: any) => {
+    if (!aplicAnticipo) return
+    if (!window.confirm(`¿Borrar la aplicación manual "${ap.descripcion}" por ${formatCurrency(ap.monto)}? El monto vuelve al saldo del anticipo.`)) return
+    const { error } = await supabase.rpc('eliminar_aplicacion_manual_anticipo', { p_id: ap.id, p_motivo: null })
+    if (error) { setAplicError(error.message); return }
+    await load()
+    await openAplicaciones(aplicAnticipo)
   }
 
   const aplicadoDe = (a: Anticipo) => saldos[a.id]?.aplicado ?? 0
@@ -261,6 +284,8 @@ function AnticiposOgemiPage() {
             aplicado={saldos[a.id]?.aplicado ?? 0} onChanged={() => load()} />
           <EditarDepositoAnticipo anticipo={a} cuentas={cuentas} modulo="ventas_ogemi"
             aplicado={saldos[a.id]?.aplicado ?? 0} onChanged={() => load()} />
+          <AplicarAnticipoManual anticipo={a} modulo="ventas_ogemi"
+            saldo={saldos[a.id]?.saldo ?? (a.estado === 'anulado' ? 0 : a.monto)} onChanged={() => load()} />
           <AnularAnticipo anticipo={a} modulo="ventas_ogemi" onChanged={() => load()} />
         </div>
       </td>
@@ -564,11 +589,27 @@ function AnticiposOgemiPage() {
 
             {loadingAplic ? (
               <p className="text-sm text-gray-400 py-6 text-center">Cargando...</p>
+            ) : aplicError ? (
+              <p className="text-sm text-red-600 py-6 text-center">{aplicError}</p>
             ) : aplicaciones.length === 0 ? (
               <p className="text-sm text-gray-400 py-6 text-center">Sin aplicaciones registradas.</p>
             ) : (
               <div className="space-y-1.5">
-                {aplicaciones.map(ap => (
+                {aplicaciones.map(ap => ap.manual ? (
+                  <div key={ap.id} className="flex justify-between items-start gap-3 text-sm bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                    <div className="min-w-0">
+                      <span className="font-medium text-gray-700">Aplicación manual</span>
+                      <span className="text-gray-400 text-xs ml-2">{formatDate(ap.fecha)}</span>
+                      <p className="text-xs text-gray-600 mt-0.5 whitespace-pre-wrap break-words">{ap.descripcion}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      <span className="font-semibold text-brand-700">{formatCurrency(ap.monto)}</span>
+                      {puedeHacer('ventas_ogemi', 'editar') && aplicAnticipo.estado !== 'anulado' && (
+                        <button onClick={() => borrarAplicacionManual(ap)} className="text-[11px] text-red-600 hover:text-red-800">Borrar</button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
                   <div key={ap.id} className="flex justify-between items-center text-sm bg-gray-50 rounded-lg px-3 py-2">
                     <div>
                       <span className="font-medium text-gray-700">
