@@ -26,8 +26,10 @@ function proveedor() {
   }
 }
 const MAX_PASOS = 8
-const MAX_MENSAJES = 16
-const MAX_RESULTADO = 24000
+const MAX_MENSAJES = 8
+const MAX_RESULTADO = 6000
+const MAX_REINTENTOS_429 = 2
+const ESPERA_MAX_MS = 15000
 
 type Msg = { role: 'system' | 'user' | 'assistant' | 'tool'; content: string | null; tool_calls?: any[]; tool_call_id?: string }
 
@@ -111,7 +113,7 @@ export async function POST(req: Request) {
   const entrada: Msg[] = (Array.isArray(body?.messages) ? body.messages : [])
     .filter((m: any) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string')
     .slice(-MAX_MENSAJES)
-    .map((m: any) => ({ role: m.role, content: String(m.content).slice(0, 4000) }))
+    .map((m: any) => ({ role: m.role, content: String(m.content).slice(0, m.role === 'assistant' ? 1500 : 2000) }))
   if (!entrada.length || entrada[entrada.length - 1].role !== 'user') {
     return NextResponse.json({ error: 'Falta la pregunta.' }, { status: 400 })
   }
@@ -119,15 +121,30 @@ export async function POST(req: Request) {
   const messages: Msg[] = [{ role: 'system', content: systemPrompt() }, ...entrada]
 
   for (let paso = 0; paso < MAX_PASOS; paso++) {
-    let res: Response
-    try {
-      res = await fetch(prov.url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${prov.key}` },
-        body: JSON.stringify({ model: prov.model, messages, tools: TOOLS, tool_choice: 'auto', temperature: 0.1 }),
-      })
-    } catch (e: any) {
-      return NextResponse.json({ error: `No se pudo contactar a ${prov.nombre}: ` + (e?.message || 'error de red') }, { status: 502 })
+    let res: Response | null = null
+    // Límite por minuto del proveedor (429): esperar lo que indique retry-after y reintentar
+    for (let intento = 0; intento <= MAX_REINTENTOS_429; intento++) {
+      try {
+        res = await fetch(prov.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${prov.key}` },
+          body: JSON.stringify({
+            model: prov.model, messages, tools: TOOLS, tool_choice: 'auto', temperature: 0.1, max_tokens: 1500,
+            // gpt-oss en Groq razona: esfuerzo bajo = menos tokens consumidos por pregunta
+            ...(prov.nombre === 'Groq' && prov.model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'low' } : {}),
+          }),
+        })
+      } catch (e: any) {
+        return NextResponse.json({ error: `No se pudo contactar a ${prov.nombre}: ` + (e?.message || 'error de red') }, { status: 502 })
+      }
+      if (res.status !== 429 || intento === MAX_REINTENTOS_429) break
+      const ra = Number(res.headers.get('retry-after'))
+      const espera = Math.min(ESPERA_MAX_MS, Math.max(2000, (Number.isFinite(ra) && ra > 0 ? ra : 8) * 1000))
+      await new Promise(r => setTimeout(r, espera))
+    }
+    if (!res) return NextResponse.json({ error: 'Sin respuesta de la IA.' }, { status: 502 })
+    if (res.status === 429) {
+      return NextResponse.json({ error: 'La IA está saturada en este momento (límite por minuto del plan). Espera un minuto y vuelve a preguntar.' }, { status: 429 })
     }
     if (!res.ok) {
       const txt = await res.text().catch(() => '')
