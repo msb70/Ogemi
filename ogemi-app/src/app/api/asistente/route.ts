@@ -53,11 +53,21 @@ COBROS, BANCO Y OTROS
 - anticipos (vista anticipos_saldos: cliente_id, fecha, monto, aplicado, saldo, estado 'activo'/'aplicado'/'anulado', empresa 'impresos'/'ogemi', numero_recibo).
 - obligaciones / obligaciones_cuotas (fecha, monto, pagada): deudas en cuotas.
 
-VISTAS ÚTILES (ya calculadas)
-- cartera_vencida: cuentas por cobrar de facturas de Impresos pendientes (numero_factura, cliente, total, saldo_pendiente, dias_vencida, tramo).
-- cartera_ventas_ogemi: igual para ventas Ogemi (numero, cliente, saldo_pendiente, dias_vencida, tramo).
+VISTAS ÚTILES (ya calculadas). OJO: en estas vistas las columnas cliente y proveedor son el NOMBRE en texto, no un id.
+- cartera_vencida: cuentas por cobrar de facturas de Impresos pendientes (numero_factura, cliente [nombre], total, saldo_pendiente, dias_vencida, tramo).
+- cartera_ventas_ogemi: igual para ventas Ogemi (numero, cliente [nombre], saldo_pendiente, dias_vencida, tramo).
 - cartera_presupuestos: igual para presupuestos.
-- compras_vencidas: cuentas por pagar a proveedores pendientes (proveedor, concepto, total, saldo_pendiente, vencimiento, dias_vencida, tramo, empresa).
+- compras_vencidas: cuentas por pagar a proveedores pendientes (proveedor [nombre], concepto, referencia, total, saldo_pendiente, vencimiento, dias_vencida, tramo, empresa).
+
+EJEMPLOS DE CONSULTAS CORRECTAS
+- Facturas pendientes / deuda con un proveedor:
+  SELECT proveedor, count(*) AS facturas, sum(saldo_pendiente) AS deuda FROM compras_vencidas WHERE proveedor ILIKE '%camilo%porras%' GROUP BY proveedor
+- Deuda por proveedor (top 5):
+  SELECT proveedor, count(*) AS facturas, sum(saldo_pendiente) AS deuda FROM compras_vencidas GROUP BY proveedor ORDER BY deuda DESC LIMIT 5
+- Cliente con mayor venta (Impresos y Ogemi por separado):
+  SELECT 'Impresos' AS empresa, c.nombre, sum(f.total) AS ventas FROM facturas f JOIN clientes c ON c.id = f.cliente_id GROUP BY c.nombre ORDER BY ventas DESC LIMIT 5
+  SELECT 'Ogemi' AS empresa, c.nombre, sum(v.total) AS ventas FROM ventas_ogemi v JOIN clientes c ON c.id = v.cliente_id GROUP BY c.nombre ORDER BY ventas DESC LIMIT 5
+- Lo que nos debe un cliente: SELECT cliente, count(*), sum(saldo_pendiente) FROM cartera_vencida WHERE cliente ILIKE '%nombre%' GROUP BY cliente (y lo mismo en cartera_ventas_ogemi y cartera_presupuestos)
 `
 
 function systemPrompt() {
@@ -132,8 +142,8 @@ export async function POST(req: Request) {
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${prov.key}` },
           body: JSON.stringify({
             model: prov.model, messages, tools: TOOLS, tool_choice: 'auto', temperature: 0.1, max_tokens: 1500,
-            // gpt-oss en Groq razona: esfuerzo bajo = menos tokens consumidos por pregunta
-            ...(prov.nombre === 'Groq' && prov.model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'low' } : {}),
+            // gpt-oss en Groq razona: 'medium' equilibra precisión y consumo de tokens (límite por minuto)
+            ...(prov.nombre === 'Groq' && prov.model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'medium' } : {}),
           }),
         })
       } catch (e: any) {
