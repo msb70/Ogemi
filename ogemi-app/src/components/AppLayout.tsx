@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Menu, PanelLeftOpen } from 'lucide-react'
 import Sidebar from './Sidebar'
+import AsistenteBot from './AsistenteBot'
 
 const COLLAPSE_KEY = 'ogemi.sidebarCollapsed'
 
@@ -86,6 +87,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         {children}
       </main>
+      <AsistenteBot />
     </div>
   )
 }
