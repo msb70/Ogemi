@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { Send, X, Loader2 } from 'lucide-react'
 
 /**
- * Asistente flotante (Grok) — botón con el logo de Impresos Comerciales.
+ * Asistente flotante (IA: Groq o Grok) — botón con el logo de Impresos Comerciales.
  * Responde solo sobre los datos de la app vía /api/asistente (lectura con la sesión del usuario).
  * La conversación vive en memoria; se borra al recargar la página.
  */
@@ -219,7 +219,7 @@ export default function AsistenteBot() {
               {cargando ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             </button>
           </form>
-          <p className="text-[10px] text-gray-400 text-center pb-2 -mt-1">Respuestas generadas con IA (Grok). Verifica las cifras importantes.</p>
+          <p className="text-[10px] text-gray-400 text-center pb-2 -mt-1">Respuestas generadas con IA. Verifica las cifras importantes.</p>
         </div>
       )}
 

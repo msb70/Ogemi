@@ -5,14 +5,26 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 /**
- * Asistente de la app (Grok / xAI).
+ * Asistente de la app (IA vía API compatible con OpenAI: Groq o xAI/Grok).
  * - Solo responde sobre los datos de la app. Para leerlos usa la herramienta `consultar_base`,
  *   que llama a la RPC `asistente_consulta` CON LA SESIÓN DEL USUARIO: aplica su RLS y permisos,
  *   y la RPC solo admite un SELECT (rechaza escrituras, funciones volátiles y esquemas internos).
- * - Variables: XAI_API_KEY (obligatoria), XAI_MODEL (opcional, por defecto grok-4.7).
+ * - Clave: GROQ_API_KEY o XAI_API_KEY. El proveedor se elige por el formato de la clave:
+ *   'gsk_…' → Groq (modelo por defecto openai/gpt-oss-120b); otra → xAI (grok-4.7).
+ *   Modelo configurable con LLM_MODEL (o XAI_MODEL).
  */
 
-const XAI_URL = 'https://api.x.ai/v1/chat/completions'
+function proveedor() {
+  const key = (process.env.GROQ_API_KEY || process.env.XAI_API_KEY || '').trim()
+  if (!key) return null
+  const groq = key.startsWith('gsk_')
+  return {
+    key,
+    nombre: groq ? 'Groq' : 'xAI',
+    url: groq ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://api.x.ai/v1/chat/completions',
+    model: process.env.LLM_MODEL || process.env.XAI_MODEL || (groq ? 'openai/gpt-oss-120b' : 'grok-4.7'),
+  }
+}
 const MAX_PASOS = 8
 const MAX_MENSAJES = 16
 const MAX_RESULTADO = 24000
@@ -83,7 +95,7 @@ const TOOLS = [
 
 // El botón consulta esto para ocultarse si el asistente no está configurado
 export async function GET() {
-  return NextResponse.json({ configurado: !!process.env.XAI_API_KEY })
+  return NextResponse.json({ configurado: !!proveedor() })
 }
 
 export async function POST(req: Request) {
@@ -91,9 +103,8 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autenticado.' }, { status: 401 })
 
-  const apiKey = process.env.XAI_API_KEY
-  if (!apiKey) return NextResponse.json({ error: 'El asistente no está configurado (falta XAI_API_KEY).' }, { status: 503 })
-  const model = process.env.XAI_MODEL || 'grok-4.7'
+  const prov = proveedor()
+  if (!prov) return NextResponse.json({ error: 'El asistente no está configurado (falta la clave de la IA).' }, { status: 503 })
 
   let body: any
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Solicitud inválida.' }, { status: 400 }) }
@@ -110,22 +121,22 @@ export async function POST(req: Request) {
   for (let paso = 0; paso < MAX_PASOS; paso++) {
     let res: Response
     try {
-      res = await fetch(XAI_URL, {
+      res = await fetch(prov.url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model, messages, tools: TOOLS, tool_choice: 'auto', temperature: 0.1 }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${prov.key}` },
+        body: JSON.stringify({ model: prov.model, messages, tools: TOOLS, tool_choice: 'auto', temperature: 0.1 }),
       })
     } catch (e: any) {
-      return NextResponse.json({ error: 'No se pudo contactar a Grok: ' + (e?.message || 'error de red') }, { status: 502 })
+      return NextResponse.json({ error: `No se pudo contactar a ${prov.nombre}: ` + (e?.message || 'error de red') }, { status: 502 })
     }
     if (!res.ok) {
       const txt = await res.text().catch(() => '')
-      console.error('xAI error', res.status, txt.slice(0, 500))
-      return NextResponse.json({ error: `Grok respondió con error ${res.status}.` }, { status: 502 })
+      console.error('LLM error', prov.nombre, prov.model, res.status, txt.slice(0, 500))
+      return NextResponse.json({ error: `${prov.nombre} respondió con error ${res.status}.` }, { status: 502 })
     }
     const data = await res.json()
     const msg = data?.choices?.[0]?.message
-    if (!msg) return NextResponse.json({ error: 'Respuesta vacía de Grok.' }, { status: 502 })
+    if (!msg) return NextResponse.json({ error: `Respuesta vacía de ${prov.nombre}.` }, { status: 502 })
 
     const calls: any[] = msg.tool_calls || []
     if (!calls.length) {
