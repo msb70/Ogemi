@@ -9,7 +9,7 @@ import type { Modulo } from '@/types/auth'
 import {
   LayoutDashboard, FileText, Users, Building2, Briefcase,
   BarChart3, Upload, ShieldCheck, LogOut, ChevronDown, X,
-  ShoppingCart, Truck, Wallet, ClipboardList, CalendarClock, QrCode, CreditCard, WalletCards, Printer
+  ShoppingCart, Truck, Wallet, ClipboardList, CalendarClock, QrCode, CreditCard, WalletCards, Printer, PanelLeftClose
 } from 'lucide-react'
 
 type NavLeaf = { kind: 'link'; href: string; label: string; icon: React.ElementType; modulo: Modulo }
@@ -107,7 +107,7 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + '/')
 }
 
-export default function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onClose?: () => void }) {
+export default function Sidebar({ onNavigate, onClose, onCollapse }: { onNavigate?: () => void; onClose?: () => void; onCollapse?: () => void }) {
   const pathname = usePathname()
   const { profile, puedeHacer, signOut } = useAuth()
 
@@ -182,6 +182,16 @@ export default function Sidebar({ onNavigate, onClose }: { onNavigate?: () => vo
             className="md:hidden p-2 -mr-2 rounded-lg text-brand-300 hover:bg-brand-800 hover:text-white transition-colors"
           >
             <X size={20} />
+          </button>
+        )}
+        {onCollapse && (
+          <button
+            onClick={onCollapse}
+            aria-label="Ocultar menú"
+            title="Ocultar menú"
+            className="hidden md:inline-flex p-2 -mr-2 rounded-lg text-brand-300 hover:bg-brand-800 hover:text-white transition-colors"
+          >
+            <PanelLeftClose size={18} />
           </button>
         )}
       </div>

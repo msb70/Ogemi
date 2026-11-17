@@ -42,7 +42,7 @@ export default function AnularAnticipo({ anticipo, modulo, onChanged }: Props) {
     setOpen(true); setMotivo(''); setFecha(hoyLocal()); setError(''); setAplicaciones([]); setLoading(true)
     const { data, error: e } = await supabase
       .from('pagos')
-      .select('id, fecha, monto, numero_recibo, facturas(numero_factura), presupuestos(numero_presupuesto), ventas_ogemi(numero), pago_reversos(id)')
+      .select('id, fecha, monto, numero_recibo, facturas!pagos_factura_id_fkey(numero_factura), presupuestos!pagos_presupuesto_id_fkey(numero_presupuesto), ventas_ogemi!pagos_venta_ogemi_id_fkey(numero), pago_reversos(id)')
       .eq('anticipo_id', anticipo.id)
       .order('fecha')
     setLoading(false)

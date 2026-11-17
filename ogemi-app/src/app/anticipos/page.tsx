@@ -35,6 +35,7 @@ function AnticiposPage() {
   // Modal de aplicaciones
   const [aplicAnticipo, setAplicAnticipo] = useState<Anticipo | null>(null)
   const [aplicaciones, setAplicaciones] = useState<any[]>([])
+  const [aplicError, setAplicError] = useState('')
   const [loadingAplic, setLoadingAplic] = useState(false)
 
   const [form, setForm] = useState({
@@ -120,12 +121,23 @@ function AnticiposPage() {
     setAplicAnticipo(a)
     setLoadingAplic(true)
     setAplicaciones([])
-    const { data } = await supabase
+    setAplicError('')
+    // pagos tiene dos FK a facturas (factura_id y credito_factura_id): hay que nombrar
+    // la relación o PostgREST responde "embed ambiguo" y la lista sale vacía.
+    const { data, error } = await supabase
       .from('pagos')
-      .select('id, fecha, monto, referencia, facturas(numero_factura), presupuestos(numero_presupuesto)')
+      .select('id, fecha, monto, referencia, facturas!pagos_factura_id_fkey(numero_factura), presupuestos!pagos_presupuesto_id_fkey(numero_presupuesto), pago_reversos(id)')
       .eq('anticipo_id', a.id)
       .order('fecha', { ascending: false })
-    setAplicaciones(data || [])
+    if (error) {
+      console.error('Error cargando aplicaciones del anticipo', error)
+      setAplicError('No se pudieron cargar las aplicaciones: ' + error.message)
+    }
+    // Las aplicaciones reversadas ya no cuentan contra el saldo del anticipo
+    setAplicaciones((data || []).filter((p: any) => {
+      const rev = Array.isArray(p.pago_reversos) ? p.pago_reversos[0] : p.pago_reversos
+      return !rev
+    }))
     setLoadingAplic(false)
   }
 
@@ -555,6 +567,8 @@ function AnticiposPage() {
 
             {loadingAplic ? (
               <p className="text-sm text-gray-400 py-6 text-center">Cargando...</p>
+            ) : aplicError ? (
+              <p className="text-sm text-red-600 py-6 text-center">{aplicError}</p>
             ) : aplicaciones.length === 0 ? (
               <p className="text-sm text-gray-400 py-6 text-center">Sin aplicaciones registradas.</p>
             ) : (

@@ -1,11 +1,24 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Menu } from 'lucide-react'
+import { Menu, PanelLeftOpen } from 'lucide-react'
 import Sidebar from './Sidebar'
+
+const COLLAPSE_KEY = 'ogemi.sidebarCollapsed'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  // Escritorio: menú plegado para ganar ancho de página (se recuerda en el navegador)
+  const [collapsed, setCollapsed] = useState(false)
+
+  useEffect(() => {
+    try { setCollapsed(localStorage.getItem(COLLAPSE_KEY) === '1') } catch {}
+  }, [])
+
+  const toggleCollapsed = (value: boolean) => {
+    setCollapsed(value)
+    try { localStorage.setItem(COLLAPSE_KEY, value ? '1' : '0') } catch {}
+  }
 
   // Bloquea el scroll del fondo y cierra con Escape mientras el drawer está abierto
   useEffect(() => {
@@ -24,10 +37,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
-      {/* Sidebar fijo en escritorio */}
-      <div className="hidden md:flex md:w-64 md:flex-shrink-0">
-        <Sidebar />
-      </div>
+      {/* Sidebar fijo en escritorio (plegable) */}
+      {collapsed ? (
+        <div className="hidden md:flex md:w-11 md:flex-shrink-0 bg-brand-900 flex-col items-center pt-3 print:hidden">
+          <button
+            onClick={() => toggleCollapsed(false)}
+            aria-label="Mostrar menú"
+            title="Mostrar menú"
+            className="p-2 rounded-lg text-brand-200 hover:bg-brand-800 hover:text-white transition-colors"
+          >
+            <PanelLeftOpen size={20} />
+          </button>
+        </div>
+      ) : (
+        <div className="hidden md:flex md:w-64 md:flex-shrink-0">
+          <Sidebar onCollapse={() => toggleCollapsed(true)} />
+        </div>
+      )}
 
       {/* Drawer en móvil: siempre montado para poder animar entrada/salida */}
       <div

@@ -38,6 +38,8 @@ declare module 'lucide-react' {
   export const Lock: LucideIcon
   export const LogOut: LucideIcon
   export const Menu: LucideIcon
+  export const PanelLeftClose: LucideIcon
+  export const PanelLeftOpen: LucideIcon
   export const Mail: LucideIcon
   export const Minus: LucideIcon
   export const Pencil: LucideIcon
