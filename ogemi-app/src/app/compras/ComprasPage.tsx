@@ -91,6 +91,7 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
   const [qrUrl, setQrUrl] = useState('')
   const [qrLoading, setQrLoading] = useState(false)
   const [qrError, setQrError] = useState('')
+  const [qrAviso, setQrAviso] = useState('')
   const [qrMode, setQrMode] = useState<'camera' | 'manual'>('camera')
   const [scannerActive, setScannerActive] = useState(false)
 
@@ -139,6 +140,7 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
   useEffect(() => { if (tab === 'vencidas') loadVencidas() }, [tab, loadVencidas])
 
   const resetForm = () => {
+    setQrAviso('')
     setForm({
       proveedor_id: '', fecha: new Date().toISOString().split('T')[0],
       concepto: '', referencia: '', tipo_documento: 'FACTURA', documento_afectado: '',
@@ -372,6 +374,7 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
     setScannerActive(false)
     setQrLoading(true)
     setQrError('')
+    setQrAviso('')
     try {
       const res = await fetch('/api/dgi-qr', {
         method: 'POST',
@@ -401,6 +404,34 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
       // Buscar también entre inactivos para no duplicar
       const { data: todosProv } = await supabase.from('proveedores').select('id, nombre, ruc, activo')
       const lista: any[] = todosProv || proveedores
+
+      // Factura aún no publicada por la DGI: pre-llenar con lo que trae el CUFE
+      // (número, fecha, RUC) y buscar el proveedor SOLO por RUC (no hay nombre para crearlo).
+      if (data.pendiente_dgi) {
+        const prov: any = rucQr.length >= 5 ? lista.find(p => rucKey(p.ruc) === rucQr) : null
+        if (prov && prov.activo === false) {
+          await supabase.from('proveedores').update({ activo: true }).eq('id', prov.id)
+          await load()
+        }
+        setForm(f => ({
+          ...f,
+          proveedor_id: prov ? prov.id : f.proveedor_id,
+          fecha: data.fecha || f.fecha,
+          referencia: data.numero_factura ? `FAC-${data.numero_factura}` : f.referencia,
+          monto: '',
+          itbms: '',
+          concepto: `Factura ${data.numero_factura}${prov ? ' - ' + prov.nombre : ''}`,
+        }))
+        setQrAviso(
+          'La DGI todavía no publica esta factura (suele tardar 24–48 h). Se completaron número y fecha desde el QR; ' +
+          (prov ? 'revisa el proveedor y ' : `selecciona el proveedor (RUC ${data.emisor_ruc}) y `) +
+          'carga los montos a mano.'
+        )
+        setShowQrModal(false)
+        setQrUrl('')
+        setShowForm(true)
+        return
+      }
       let existente: any =
         (rucQr.length >= 5 && lista.find(p => rucKey(p.ruc) === rucQr)) ||
         lista.find(p => nomKey(p.nombre) === nomQr)
@@ -1150,6 +1181,12 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold mb-5">{editId ? 'Editar compra' : 'Nueva compra'}</h2>
+            {qrAviso && !editId && (
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-sm text-amber-800">
+                <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                <span>{qrAviso}</span>
+              </div>
+            )}
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>

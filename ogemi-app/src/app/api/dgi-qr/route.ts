@@ -17,6 +17,29 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
+/**
+ * Datos que se pueden leer del propio CUFE (sin consultar a la DGI).
+ * Estructura (de derecha a izquierda): FE + tipoDoc(2) + tipoContrib(1) + RUC(20, con ceros a la izq.)
+ * + "-" + DV(2) + sucursal(4) + fecha AAAAMMDD(8) + número(10) + ptoFact(3) + tipoEmisión(2)
+ * + ambiente(1) + seguridad(9) + verificador(1)
+ * Ej: FE012 00000008329-70-87734 -80 0001 20261117 0000171664 001 01 1 200709923 4
+ */
+function parseCufe(cufe: string | null) {
+  if (!cufe) return null
+  const m = cufe.match(/^FE(\d{2})\d(.+)-(\d{2})(\d{4})(\d{4})(\d{2})(\d{2})(\d{10})\d{3}\d{2}\d\d{9}\d$/)
+  if (!m) return null
+  const [, tipoDoc, rucPad, dv, , yyyy, mm, dd, numero] = m
+  const mes = Number(mm), dia = Number(dd)
+  if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null
+  return {
+    tipo_doc: tipoDoc,
+    emisor_ruc: rucPad.replace(/^0+/, ''),
+    emisor_dv: dv,
+    fecha: `${yyyy}-${mm}-${dd}`,
+    numero_factura: numero.replace(/^0+/, '') || numero,
+  }
+}
+
 function extractBetween(html: string, before: string, after: string): string | null {
   const idx = html.indexOf(before)
   if (idx === -1) return null
@@ -54,6 +77,26 @@ export async function POST(req: NextRequest) {
     }
 
     const html = await response.text()
+
+    // La DGI publica las facturas con ~1 día de retraso respecto al PAC: mientras tanto
+    // responde "CUFE, digestValue o Ambiente inexistente". Devolvemos lo que sale del CUFE
+    // (número, fecha, RUC emisor) para pre-llenar; los montos quedan para cargarlos a mano.
+    if (/inexistente/i.test(html) && !/Valor Total/i.test(html)) {
+      const datos = parseCufe(parsedUrl.searchParams.get('chFE'))
+      if (!datos) {
+        return NextResponse.json({
+          error: 'La DGI no encuentra esta factura y el código QR no tiene un CUFE válido. Verifica que sea el QR de la factura.',
+        }, { status: 422 })
+      }
+      return NextResponse.json({
+        pendiente_dgi: true,
+        ...datos,
+        emisor_nombre: null,
+        monto: null,
+        itbms: null,
+        total: null,
+      })
+    }
 
     // --- Número de factura ---
     // <h2>No. 0000000001</h2>  o similar
@@ -135,7 +178,7 @@ export async function POST(req: NextRequest) {
         ? { debug: { numero_factura, fecha, emisor_nombre, emisor_ruc, total, itbms } }
         : {}
       return NextResponse.json({
-        error: 'No se pudieron extraer los datos de la factura. Verifica que la URL del QR sea correcta.',
+        error: 'La DGI respondió pero no se pudieron leer los datos de la factura (posible cambio de formato de su página). Cárgala a mano.',
         ...debugInfo
       }, { status: 422 })
     }
