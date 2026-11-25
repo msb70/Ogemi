@@ -12,7 +12,22 @@ import { useToast } from '@/hooks/useToast'
 import PermissionGuard, { withPagePermission } from '@/components/PermissionGuard'
 import { exportXLSX, kpiSheet } from '@/lib/exportXlsx'
 
-type EstadoFilter = 'todas' | 'disponible' | 'aplicada'
+type EstadoFilter = 'todas' | 'disponible' | 'parcial' | 'aplicada'
+
+const ESTADO_LABEL: Record<string, string> = { disponible: 'Disponible', parcial: 'Parcial', aplicada: 'Aplicada' }
+const ESTADO_BADGE: Record<string, string> = {
+  disponible: 'bg-green-100 text-green-700',
+  parcial: 'bg-amber-100 text-amber-700',
+  aplicada: 'bg-gray-200 text-gray-600',
+}
+
+type Aplicacion = {
+  id: string; monto: number; fecha: string
+  factura?: { numero_factura: number } | null
+  venta?: { numero: number } | null
+  pago_reversos?: { id: string }[] | null
+}
+type NotaCreditoRow = NotaCredito & { aplicaciones?: Aplicacion[] }
 
 const emptyForm = () => ({
   id: '' as string,
@@ -34,7 +49,14 @@ function NotasCreditoPage({ empresa }: { empresa: Empresa }) {
   const esOgemi = empresa === 'ogemi'
   const docLabel = esOgemi ? 'venta Ogemi' : 'factura'
   const numAplicado = (n: NotaCredito) => esOgemi ? n.venta_aplicada?.numero : n.factura_aplicada?.numero_factura
-  const [notas, setNotas] = useState<NotaCredito[]>([])
+  const aplicado = (n: NotaCredito) => Number(n.monto_aplicado || 0)
+  const saldoNC = (n: NotaCredito) => Number(n.saldo ?? n.total) || 0
+  /** Aplicaciones vigentes (no reversadas) de la NC: a qué documento y cuánto */
+  const aplicacionesVivas = (n: NotaCreditoRow) => (n.aplicaciones || []).filter(a => !(a.pago_reversos && a.pago_reversos.length > 0))
+  const detalleAplicaciones = (n: NotaCreditoRow) => aplicacionesVivas(n)
+    .map(a => `#${(esOgemi ? a.venta?.numero : a.factura?.numero_factura) ?? '—'} (${formatCurrency(a.monto)})`)
+    .join(', ')
+  const [notas, setNotas] = useState<NotaCreditoRow[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -50,12 +72,12 @@ function NotasCreditoPage({ empresa }: { empresa: Empresa }) {
     setLoading(true)
     const [{ data: ncData }, { data: cliData }] = await Promise.all([
       supabase.from('notas_credito')
-        .select('*, clientes(nombre), factura_aplicada:facturas!factura_aplicada_id(numero_factura), venta_aplicada:ventas_ogemi!venta_ogemi_aplicada_id(numero)')
+        .select('*, clientes(nombre), factura_aplicada:facturas!factura_aplicada_id(numero_factura), venta_aplicada:ventas_ogemi!venta_ogemi_aplicada_id(numero), aplicaciones:pagos!pagos_nota_credito_id_fkey(id, monto, fecha, factura:facturas!pagos_factura_id_fkey(numero_factura), venta:ventas_ogemi!pagos_venta_ogemi_id_fkey(numero), pago_reversos!pago_reversos_pago_id_fkey(id))')
         .eq('empresa', empresa)
         .order('fecha', { ascending: false }),
       supabase.from('clientes').select('*').eq('activo', true).order('nombre'),
     ])
-    setNotas((ncData || []) as NotaCredito[])
+    setNotas((ncData || []) as NotaCreditoRow[])
     setClientes((cliData || []) as Cliente[])
     setLoading(false)
   }, [empresa])
@@ -76,15 +98,19 @@ function NotasCreditoPage({ empresa }: { empresa: Empresa }) {
       kpiSheet(esOgemi ? 'Notas de crédito Ogemi' : 'Notas de crédito', `${filtered.length} registros`, [
         ['# Notas de crédito', filtered.length],
         ['Total', filtered.reduce((s, n) => s + (n.total || 0), 0)],
+        ['Aplicado', filtered.reduce((s, n) => s + aplicado(n), 0)],
+        ['Saldo por usar', filtered.reduce((s, n) => s + saldoNC(n), 0)],
         ['Disponibles', filtered.filter(n => n.estado === 'disponible').length],
+        ['Parciales', filtered.filter(n => n.estado === 'parcial').length],
         ['Aplicadas', filtered.filter(n => n.estado === 'aplicada').length],
       ]),
       { name: 'Listado', rows: [
-        ['Número', 'Fecha', 'Cliente', 'Neto', 'ITBMS', 'Total', 'Estado', esOgemi ? 'Venta aplicada' : 'Factura aplicada'],
+        ['Número', 'Fecha', 'Cliente', 'Neto', 'ITBMS', 'Total', 'Aplicado', 'Saldo', 'Estado', esOgemi ? 'Ventas aplicadas' : 'Facturas aplicadas'],
         ...filtered.map(n => [
           n.numero || '', n.fecha, n.clientes?.nombre || '', n.monto, n.itbms, n.total,
-          n.estado === 'aplicada' ? 'Aplicada' : 'Disponible',
-          numAplicado(n) ? `#${numAplicado(n)}` : '',
+          aplicado(n), saldoNC(n),
+          ESTADO_LABEL[n.estado] || n.estado,
+          detalleAplicaciones(n),
         ]),
       ] },
     ])
@@ -92,29 +118,23 @@ function NotasCreditoPage({ empresa }: { empresa: Empresa }) {
 
   const openNew = () => { setForm(emptyForm()); setShowForm(true) }
 
-  // Des-aplica una NC: reversa su pago, lo que la devuelve a 'disponible' y
-  // restaura el saldo de la factura. Devuelve true si quedó libre.
-  const desaplicarNC = async (n: NotaCredito): Promise<boolean> => {
-    if (n.estado !== 'aplicada' || !n.pago_id) return true
-    const { error } = await supabase.rpc('reversar_pago', {
-      p_pago_id: n.pago_id,
-      p_motivo: 'Edición/borrado de nota de crédito',
+  // Libera TODAS las aplicaciones de la NC (borra esos cobros; los documentos vuelven a quedar con saldo).
+  const liberarNC = async (n: NotaCredito): Promise<boolean> => {
+    if (aplicado(n) <= 0.005) return true
+    const { error } = await supabase.rpc('liberar_nota_credito', {
+      p_nota_id: n.id,
+      p_motivo: 'Borrado de nota de crédito',
     })
     if (error) { showToast(`No se pudo liberar la NC: ${error.message}`, 'error'); return false }
     return true
   }
 
-  const openEdit = async (n: NotaCredito) => {
-    if (n.estado === 'aplicada') {
-      const fnum = numAplicado(n)
-      if (!confirm(`Esta NC está aplicada a la ${docLabel} #${fnum ?? ''}. Para editarla se liberará ese pago (la ${docLabel} volverá a quedar con saldo). ¿Continuar?`)) return
-      const ok = await desaplicarNC(n)
-      if (!ok) return
-      showToast('NC liberada. Ahora puedes editarla.', 'success')
-    }
+  // Aplicado de la NC que se está editando (el total no puede quedar por debajo)
+  const aplicadoForm = form.id ? aplicado(notas.find(x => x.id === form.id) || ({} as NotaCredito)) : 0
+
+  const openEdit = (n: NotaCredito) => {
     setForm({ id: n.id, cliente_id: n.cliente_id, numero: n.numero || '', fecha: n.fecha, monto: String(n.monto), itbms: String(n.itbms) })
     setShowForm(true)
-    loadData()
   }
 
   const handleSave = async () => {
@@ -122,6 +142,9 @@ function NotasCreditoPage({ empresa }: { empresa: Empresa }) {
     const monto = parseFloat(form.monto) || 0
     const itbms = parseFloat(form.itbms) || 0
     if (monto + itbms <= 0) { showToast('El total debe ser mayor a 0.', 'error'); return }
+    if (aplicadoForm > 0 && monto + itbms < aplicadoForm - 0.009) {
+      showToast(`El total no puede ser menor a lo ya aplicado (${formatCurrency(aplicadoForm)}).`, 'error'); return
+    }
     setSaving(true)
     const payload = { cliente_id: form.cliente_id, numero: form.numero.trim() || null, fecha: form.fecha, monto, itbms }
     const { error } = form.id
@@ -134,11 +157,10 @@ function NotasCreditoPage({ empresa }: { empresa: Empresa }) {
     loadData()
   }
 
-  const handleDelete = async (n: NotaCredito) => {
-    if (n.estado === 'aplicada') {
-      const fnum = numAplicado(n)
-      if (!confirm(`La NC ${n.numero || ''} está aplicada a la ${docLabel} #${fnum ?? ''}. Al borrarla se liberará ese pago (la ${docLabel} volverá a quedar con saldo) y se eliminará la NC. ¿Continuar?`)) return
-      const ok = await desaplicarNC(n)
+  const handleDelete = async (n: NotaCreditoRow) => {
+    if (aplicado(n) > 0.005) {
+      if (!confirm(`La NC ${n.numero || ''} tiene ${formatCurrency(aplicado(n))} aplicado (${docLabel}s ${detalleAplicaciones(n)}). Al borrarla se borrarán esos descuentos (las ${docLabel}s volverán a quedar con saldo) y se eliminará la NC. ¿Continuar?`)) return
+      const ok = await liberarNC(n)
       if (!ok) return
     } else {
       if (!confirm(`¿Borrar la nota de crédito ${n.numero || ''} de ${formatCurrency(n.total)}?`)) return
@@ -179,7 +201,7 @@ function NotasCreditoPage({ empresa }: { empresa: Empresa }) {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {(['todas', 'disponible', 'aplicada'] as EstadoFilter[]).map(e => (
+          {(['todas', 'disponible', 'parcial', 'aplicada'] as EstadoFilter[]).map(e => (
             <button key={e} onClick={() => setEstadoFilter(e)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${estadoFilter === e ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
               {e.charAt(0).toUpperCase() + e.slice(1)}
@@ -199,15 +221,17 @@ function NotasCreditoPage({ empresa }: { empresa: Empresa }) {
                 <th className="table-header text-right">Neto</th>
                 <th className="table-header text-right">ITBMS</th>
                 <th className="table-header text-right">Total</th>
+                <th className="table-header text-right">Aplicado</th>
+                <th className="table-header text-right">Saldo</th>
                 <th className="table-header">Estado</th>
                 <th className="table-header">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={8} className="text-center py-12 text-gray-400">Cargando...</td></tr>
+                <tr><td colSpan={10} className="text-center py-12 text-gray-400">Cargando...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-12 text-gray-400">Sin notas de crédito</td></tr>
+                <tr><td colSpan={10} className="text-center py-12 text-gray-400">Sin notas de crédito</td></tr>
               ) : filtered.map(n => (
                 <tr key={n.id} className="hover:bg-gray-50">
                   <td className="table-cell font-mono">{n.numero || '—'}</td>
@@ -216,15 +240,19 @@ function NotasCreditoPage({ empresa }: { empresa: Empresa }) {
                   <td className="table-cell text-right">{formatCurrency(n.monto)}</td>
                   <td className="table-cell text-right">{formatCurrency(n.itbms)}</td>
                   <td className="table-cell text-right font-semibold">{formatCurrency(n.total)}</td>
+                  <td className="table-cell text-right text-gray-500">{aplicado(n) > 0 ? formatCurrency(aplicado(n)) : '—'}</td>
+                  <td className={`table-cell text-right font-semibold ${saldoNC(n) > 0.005 ? 'text-green-700' : 'text-gray-400'}`}>{formatCurrency(saldoNC(n))}</td>
                   <td className="table-cell">
-                    <span className={`badge ${n.estado === 'aplicada' ? 'bg-gray-200 text-gray-600' : 'bg-green-100 text-green-700'}`}>
-                      {n.estado === 'aplicada' ? 'Aplicada' : 'Disponible'}
+                    <span className={`badge ${ESTADO_BADGE[n.estado] || 'bg-gray-100 text-gray-600'}`}>
+                      {ESTADO_LABEL[n.estado] || n.estado}
                     </span>
                   </td>
                   <td className="table-cell">
                     <div className="flex items-center gap-3">
-                      {n.estado === 'aplicada' && (
-                        <span className="text-xs text-gray-500">Aplicada a {docLabel} #{numAplicado(n) ?? '—'}</span>
+                      {aplicacionesVivas(n).length > 0 && (
+                        <span className="text-xs text-gray-500 max-w-[240px]" title={detalleAplicaciones(n)}>
+                          Aplicada a {docLabel} {detalleAplicaciones(n)}
+                        </span>
                       )}
                       <PermissionGuard modulo="notas_credito" accion="editar" silent>
                         <button onClick={() => openEdit(n)} className="flex items-center gap-1 text-sm text-brand-600 hover:text-brand-800"><Pencil size={14} /> Editar</button>
@@ -241,8 +269,8 @@ function NotasCreditoPage({ empresa }: { empresa: Empresa }) {
         </div>
         <p className="text-xs text-gray-400 mt-3">
           {esOgemi
-            ? 'Las notas de crédito disponibles se aplican como pago desde Ogemi → Facturas (botón Cobrar, origen "Nota de crédito"). Una NC se usa una sola vez y no mueve el banco. En el Informe diario se restan de las Ventas Impresora Ogemi.'
-            : 'Las notas de crédito disponibles se aplican como pago desde la factura (botón Cobrar). Una NC se usa una sola vez.'}
+            ? 'Las notas de crédito con saldo se aplican como pago desde Ogemi → Facturas (botón Cobrar, origen "Nota de crédito"). Se pueden descontar total o parcialmente, en una o varias ventas, hasta agotar su saldo. No mueven el banco. En el Informe diario se restan de las Ventas Impresora Ogemi.'
+            : 'Las notas de crédito con saldo se aplican como pago desde la factura (botón Cobrar) o desde Cobros. Se pueden descontar total o parcialmente, en una o varias facturas, hasta agotar su saldo.'}
         </p>
       </div>
 
@@ -254,7 +282,9 @@ function NotasCreditoPage({ empresa }: { empresa: Empresa }) {
             <div className="space-y-3">
               <div>
                 <label className="label">Cliente *</label>
-                <select className="input" value={form.cliente_id} onChange={e => setForm(f => ({ ...f, cliente_id: e.target.value }))}>
+                <select className="input" value={form.cliente_id} disabled={aplicadoForm > 0}
+                  title={aplicadoForm > 0 ? 'La NC ya tiene descuentos aplicados: no se puede cambiar el cliente' : undefined}
+                  onChange={e => setForm(f => ({ ...f, cliente_id: e.target.value }))}>
                   <option value="">Seleccionar cliente...</option>
                   {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                 </select>
@@ -275,6 +305,11 @@ function NotasCreditoPage({ empresa }: { empresa: Empresa }) {
                 <span className="text-sm text-gray-600">Total</span>
                 <span className="text-lg font-bold text-brand-700">{formatCurrency(totalForm)}</span>
               </div>
+              {aplicadoForm > 0 && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Ya aplicado: {formatCurrency(aplicadoForm)} · saldo quedaría en {formatCurrency(Math.max(0, totalForm - aplicadoForm))}. El total no puede ser menor a lo aplicado.
+                </p>
+              )}
             </div>
             <div className="flex gap-3 mt-5">
               <button className="btn-secondary flex-1" onClick={() => setShowForm(false)}>Cancelar</button>

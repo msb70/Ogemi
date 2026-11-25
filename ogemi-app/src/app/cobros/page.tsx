@@ -15,6 +15,9 @@ import PermissionGuard, { withPagePermission } from '@/components/PermissionGuar
 const saldoFactura = (f: Factura) =>
   (f.total || 0) - (f.retencion_monto || 0) - (f.monto_pagado || 0)
 
+/** Saldo por usar de una nota de crédito (total − ya aplicado) */
+const ncSaldo = (n: NotaCredito) => Number(n.saldo ?? n.total) || 0
+
 interface SelFactura {
   checked: boolean
   monto: string // efectivo a cobrar (editable; default = saldo → pago completo)
@@ -23,6 +26,7 @@ interface SelFactura {
 interface SelNC {
   checked: boolean
   factura_id: string
+  monto: string // monto a descontar de la NC (total o parcial)
 }
 
 interface AnticipoDisp {
@@ -119,7 +123,7 @@ function CobrosPage() {
         .select('*')
         .eq('cliente_id', c.id)
         .eq('empresa', 'impresos')
-        .eq('estado', 'disponible')
+        .in('estado', ['disponible', 'parcial'])
         .order('fecha', { ascending: true }),
       supabase
         .from('anticipos_saldos')
@@ -154,7 +158,7 @@ function CobrosPage() {
     for (const nc of ncs) {
       const s = ncSel[nc.id]
       if (s?.checked && s.factura_id) {
-        map[s.factura_id] = (map[s.factura_id] || 0) + (nc.total || 0)
+        map[s.factura_id] = (map[s.factura_id] || 0) + (parseFloat(s.monto) || 0)
       }
     }
     return map
@@ -194,17 +198,29 @@ function CobrosPage() {
   const toggleNC = (nc: NotaCredito) => {
     setNcSel(prev => {
       const cur = prev[nc.id]
-      if (cur?.checked) return { ...prev, [nc.id]: { checked: false, factura_id: '' } }
-      // Default: primera factura seleccionada con saldo suficiente, si no la primera pendiente que quepa
-      const candidata = facturas.find(f =>
-        saldoFactura(f) - creditosFactura(f.id) >= (nc.total || 0) - 0.001
-      )
-      return { ...prev, [nc.id]: { checked: true, factura_id: candidata?.id || '' } }
+      if (cur?.checked) return { ...prev, [nc.id]: { checked: false, factura_id: '', monto: '' } }
+      // Default: primera factura con saldo; monto = min(saldo de la NC, saldo restante de la factura)
+      const candidata = facturas.find(f => saldoFactura(f) - creditosFactura(f.id) > 0.001)
+      const restante = candidata ? saldoFactura(candidata) - creditosFactura(candidata.id) : 0
+      const monto = Math.max(0, Math.min(ncSaldo(nc), restante))
+      return { ...prev, [nc.id]: { checked: true, factura_id: candidata?.id || '', monto: monto > 0 ? monto.toFixed(2) : '' } }
     })
   }
 
   const setNCFactura = (nc: NotaCredito, facturaId: string) => {
-    setNcSel(prev => ({ ...prev, [nc.id]: { checked: true, factura_id: facturaId } }))
+    setNcSel(prev => {
+      const cur = prev[nc.id]
+      const f = facturas.find(x => x.id === facturaId)
+      // Recalcular monto por defecto al cambiar de factura (sin contar esta NC)
+      const otros = creditosFactura(facturaId) - (cur?.factura_id === facturaId ? (parseFloat(cur?.monto || '') || 0) : 0)
+      const restante = f ? saldoFactura(f) - otros : 0
+      const monto = Math.max(0, Math.min(ncSaldo(nc), restante))
+      return { ...prev, [nc.id]: { checked: true, factura_id: facturaId, monto: monto > 0 ? monto.toFixed(2) : (cur?.monto || '') } }
+    })
+  }
+
+  const setNCMonto = (nc: NotaCredito, monto: string) => {
+    setNcSel(prev => ({ ...prev, [nc.id]: { checked: true, factura_id: prev[nc.id]?.factura_id || '', monto } }))
   }
 
   const toggleAnt = (a: AnticipoDisp) => {
@@ -257,7 +273,7 @@ function CobrosPage() {
   const seleccionadas = facturas.filter(f => sel[f.id]?.checked)
   const totalEfectivo = seleccionadas.reduce((s, f) => s + (parseFloat(sel[f.id]?.monto || '') || 0), 0)
   const ncsMarcadas = ncs.filter(n => ncSel[n.id]?.checked)
-  const totalNC = ncsMarcadas.reduce((s, n) => s + (n.total || 0), 0)
+  const totalNC = ncsMarcadas.reduce((s, n) => s + (parseFloat(ncSel[n.id]?.monto || '') || 0), 0)
   const antsMarcados = anticipos.filter(a => antSel[a.id]?.checked)
   const totalAnticipo = antsMarcados.reduce((s, a) => s + (parseFloat(antSel[a.id]?.monto || '') || 0), 0)
 
@@ -270,14 +286,14 @@ function CobrosPage() {
   }
   for (const nc of ncsMarcadas) {
     const s = ncSel[nc.id]
+    const m = parseFloat(s.monto) || 0
     if (!s.factura_id) errores.push(`NC ${nc.numero || ''}: selecciona la factura a la que se aplica.`)
-    else {
+    if (m <= 0) errores.push(`NC ${nc.numero || ''}: indica el monto a descontar.`)
+    if (m > ncSaldo(nc) + 0.009) errores.push(`NC ${nc.numero || ''}: el monto supera su saldo (${formatCurrency(ncSaldo(nc))}).`)
+    if (s.factura_id && m > 0) {
       const f = facturas.find(x => x.id === s.factura_id)
-      if (f) {
-        const otrosCreditos = creditosFactura(f.id) - (nc.total || 0)
-        if ((nc.total || 0) + otrosCreditos > saldoFactura(f) + 0.001) {
-          errores.push(`NC ${nc.numero || ''}: excede el saldo de la factura #${f.numero_factura}.`)
-        }
+      if (f && creditosFactura(f.id) > saldoFactura(f) + 0.001) {
+        errores.push(`NC ${nc.numero || ''}: los créditos asignados exceden el saldo de la factura #${f.numero_factura}.`)
       }
     }
   }
@@ -309,6 +325,7 @@ function CobrosPage() {
     const ncsPayload = ncsMarcadas.map(nc => ({
       nota_credito_id: nc.id,
       factura_id: ncSel[nc.id].factura_id,
+      monto: Math.round((parseFloat(ncSel[nc.id].monto) || 0) * 100) / 100,
     }))
     const anticiposPayload = antsMarcados.map(a => ({
       anticipo_id: a.id,
@@ -498,8 +515,8 @@ function CobrosPage() {
             {ncs.length > 0 && (
               <div className="card overflow-hidden">
                 <div className="px-4 py-3 border-b border-gray-100">
-                  <p className="text-sm font-semibold text-gray-700">Notas de crédito disponibles ({ncs.length})</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Se aplican por su monto total a una factura y no pasan por banco.</p>
+                  <p className="text-sm font-semibold text-gray-700">Notas de crédito con saldo ({ncs.length})</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Se pueden descontar total o parcialmente; lo que sobre queda disponible. No pasan por banco.</p>
                 </div>
                 <div className="divide-y divide-gray-100">
                   {ncs.map(nc => {
@@ -511,9 +528,12 @@ function CobrosPage() {
                           checked={checked} onChange={() => toggleNC(nc)} />
                         <span className="text-sm font-medium">NC {nc.numero || 's/n'}</span>
                         <span className="text-xs text-gray-400">{formatDate(nc.fecha)}</span>
-                        <span className="text-sm font-semibold text-purple-700">{formatCurrency(nc.total)}</span>
+                        <span className="text-sm font-semibold text-purple-700">
+                          Saldo {formatCurrency(ncSaldo(nc))}
+                          {ncSaldo(nc) < (nc.total || 0) - 0.005 && <span className="text-xs font-normal text-gray-400"> de {formatCurrency(nc.total)}</span>}
+                        </span>
                         {checked && (
-                          <div className="flex items-center gap-2 ml-auto">
+                          <div className="flex flex-wrap items-center gap-2 ml-auto">
                             <span className="text-xs text-gray-500">Aplicar a</span>
                             <select
                               className="input text-sm py-1.5 w-56"
@@ -527,6 +547,13 @@ function CobrosPage() {
                                 </option>
                               ))}
                             </select>
+                            <input
+                              type="number" step="0.01" min="0" max={ncSaldo(nc)}
+                              className="input text-sm py-1.5 w-28 text-right"
+                              title="Monto a descontar de la nota de crédito"
+                              value={s.monto}
+                              onChange={e => setNCMonto(nc, e.target.value)}
+                            />
                           </div>
                         )}
                       </div>

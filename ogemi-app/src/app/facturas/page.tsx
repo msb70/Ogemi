@@ -323,17 +323,18 @@ function FacturasPage() {
       // NC disponibles del cliente (todas las NC viven en notas_credito)
       supabase
         .from('notas_credito')
-        .select('id, numero, total')
+        .select('id, numero, total, saldo')
         .eq('cliente_id', f.cliente_id)
         .eq('empresa', 'impresos')
-        .eq('estado', 'disponible')
+        .in('estado', ['disponible', 'parcial'])
         .order('fecha'),
     ])
     setPagosExistentes(data || [])
     setReversadosIds(new Set((reversos || []).map(r => r.pago_id)))
     setAnticipos((anticData || []) as AnticipoDisp[])
     const creds: { tipo: 'manual' | 'factura'; id: string; etiqueta: string; monto: number }[] = [
-      ...((ncManual || []) as any[]).map(n => ({ tipo: 'manual' as const, id: n.id, etiqueta: `NC ${n.numero || ''}`.trim(), monto: Number(n.total) || 0 })),
+      // monto = saldo por usar de la NC (puede aplicarse parcialmente, en varias veces)
+      ...((ncManual || []) as any[]).map(n => ({ tipo: 'manual' as const, id: n.id, etiqueta: `NC ${n.numero || ''}`.trim(), monto: Number(n.saldo ?? n.total) || 0 })),
     ]
     setCreditos(creds)
   }
@@ -472,14 +473,26 @@ function FacturasPage() {
       }
     }
 
+    // Validar que no se exceda el saldo por usar de cada nota de crédito (puede repetirse en varias líneas)
+    const usoNC = new Map<string, number>()
+    lineasValidas.filter(l => l.origen === 'nota_credito').forEach(l =>
+      usoNC.set(l.nota_credito_id, (usoNC.get(l.nota_credito_id) || 0) + parseFloat(l.monto)))
+    for (const [id, usado] of Array.from(usoNC.entries())) {
+      const c = creditos.find(x => x.id === id)
+      if (c && usado > c.monto + 0.005) {
+        showToast(`El monto supera el saldo de la ${c.etiqueta} (${formatCurrency(c.monto)})`, 'error')
+        return
+      }
+    }
+
     setSaving(true)
 
-    // 1) Notas de crédito: se aplican vía RPC (uso único + validación de saldo)
+    // 1) Notas de crédito: se aplican vía RPC (descuento total o parcial; valida saldo de NC y factura)
     const lineasNC = lineasValidas.filter(l => l.origen === 'nota_credito' && l.nota_credito_id)
     for (const l of lineasNC) {
       const rpc = l.nota_credito_tipo === 'manual' ? 'aplicar_nota_credito' : 'aplicar_nc_factura'
       const args = l.nota_credito_tipo === 'manual'
-        ? { p_nota_id: l.nota_credito_id, p_factura_id: selectedFactura.id, p_fecha: fechaPago }
+        ? { p_nota_id: l.nota_credito_id, p_factura_id: selectedFactura.id, p_fecha: fechaPago, p_monto: Math.round(parseFloat(l.monto) * 100) / 100 }
         : { p_nc_factura_id: l.nota_credito_id, p_factura_id: selectedFactura.id, p_fecha: fechaPago }
       const { error: eNC } = await supabase.rpc(rpc, args)
       if (eNC) {
@@ -1003,17 +1016,20 @@ function FacturasPage() {
                             value={linea.nota_credito_id}
                             onChange={e => {
                               const c = creditos.find(x => x.id === e.target.value)
+                              // Sugerir el menor entre el saldo de la NC y lo que falta por cubrir (editable)
+                              const otros = lineas.reduce((t, l, i) => i === idx ? t : t + (parseFloat(l.monto) || 0), 0)
+                              const falta = Math.max(0, saldoPendiente - otros)
                               setLineas(prev => prev.map((l, i) => i === idx ? ({
                                 ...l,
                                 nota_credito_id: e.target.value,
                                 nota_credito_tipo: c?.tipo || '',
-                                monto: c ? c.monto.toFixed(2) : '',
+                                monto: c ? Math.min(c.monto, falta).toFixed(2) : '',
                               }) : l))
                             }}
                           >
                             <option value="">Seleccionar nota de crédito...</option>
                             {creditos.map(c => (
-                              <option key={c.id} value={c.id}>{c.etiqueta} · {formatCurrency(c.monto)}</option>
+                              <option key={c.id} value={c.id}>{c.etiqueta} · saldo {formatCurrency(c.monto)}</option>
                             ))}
                           </select>
                         </>
@@ -1030,8 +1046,7 @@ function FacturasPage() {
                         className="input text-sm"
                         placeholder="0.00"
                         value={linea.monto}
-                        readOnly={linea.origen === 'nota_credito'}
-                        title={linea.origen === 'nota_credito' ? 'La nota de crédito se aplica por su monto total' : undefined}
+                        title={linea.origen === 'nota_credito' ? 'Monto a descontar de la nota de crédito (total o parcial). Lo que sobre queda disponible.' : undefined}
                         onChange={e => updateLinea(idx, 'monto', e.target.value)}
                       />
                     </div>

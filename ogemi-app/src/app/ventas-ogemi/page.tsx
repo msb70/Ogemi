@@ -29,7 +29,7 @@ interface LineaCobro {
   referencia: string
 }
 
-type NcDisp = { id: string; numero: string | null; fecha: string; total: number }
+type NcDisp = { id: string; numero: string | null; fecha: string; total: number; saldo: number }
 
 type AnticipoDisp = {
   id: string
@@ -226,14 +226,14 @@ function VentasOgemiPage() {
         .order('fecha'),
       supabase
         .from('notas_credito')
-        .select('id, numero, fecha, total')
+        .select('id, numero, fecha, total, saldo')
         .eq('cliente_id', v.cliente_id)
         .eq('empresa', 'ogemi')
-        .eq('estado', 'disponible')
+        .in('estado', ['disponible', 'parcial'])
         .order('fecha'),
     ])
     setAnticipos((data || []) as AnticipoDisp[])
-    setNcsDisp((ncs || []) as NcDisp[])
+    setNcsDisp(((ncs || []) as any[]).map(n => ({ ...n, saldo: Number(n.saldo ?? n.total) || 0 })) as NcDisp[])
   }
 
   const addLinea = () => setLineas(prev => [...prev, emptyLinea(cuentas[0]?.id || '')])
@@ -241,7 +241,7 @@ function VentasOgemiPage() {
   const updateLinea = (idx: number, field: keyof LineaCobro, value: string) =>
     setLineas(prev => prev.map((l, i) => {
       if (i !== idx) return l
-      // Al pasar a nota de crédito el monto sale de la NC elegida (uso único, por su total)
+      // Al pasar a nota de crédito el monto se sugiere desde la NC elegida (editable: descuento total o parcial)
       if (field === 'origen' && value === 'nota_credito') return { ...l, origen: 'nota_credito', nota_credito_id: '', monto: '', referencia: '' }
       return { ...l, [field]: value } as LineaCobro
     }))
@@ -253,9 +253,16 @@ function VentasOgemiPage() {
     if (validas.length === 0) { showToast('Agrega al menos un pago con monto y origen', 'error'); return }
     if (totalLineas > saldoDe(cobrar) + 0.005) { showToast('El monto supera el saldo pendiente', 'error'); return }
 
-    // Cada nota de crédito se usa una sola vez
-    const ncIds = validas.filter(l => l.origen === 'nota_credito').map(l => l.nota_credito_id)
-    if (new Set(ncIds).size !== ncIds.length) { showToast('La misma nota de crédito está en dos líneas', 'error'); return }
+    // Notas de crédito: se pueden descontar total o parcialmente; validar el acumulado contra su saldo por usar
+    const usoNc = new Map<string, number>()
+    validas.filter(l => l.origen === 'nota_credito').forEach(l => usoNc.set(l.nota_credito_id, (usoNc.get(l.nota_credito_id) || 0) + parseFloat(l.monto)))
+    for (const [id, usado] of Array.from(usoNc.entries())) {
+      const n = ncsDisp.find(x => x.id === id)
+      if (n && usado > n.saldo + 0.005) {
+        showToast(`El monto supera el saldo de la NC ${n.numero || ''} (${formatCurrency(n.saldo)})`, 'error')
+        return
+      }
+    }
 
     // Un anticipo puede usarse en varias líneas: validar el acumulado contra su saldo
     const usoAnt = new Map<string, number>()
@@ -272,9 +279,9 @@ function VentasOgemiPage() {
 
     // 0) Notas de crédito: vía RPC (valida empresa, cliente, disponible y saldo; no mueve banco)
     let ncAplicadas = 0
-    for (const id of ncIds) {
+    for (const [id, monto] of Array.from(usoNc.entries())) {
       const { error: eNc } = await supabase.rpc('aplicar_nota_credito_ogemi', {
-        p_nota_id: id, p_venta_id: cobrar.id, p_fecha: fechaCobro,
+        p_nota_id: id, p_venta_id: cobrar.id, p_fecha: fechaCobro, p_monto: Math.round(monto * 100) / 100,
       })
       if (eNc) {
         setCobrando(false)
@@ -599,7 +606,7 @@ function VentasOgemiPage() {
             )}
             {ncsDisp.length > 0 && (
               <div className="text-xs text-purple-800 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 mb-3">
-                El cliente tiene {ncsDisp.length} nota{ncsDisp.length === 1 ? '' : 's'} de crédito disponible{ncsDisp.length === 1 ? '' : 's'} por {formatCurrency(ncsDisp.reduce((t, n) => t + Number(n.total || 0), 0))}. Elige el origen &quot;Nota de crédito&quot; para aplicarla.
+                El cliente tiene {ncsDisp.length} nota{ncsDisp.length === 1 ? '' : 's'} de crédito con saldo por {formatCurrency(ncsDisp.reduce((t, n) => t + n.saldo, 0))}. Elige el origen &quot;Nota de crédito&quot; y el monto a descontar (total o parcial).
               </div>
             )}
 
@@ -646,18 +653,19 @@ function VentasOgemiPage() {
                             value={linea.nota_credito_id}
                             onChange={e => {
                               const n = ncsDisp.find(x => x.id === e.target.value)
-                              // La NC se aplica por su total (uso único)
+                              // Sugerir el menor entre el saldo de la NC y lo que falta por cubrir (editable)
+                              const otros = lineas.reduce((t, l, i) => i === idx ? t : t + (parseFloat(l.monto) || 0), 0)
+                              const falta = Math.max(0, saldoDe(cobrar) - otros)
                               setLineas(prev => prev.map((l, i) => i === idx ? ({
                                 ...l, nota_credito_id: e.target.value,
-                                monto: n ? Number(n.total).toFixed(2) : '',
+                                monto: n ? Math.min(n.saldo, falta).toFixed(2) : '',
                               }) : l))
                             }}
                           >
                             <option value="">Seleccionar nota de crédito...</option>
                             {ncsDisp.map(n => (
-                              <option key={n.id} value={n.id}
-                                disabled={lineas.some((l, i) => i !== idx && l.origen === 'nota_credito' && l.nota_credito_id === n.id)}>
-                                NC {n.numero || '—'} · {formatDate(n.fecha)} · {formatCurrency(n.total)}
+                              <option key={n.id} value={n.id}>
+                                NC {n.numero || '—'} · {formatDate(n.fecha)} · saldo {formatCurrency(n.saldo)}{n.saldo < n.total - 0.005 ? ` de ${formatCurrency(n.total)}` : ''}
                               </option>
                             ))}
                           </select>
@@ -703,8 +711,7 @@ function VentasOgemiPage() {
                       <label className="label text-xs">Monto</label>
                       <input type="number" step="0.01" min="0.01" className="input text-sm" placeholder="0.00"
                         value={linea.monto} onChange={e => updateLinea(idx, 'monto', e.target.value)}
-                        readOnly={linea.origen === 'nota_credito'}
-                        title={linea.origen === 'nota_credito' ? 'La nota de crédito se aplica por su monto total' : undefined} />
+                        title={linea.origen === 'nota_credito' ? 'Monto a descontar de la nota de crédito (total o parcial). Lo que sobre queda disponible.' : undefined} />
                     </div>
                     <div>
                       <label className="label text-xs">Referencia</label>

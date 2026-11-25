@@ -73,7 +73,7 @@ export interface Factura {
   tipo_venta?: 'litografico' | 'digital' | 'otras' | null;
 }
 
-export type NotaCreditoEstado = 'disponible' | 'aplicada';
+export type NotaCreditoEstado = 'disponible' | 'parcial' | 'aplicada';
 
 export interface NotaCredito {
   id: string;
@@ -83,6 +83,10 @@ export interface NotaCredito {
   monto: number;
   itbms: number;
   total: number;
+  /** Lo ya descontado con esta NC (suma de pagos no reversados) */
+  monto_aplicado?: number;
+  /** Saldo por usar = total − monto_aplicado */
+  saldo?: number;
   estado: NotaCreditoEstado;
   /** Número de la factura afectada (para auto-aplicación al importar) */
   documento_afectado?: number | null;

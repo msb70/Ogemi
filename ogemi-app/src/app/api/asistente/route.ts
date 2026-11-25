@@ -40,7 +40,7 @@ VENTAS
 - facturas: ventas de IMPRESOS COMERCIALES. numero_factura, fecha, cliente_id→clientes, tipo_documento ('FACTURA','FACTURA DE OPERACION INTERNA'), monto (sin ITBMS), itbms, total, fecha_pago (vencimiento), estado ('pendiente','pagada','falta_retencion'), monto_pagado, fecha_cobro, tipo_venta ('digital','litografico','otras'), retencion_monto.
 - ventas_ogemi: ventas de IMPRESORA OGEMI. numero, fecha, cliente_id→clientes, concepto, monto, itbms, total, fecha_pago, estado ('pendiente','pagada'), monto_pagado, fecha_cobro, retencion_monto.
 - presupuestos: presupuestos/ventas sin factura de Impresos. numero_presupuesto, fecha, cliente_id, total, estado ('pendiente','pagada'), monto_pagado, orden_trabajo.
-- notas_credito: NC de ventas. numero, cliente_id, fecha, total, estado ('disponible','aplicada'), empresa, factura_aplicada_id, venta_ogemi_aplicada_id. Venta neta = ventas − notas de crédito.
+- notas_credito: NC de ventas. numero, cliente_id, fecha, total, estado ('disponible','parcial','aplicada'), monto_aplicado, saldo (lo que falta por descontar; una NC puede aplicarse en varias veces), empresa, factura_aplicada_id, venta_ogemi_aplicada_id. Venta neta = ventas − notas de crédito.
 - clientes: nombre, ruc, dias_credito, telefono, email, contacto, direccion, activo.
 
 COMPRAS / PROVEEDORES
