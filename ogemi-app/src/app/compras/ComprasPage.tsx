@@ -111,6 +111,10 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
   })
 
   const esNotaCredito = (t?: string | null) => !!t && t.toUpperCase().includes('CREDITO')
+  // NC de proveedor: lo aplicado se guarda como monto_pagado negativo; saldo por usar = |total| − aplicado
+  const ncAplicado = (c: Compra) => Math.max(0, -(c.monto_pagado || 0))
+  const ncSaldo = (c: Compra) => Math.max(0, Math.round((Math.abs(c.total || 0) - ncAplicado(c)) * 100) / 100)
+  const ncEstado = (c: Compra) => ncAplicado(c) <= 0.005 ? 'Disponible' : ncSaldo(c) <= 0.01 ? 'Aplicada' : 'Parcial'
 
   const { profile } = useAuth()
   const isAdmin = profile?.rol_id === 'admin'
@@ -153,8 +157,8 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
   }
 
   const handleOpenForm = (c?: Compra) => {
-    if (c && c.compra_aplicada_id) {
-      showToast('Esta nota de crédito ya está aplicada como pago. Reversa ese pago antes de editarla.', 'error')
+    if (c && (c.total || 0) < 0 && ncAplicado(c) > 0.005) {
+      showToast(`Esta nota de crédito tiene ${formatCurrency(ncAplicado(c))} aplicado. Borra primero esos descuentos (en el pago de la compra) para poder editarla.`, 'error')
       return
     }
     if (c) {
@@ -251,18 +255,18 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
       supabase.from('pagos').select('*, banco_cuentas(nombre, banco)')
         .eq('compra_id', c.id).order('fecha', { ascending: false }),
       supabase.from('pago_reversos').select('pago_id').eq('compra_id', c.id),
-      // NC del proveedor disponibles (total negativo, aún no aplicadas)
+      // NC del proveedor con saldo por usar (total negativo; pueden aplicarse parcialmente)
       supabase.from('compras')
-        .select('id, fecha, referencia, concepto, total, documento_afectado')
+        .select('id, fecha, referencia, concepto, total, monto_pagado, documento_afectado')
         .eq('proveedor_id', c.proveedor_id)
+        .eq('empresa', empresa)
         .ilike('tipo_documento', '%credito%')
         .lt('total', 0)
-        .is('compra_aplicada_id', null)
         .order('fecha'),
     ])
     setPagosExistentes(data || [])
     setPagoReversados(new Set((reversos || []).map(r => r.pago_id)))
-    setNcsProveedor((ncsData || []) as Compra[])
+    setNcsProveedor(((ncsData || []) as Compra[]).filter(n => ncSaldo(n) > 0.005))
   }
 
   const openDetalle = async (c: Compra) => {
@@ -305,7 +309,7 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
     setLineas(p => p.map((l, i) => {
       if (i !== idx) return l
       const next = { ...l, [field]: value }
-      // Al elegir origen NC, el monto queda fijo al total de la NC (uso único)
+      // Al elegir una NC se sugiere el menor entre su saldo y lo que falta por pagar (editable)
       if (field === 'origen') {
         next.cuenta_id = value === 'cuenta' ? (cuentas[0]?.id || '') : ''
         next.nc_id = ''
@@ -313,7 +317,9 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
       }
       if (field === 'nc_id') {
         const nc = ncsProveedor.find(n => n.id === value)
-        next.monto = nc ? Math.abs(nc.total).toFixed(2) : ''
+        const otros = p.reduce((t, x, j) => j === idx ? t : t + (parseFloat(x.monto) || 0), 0)
+        const falta = selectedCompra ? Math.max(0, selectedCompra.total - (selectedCompra.monto_pagado || 0) - otros) : 0
+        next.monto = nc ? Math.min(ncSaldo(nc), falta).toFixed(2) : ''
       }
       return next
     }))
@@ -328,14 +334,22 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
       parseFloat(l.monto) > 0 && (l.origen === 'cuenta' ? l.cuenta_id : l.nc_id)
     )
     if (validas.length === 0) return
+    for (const l of validas.filter(x => x.origen === 'nota_credito')) {
+      const nc = ncsProveedor.find(n => n.id === l.nc_id)
+      if (nc && parseFloat(l.monto) > ncSaldo(nc) + 0.005) {
+        showToast(`El monto supera el saldo de la nota de crédito (${formatCurrency(ncSaldo(nc))})`, 'error')
+        return
+      }
+    }
     setSavingPago(true)
 
-    // 1) Notas de crédito: vía RPC (uso único + validación de saldo en DB)
+    // 1) Notas de crédito: vía RPC (descuento total o parcial; valida saldo de NC y compra en DB)
     for (const l of validas.filter(x => x.origen === 'nota_credito')) {
       const { error: eNC } = await supabase.rpc('aplicar_nc_compra', {
         p_nc_id: l.nc_id,
         p_compra_id: selectedCompra.id,
         p_fecha: fechaPago,
+        p_monto: Math.round(parseFloat(l.monto) * 100) / 100,
       })
       if (eNC) {
         setSavingPago(false)
@@ -615,7 +629,10 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
                         <td className="table-cell text-right text-gray-500">{formatCurrency(c.itbms)}</td>
                         <td className="table-cell text-right font-semibold">{formatCurrency(c.total)}</td>
                         <td className="table-cell text-right text-green-600">
-                          {(c.monto_pagado || 0) > 0 ? formatCurrency(c.monto_pagado || 0) : '—'}
+                          {(c.monto_pagado || 0) > 0 ? formatCurrency(c.monto_pagado || 0)
+                            : esNotaCredito(c.tipo_documento) && ncAplicado(c) > 0
+                              ? <span className="text-purple-700" title="Aplicado de la nota de crédito">{formatCurrency(ncAplicado(c))}</span>
+                              : '—'}
                         </td>
                         <td className="table-cell text-right font-semibold text-orange-600">
                           {c.estado === 'pagada'
@@ -625,8 +642,8 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
                         <td className="table-cell">
                           {esNotaCredito(c.tipo_documento) ? (
                             <span className="badge flex items-center gap-1 w-fit bg-purple-100 text-purple-700">
-                              {c.compra_aplicada_id ? <CheckCircle size={11} /> : <Clock size={11} />}
-                              {c.compra_aplicada_id ? 'Aplicada' : 'Disponible'}
+                              {ncEstado(c) === 'Aplicada' ? <CheckCircle size={11} /> : <Clock size={11} />}
+                              {ncEstado(c)}
                             </span>
                           ) : (
                             <span className={`badge flex items-center gap-1 w-fit ${
@@ -795,8 +812,8 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
                       </p>
                       {esNotaCredito(c.tipo_documento) ? (
                         <span className="badge flex items-center gap-1 flex-shrink-0 bg-purple-100 text-purple-700">
-                          {c.compra_aplicada_id ? <CheckCircle size={11} /> : <Clock size={11} />}
-                          {c.compra_aplicada_id ? 'Aplicada' : 'Disponible'}
+                          {ncEstado(c) === 'Aplicada' ? <CheckCircle size={11} /> : <Clock size={11} />}
+                          {ncEstado(c)}
                         </span>
                       ) : (
                         <span className={`badge flex items-center gap-1 flex-shrink-0 ${
@@ -1137,12 +1154,12 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
                         <option value="">Seleccionar NC...</option>
                         {ncsElegibles.map(n => (
                           <option key={n.id} value={n.id}>
-                            {formatDate(n.fecha)} · {n.referencia || n.concepto || 'NC'} · {formatCurrency(Math.abs(n.total))}
+                            {formatDate(n.fecha)} · {n.referencia || n.concepto || 'NC'} · saldo {formatCurrency(ncSaldo(n))}{ncAplicado(n) > 0.005 ? ` de ${formatCurrency(Math.abs(n.total))}` : ''}
                           </option>
                         ))}
                       </select>
                       <p className="text-[11px] text-purple-700 mt-1">
-                        La NC se aplica por su monto total y no pasa por banco.
+                        Puedes descontar toda la NC o solo una parte; lo que sobre queda disponible. No pasa por banco.
                       </p>
                     </div>
                   )}
@@ -1150,7 +1167,7 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
                     <div>
                       <label className="label text-xs">Monto</label>
                       <input type="number" step="0.01" className="input text-sm" placeholder="0.00"
-                        value={linea.monto} readOnly={linea.origen === 'nota_credito'}
+                        value={linea.monto}
                         onChange={e => updateLinea(idx, 'monto', e.target.value)} />
                     </div>
                     <div>
