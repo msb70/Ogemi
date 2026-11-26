@@ -222,7 +222,12 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
     }
     setSaving(false)
     if (error) {
-      showToast(`Error al guardar: ${error.message}`, 'error')
+      // trg_compras_no_duplicada: mismo número + mismo proveedor (en Ogemi o Impresos)
+      if (error.code === '23505' && (error as any).hint === 'compra_duplicada') {
+        showToast(error.message, 'error')
+      } else {
+        showToast(`Error al guardar: ${error.message}`, 'error')
+      }
     } else {
       setShowForm(false)
       resetForm()
@@ -481,6 +486,23 @@ function ComprasPage({ empresa }: { empresa: Empresa }) {
         }
         proveedorId = nuevo.id
         await load() // recargar lista de proveedores
+      }
+
+      // Aviso temprano si esa factura del proveedor ya está cargada (la BD la rechazaría al guardar)
+      if (data.numero_factura) {
+        const norm = (r?: string | null) => {
+          const t = (r || '').replace(/\s/g, '').toUpperCase().replace(/^FAC-?/, '')
+          return t ? (t.replace(/^0+/, '') || '0') : ''
+        }
+        const objetivo = norm(String(data.numero_factura))
+        const { data: previas } = await supabase.from('compras')
+          .select('referencia, fecha, total, empresa').eq('proveedor_id', proveedorId)
+        const dup = (previas || []).find((c: any) => norm(c.referencia) === objetivo)
+        setQrAviso(dup
+          ? `La compra ya existe: este proveedor ya tiene registrada la factura ${dup.referencia} ` +
+            `(fecha ${formatDate(dup.fecha)}, total ${formatCurrency(dup.total)}, ` +
+            `${EMPRESA_LABEL[(dup.empresa || 'ogemi') as Empresa]}). No se podrá guardar de nuevo.`
+          : '')
       }
 
       // Pre-llenar el formulario
